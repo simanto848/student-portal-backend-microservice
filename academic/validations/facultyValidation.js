@@ -92,3 +92,27 @@ export const getFacultiesSchema = z.object({
     }),
 });
 
+export const assignDeanSchema = z.object({
+    params: z.object({
+        id: z.string({
+            required_error: 'Faculty ID is required',
+        })
+        .uuid('Invalid faculty ID format'),
+    }),
+    body: z.object({
+        deanId: z.string({
+            required_error: 'Dean ID is required',
+        })
+        .uuid('Invalid dean ID format'),
+    }),
+});
+
+export const removeDeanSchema = z.object({
+    params: z.object({
+        id: z.string({
+            required_error: 'Faculty ID is required',
+        })
+        .uuid('Invalid faculty ID format'),
+    }),
+});
+

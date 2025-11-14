@@ -67,6 +67,8 @@ export {
     getFacultyByIdSchema,
     deleteFacultySchema,
     getFacultiesSchema,
+    assignDeanSchema,
+    removeDeanSchema,
 } from './facultyValidation.js';
 
 // Department validations
