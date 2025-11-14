@@ -1,10 +1,11 @@
 import http from "http";
+import colors from "colors"
 import app from "./app.js";
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8001;
 
 server.listen(PORT, () => {
-    console.log(`Server started on port http://localhost:${PORT}`);
+    console.log(`Server started on port http://localhost:${PORT}`.green);
 });
