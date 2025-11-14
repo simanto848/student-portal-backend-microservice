@@ -111,3 +111,28 @@ export const getDepartmentsSchema = z.object({
     }),
 });
 
+export const assignDepartmentHeadSchema = z.object({
+    params: z.object({
+        id: z.string({
+            required_error: 'Department ID is required',
+        })
+        .uuid('Invalid department ID format'),
+    }),
+    body: z.object({
+        headId: z.string({
+            required_error: 'Head ID is required',
+        })
+        .uuid('Invalid head ID format'),
+        isActingHead: z.boolean().optional().default(false),
+    }),
+});
+
+export const removeDepartmentHeadSchema = z.object({
+    params: z.object({
+        id: z.string({
+            required_error: 'Department ID is required',
+        })
+        .uuid('Invalid department ID format'),
+    }),
+});
+

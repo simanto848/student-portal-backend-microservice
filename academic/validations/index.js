@@ -78,6 +78,8 @@ export {
     getDepartmentByIdSchema,
     deleteDepartmentSchema,
     getDepartmentsSchema,
+    assignDepartmentHeadSchema,
+    removeDepartmentHeadSchema,
 } from './departmentValidation.js';
 
 // Program validations
