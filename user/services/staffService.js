@@ -8,12 +8,7 @@ import mongoose from 'mongoose';
 class StaffService {
     async getAll(options = {}) {
         try {
-            const {
-                pagination = { page: 1, limit: 10 },
-                search,
-                filters = {}
-            } = options;
-
+            const { pagination, search, filters = {} } = options;
             const query = { deletedAt: null };
             if (search) {
                 query.$or = [
@@ -31,21 +26,43 @@ class StaffService {
                 query.departmentId = filters.departmentId;
             }
 
-            const page = parseInt(pagination.page) || 1;
-            const limit = parseInt(pagination.limit) || 10;
-            const skip = (page - 1) * limit;
+            if (pagination && (pagination.page || pagination.limit)) {
+                const page = parseInt(pagination.page) || 1;
+                const limit = parseInt(pagination.limit) || 10;
+                const skip = (page - 1) * limit;
 
-            const [staffMembers, total] = await Promise.all([
-                Staff.find(query)
-                    .select('-password')
-                    .populate('profile')
-                    .sort({ createdAt: -1 })
-                    .skip(skip)
-                    .limit(limit)
-                    .lean(),
-                Staff.countDocuments(query),
-            ]);
+                const [staffMembers, total] = await Promise.all([
+                    Staff.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+                    Staff.countDocuments(query),
+                ]);
 
+                const staffWithDetails = await Promise.all(
+                    staffMembers.map(async (staff) => {
+                        if (staff.departmentId) {
+                            try {
+                                const departmentResponse = await academicServiceClient.getDepartmentById(staff.departmentId);
+                                staff.department = departmentResponse.data;
+                            } catch (error) {
+                                console.error('Error fetching department:', error.message);
+                                staff.department = null;
+                            }
+                        }
+                        return staff;
+                    })
+                );
+
+                return {
+                    staff: staffWithDetails,
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        pages: Math.ceil(total / limit),
+                    },
+                };
+            }
+
+            const staffMembers = await Staff.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
             const staffWithDetails = await Promise.all(
                 staffMembers.map(async (staff) => {
                     if (staff.departmentId) {
@@ -61,15 +78,7 @@ class StaffService {
                 })
             );
 
-            return {
-                staff: staffWithDetails,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
-            };
+            return { staff: staffWithDetails };
         } catch (error) {
             throw new ApiError(500, 'Error fetching staff: ' + error.message);
         }
@@ -248,40 +257,52 @@ class StaffService {
                 throw new ApiError(400, 'Invalid department ID');
             }
 
-            const { pagination = { page: 1, limit: 10 }, search } = options;
-            const query = { departmentId: departmentId, deletedAt: null };
+            const { pagination, search } = options;
+            const baseQuery = { departmentId: departmentId, deletedAt: null };
+
             if (search) {
-                query.$or = [
+                baseQuery.$or = [
                     { fullName: { $regex: search, $options: 'i' } },
                     { email: { $regex: search, $options: 'i' } },
                     { registrationNumber: { $regex: search, $options: 'i' } },
                 ];
             }
 
-            const page = parseInt(pagination.page) || 1;
-            const limit = parseInt(pagination.limit) || 10;
-            const skip = (page - 1) * limit;
+            if (pagination && (pagination.page || pagination.limit)) {
+                const page = parseInt(pagination.page) || 1;
+                const limit = parseInt(pagination.limit) || 10;
+                const skip = (page - 1) * limit;
 
-            const [staffMembers, total] = await Promise.all([
-                Staff.find(query)
-                    .select('-password')
-                    .populate('profile')
-                    .sort({ createdAt: -1 })
-                    .skip(skip)
-                    .limit(limit)
-                    .lean(),
-                Staff.countDocuments(query),
-            ]);
+                const [staffMembers, total] = await Promise.all([
+                    Staff.find(baseQuery)
+                        .select('-password')
+                        .populate('profile')
+                        .sort({ createdAt: -1 })
+                        .skip(skip)
+                        .limit(limit)
+                        .lean(),
+                    Staff.countDocuments(baseQuery),
+                ]);
 
-            return {
-                staff: staffMembers,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
-            };
+                return {
+                    staff: staffMembers,
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        pages: Math.ceil(total / limit),
+                    },
+                };
+            }
+
+            // Otherwise, return all without pagination
+            const staffMembers = await Staff.find(baseQuery)
+                .select('-password')
+                .populate('profile')
+                .sort({ createdAt: -1 })
+                .lean();
+
+            return { staff: staffMembers };
         } catch (error) {
             if (error instanceof ApiError) throw error;
             throw new ApiError(500, 'Error fetching staff by department: ' + error.message);
@@ -321,4 +342,3 @@ class StaffService {
 }
 
 export default new StaffService();
-

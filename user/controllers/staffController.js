@@ -86,12 +86,13 @@ class StaffController {
     async getByDepartment(req, res, next) {
         try {
             const { page, limit, search } = req.query;
-            const options = {
-                pagination: {
+            const options = {};
+            if (page || limit) {
+                options.pagination = {
                     page: parseInt(page) || 1,
                     limit: parseInt(limit) || 10,
-                },
-            };
+                };
+            }
 
             if (search) {
                 options.search = search;
@@ -115,4 +116,3 @@ class StaffController {
 }
 
 export default new StaffController();
-

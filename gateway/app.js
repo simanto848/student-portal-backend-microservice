@@ -11,7 +11,8 @@ app.use(morgan("dev"));
 
 const PORT = process.env.PORT || 8000;
 
-app.use('/api/academic', expressProxy('http://localhost:8001'));
+app.use('/api/academic', expressProxy(process.env.ACADEMIC_SERVICE_URL));
+app.use('/api/user', expressProxy(process.env.USER_SERVICE_URL));
 
 app.listen(PORT, () => {
     console.log(`Gateway server started on http://localhost:${PORT}`.green.underline.bold);

@@ -7,12 +7,7 @@ import mongoose from 'mongoose';
 class AdminService {
     async getAll(options = {}) {
         try {
-            const {
-                pagination = { page: 1, limit: 10 },
-                search,
-                filters = {}
-            } = options;
-
+            const { pagination, search, filters = {} } = options;
             const query = { deletedAt: null };
             if (search) {
                 query.$or = [
@@ -26,30 +21,35 @@ class AdminService {
                 query.role = filters.role;
             }
 
-            const page = parseInt(pagination.page) || 1;
-            const limit = parseInt(pagination.limit) || 10;
-            const skip = (page - 1) * limit;
+            if (pagination && (pagination.page || pagination.limit)) {
+                const page = parseInt(pagination.page) || 1;
+                const limit = parseInt(pagination.limit) || 10;
+                const skip = (page - 1) * limit;
 
-            const [admins, total] = await Promise.all([
-                Admin.find(query)
-                    .select('-password')
-                    .populate('profile')
-                    .sort({ createdAt: -1 })
-                    .skip(skip)
-                    .limit(limit)
-                    .lean(),
-                Admin.countDocuments(query),
-            ]);
+                const [admins, total] = await Promise.all([
+                    Admin.find(query)
+                        .select('-password')
+                        .populate('profile')
+                        .sort({ createdAt: -1 })
+                        .skip(skip)
+                        .limit(limit)
+                        .lean(),
+                    Admin.countDocuments(query),
+                ]);
 
-            return {
-                admins,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
-            };
+                return {
+                    admins,
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        pages: Math.ceil(total / limit),
+                    },
+                };
+            }
+
+            const admins = await Admin.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
+            return { admins };
         } catch (error) {
             throw new ApiError(500, 'Error fetching admins: ' + error.message);
         }
@@ -208,4 +208,3 @@ class AdminService {
 }
 
 export default new AdminService();
-
