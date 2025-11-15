@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Factor Authentication Enabled</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #2d3748;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .email-wrapper {
+            max-width: 600px;
+            margin: 0 auto;
+            perspective: 1000px;
+        }
+
+        .email-container {
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow:
+                    0 20px 60px rgba(0, 0, 0, 0.3),
+                    0 10px 30px rgba(0, 0, 0, 0.22),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            transform-style: preserve-3d;
+            transform: translateZ(0);
+        }
+
+        /* Animated gradient header */
+        .header {
+            background: linear-gradient(135deg, #0f9b8e 0%, #2ecc71 50%, #27ae60 100%);
+            background-size: 200% 200%;
+            animation: gradientShift 3s ease infinite;
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+            transform: translateZ(30px);
+            box-shadow:
+                    0 10px 30px rgba(46, 204, 113, 0.4),
+                    inset 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .logo {
+            max-width: 140px;
+            height: auto;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        }
+
+        .header h1 {
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            letter-spacing: -0.5px;
+        }
+
+        .header-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: inline-block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Content area */
+        .content {
+            padding: 40px;
+            transform: translateZ(10px);
+        }
+
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
+        /* Success badge card - elevated */
+        .success-badge {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border-left: 5px solid #28a745;
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin: 25px 0;
+            box-shadow:
+                    0 8px 20px rgba(40, 167, 69, 0.15),
+                    0 3px 8px rgba(0, 0, 0, 0.1);
+            transform: translateZ(20px);
+            position: relative;
+        }
+
+        .success-badge::before {
+            content: '✓';
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 48px;
+            color: #28a745;
+            opacity: 0.2;
+            font-weight: bold;
+        }
+
+        .success-badge strong {
+            color: #155724;
+            font-size: 16px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .success-badge p {
+            color: #155724;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        /* Main description */
+        .description {
+            color: #4a5568;
+            font-size: 15px;
+            line-height: 1.8;
+            margin: 25px 0;
+        }
+
+        .description strong {
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        /* Info card - elevated */
+        .info-card {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow:
+                    0 8px 20px rgba(56, 189, 248, 0.15),
+                    0 3px 8px rgba(0, 0, 0, 0.08);
+            transform: translateZ(15px);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .info-card-title {
+            color: #0369a1;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .info-card-title::before {
+            content: '🛡️';
+            margin-right: 10px;
+            font-size: 20px;
+        }
+
+        .info-card ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .info-card li {
+            color: #0c4a6e;
+            font-size: 14px;
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .info-card li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #0ea5e9;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        /* Login process card - elevated */
+        .process-card {
+            background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow:
+                    0 8px 20px rgba(251, 146, 60, 0.15),
+                    0 3px 8px rgba(0, 0, 0, 0.08);
+            transform: translateZ(12px);
+            border: 1px solid rgba(251, 146, 60, 0.2);
+        }
+
+        .process-card-title {
+            color: #c2410c;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .process-card-title::before {
+            content: '🔐';
+            margin-right: 10px;
+            font-size: 20px;
+        }
+
+        .process-card ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .process-card li {
+            color: #7c2d12;
+            font-size: 14px;
+            padding: 8px 0;
+            line-height: 1.6;
+        }
+
+        .process-card li::marker {
+            color: #fb923c;
+            font-weight: bold;
+        }
+
+        /* Warning section */
+        .warning {
+            background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+            border-left: 4px solid #dc2626;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1);
+            transform: translateZ(10px);
+        }
+
+        .warning p {
+            color: #991b1b;
+            font-size: 14px;
+            margin: 0;
+            font-weight: 500;
+        }
+
+        .warning::before {
+            content: '⚠️';
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        /* Signature */
+        .signature {
+            margin: 30px 0;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+        }
+
+        .signature p {
+            color: #4a5568;
+            font-size: 15px;
+            line-height: 1.8;
+            margin: 5px 0;
+        }
+
+        .signature strong {
+            color: #2d3748;
+            font-size: 16px;
+        }
+
+        /* Footer */
+        .footer {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            padding: 30px 40px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            transform: translateZ(5px);
+        }
+
+        .footer p {
+            color: #718096;
+            font-size: 13px;
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .footer-links {
+            margin-top: 15px;
+        }
+
+        .footer-links a {
+            color: #4299e1;
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive design */
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 20px 10px;
+            }
+
+            .header {
+                padding: 40px 25px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 30px 25px;
+            }
+
+            .success-badge,
+            .info-card,
+            .process-card,
+            .warning {
+                padding: 20px;
+            }
+
+            .footer {
+                padding: 25px 20px;
+            }
+
+            .success-badge::before {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="email-wrapper">
+    <div class="email-container">
+        <!-- Header with animated gradient -->
+        <div class="header">
+            <% if (companyLogoUrl) { %>
+                <img src="<%= companyLogoUrl %>" alt="<%= companyName %>" class="logo">
+            <% } %>
+            <div class="header-icon">🔒</div>
+            <h1>Two-Factor Authentication Enabled</h1>
+        </div>
+
+        <!-- Main content -->
+        <div class="content">
+            <p class="greeting">Hello <strong><%= userName %></strong>,</p>
+
+            <!-- Success badge card -->
+            <div class="success-badge">
+                <strong>✓ Success!</strong>
+                <p>Two-factor authentication has been successfully enabled for your account.</p>
+            </div>
+
+            <!-- Description -->
+            <p class="description">
+                Your account security has been enhanced with two-factor authentication (2FA). From now on, you'll need to enter a verification code sent to your email (<strong><%= userEmail %></strong>) each time you log in.
+            </p>
+
+            <!-- Info card -->
+            <div class="info-card">
+                <div class="info-card-title">What This Means for You</div>
+                <ul>
+                    <li>Enhanced account security with an additional layer of protection</li>
+                    <li>Protection against unauthorized access attempts</li>
+                    <li>A verification code will be sent to your email at each login</li>
+                    <li>You can disable 2FA anytime from your account settings</li>
+                </ul>
+            </div>
+
+            <!-- Login process card -->
+            <div class="process-card">
+                <div class="process-card-title">Next Login Process</div>
+                <ol>
+                    <li>Enter your email and password as usual</li>
+                    <li>Check your email inbox for the verification code</li>
+                    <li>Enter the 6-digit code to complete your login</li>
+                </ol>
+            </div>
+
+            <!-- Warning -->
+            <div class="warning">
+                <p>If you did not enable this feature, please contact our support team immediately at <strong><%= supportEmail %></strong></p>
+            </div>
+
+            <!-- Signature -->
+            <div class="signature">
+                <p>Best regards,</p>
+                <p><strong><%= companyName %> Security Team</strong></p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>&copy; <%= currentYear %> <%= companyName %></strong></p>
+            <p>All rights reserved.</p>
+            <p>This is an automated security notification.</p>
+            <div class="footer-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Contact Support</a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

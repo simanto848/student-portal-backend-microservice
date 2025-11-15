@@ -10,14 +10,9 @@ export const adminCreateValidation = (data) => {
         })
         .trim()
         .min(1, { message: 'Full name cannot be empty' }),
-        registrationNumber: z.string({
-            required_error: 'Registration number is required',
-        })
-        .trim()
-        .min(1, { message: 'Registration number cannot be empty' }),
         role: z.enum(['super_admin', 'admin', 'moderator'], {
             errorMap: () => ({ message: 'Role must be one of: super_admin, admin, moderator' }),
-        }),
+        }).optional(),
         joiningDate: z.coerce.date({
             invalid_type_error: 'Joining date must be a valid date',
         }).optional(),
@@ -47,3 +42,18 @@ export const adminUpdateValidation = (data) => {
     return schema.safeParse(data);
 };
 
+export const adminUpdateRoleValidation = (data) => {
+    const schema = z.object({
+        role: z.enum(['super_admin', 'admin', 'moderator'], {
+            required_error: 'Role is required',
+            invalid_type_error: 'Invalid role',
+        }),
+    });
+
+    return schema.safeParse(data);
+};
+
+// Aliases for better naming consistency
+export const createAdminSchema = adminCreateValidation;
+export const updateAdminSchema = adminUpdateValidation;
+export const updateAdminRoleSchema = adminUpdateRoleValidation;

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two-Factor Authentication Disabled</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #1a202c;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 60px 20px;
+            min-height: 100vh;
+        }
+        .email-wrapper {
+            max-width: 650px;
+            margin: 0 auto;
+            perspective: 1000px;
+        }
+        .email-card {
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow:
+                    0 20px 60px rgba(102, 126, 234, 0.4),
+                    0 0 0 1px rgba(255, 255, 255, 0.1);
+            transform: translateZ(0);
+            transition: transform 0.3s ease;
+        }
+        .header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+            animation: pulse 20s ease-in-out infinite;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #f5576c 0%, #ff6b95 50%, #f5576c 100%);
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.5; }
+            50% { transform: scale(1.1) rotate(180deg); opacity: 0.3; }
+        }
+        .logo {
+            max-width: 120px;
+            height: auto;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 2;
+            filter: brightness(0) invert(1) drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+        }
+        h1 {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+            z-index: 2;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            letter-spacing: -0.5px;
+        }
+        .content {
+            padding: 50px 40px;
+            background: #ffffff;
+        }
+        .section {
+            margin-bottom: 32px;
+        }
+        .section:last-of-type {
+            margin-bottom: 0;
+        }
+        .greeting {
+            font-size: 19px;
+            color: #1a202c;
+            margin-bottom: 32px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, #e2e8f0 20%, #e2e8f0 80%, transparent 100%);
+            margin: 32px 0;
+        }
+        .alert-badge {
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            border: 2px solid #fc8181;
+            border-radius: 16px;
+            padding: 28px 32px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow:
+                    0 10px 25px rgba(252, 129, 129, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            transform: translateZ(20px);
+        }
+        .alert-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 8px 16px rgba(229, 62, 62, 0.35);
+            font-size: 32px;
+            color: #ffffff;
+        }
+        .alert-text {
+            flex: 1;
+        }
+        .alert-text strong {
+            color: #742a2a;
+            font-size: 20px;
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        .alert-text p {
+            color: #9b2c2c;
+            margin: 0;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .info-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f7fafc 100%);
+            border-radius: 16px;
+            padding: 32px;
+            border: 2px solid #e2e8f0;
+            box-shadow:
+                    0 15px 35px rgba(0, 0, 0, 0.08),
+                    0 5px 15px rgba(0, 0, 0, 0.05),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            transform: translateZ(10px);
+        }
+        .info-card h3 {
+            color: #2d3748;
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .info-card h3::before {
+            content: '🔓';
+            font-size: 24px;
+        }
+        .info-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .info-list li {
+            padding: 14px 0 14px 36px;
+            border-bottom: 1px solid #e2e8f0;
+            position: relative;
+            color: #4a5568;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .info-list li:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .info-list li:first-child {
+            padding-top: 0;
+        }
+        .info-list li::before {
+            content: '→';
+            position: absolute;
+            left: 8px;
+            color: #f5576c;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .security-card {
+            background: linear-gradient(135deg, #fffaf0 0%, #feebc8 100%);
+            border: 2px solid #ed8936;
+            border-radius: 16px;
+            padding: 28px 32px;
+            box-shadow:
+                    0 10px 25px rgba(237, 137, 54, 0.2),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+            transform: translateZ(15px);
+        }
+        .security-card strong {
+            color: #c05621;
+            font-size: 17px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .security-card p {
+            color: #7c2d12;
+            margin: 0;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+        .security-card a {
+            color: #c05621;
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 2px solid #ed8936;
+            padding-bottom: 1px;
+            transition: all 0.2s ease;
+        }
+        .security-card a:hover {
+            color: #9c4221;
+            border-bottom-color: #dd6b20;
+        }
+        .footer {
+            background: linear-gradient(135deg, #fafbfc 0%, #f0f2f5 100%);
+            padding: 40px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+        .footer p {
+            color: #6b7280;
+            font-size: 14px;
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+        .footer strong {
+            color: #f5576c;
+            font-weight: 600;
+        }
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 30px 15px;
+            }
+            .content {
+                padding: 40px 25px;
+            }
+            .header {
+                padding: 40px 25px;
+            }
+            h1 {
+                font-size: 26px;
+            }
+            .alert-badge {
+                flex-direction: column;
+                text-align: center;
+                padding: 28px 24px;
+            }
+            .info-card,
+            .security-card {
+                padding: 24px;
+            }
+            .footer {
+                padding: 30px 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="email-wrapper">
+    <div class="email-card">
+        <!-- Header with gradient -->
+        <div class="header">
+            <% if (companyLogoUrl) { %>
+                <img src="<%= companyLogoUrl %>" alt="<%= companyName %>" class="logo">
+            <% } %>
+            <h1>🔓 Two-Factor Authentication Disabled</h1>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <p class="greeting">Hello <%= userName %>,</p>
+
+            <!-- Security Alert Badge -->
+            <div class="section">
+                <div class="alert-badge">
+                    <div class="alert-icon">⚠</div>
+                    <div class="alert-text">
+                        <strong>Security Level Reduced</strong>
+                        <p>Two-factor authentication disabled for <%= userEmail %></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Information Card -->
+            <div class="section">
+                <div class="info-card">
+                    <h3>What This Means</h3>
+                    <ul class="info-list">
+                        <li>Your account is now less secure</li>
+                        <li>No verification code required at login</li>
+                        <li>Only email and password needed</li>
+                        <li>You can re-enable 2FA anytime</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Security Warning -->
+            <div class="section">
+                <div class="security-card">
+                    <strong>🛡️ Important Security Notice</strong>
+                    <p>If you did not disable this feature, contact us immediately at <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a> and change your password.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>&copy; <%= currentYear %> <%= companyName %>.</strong> All rights reserved.</p>
+            <p>This is an automated security notification.</p>
+            <p>For assistance: <strong><%= supportEmail %></strong></p>
+        </div>
+    </div>
+</div>
+</body>
+</html>

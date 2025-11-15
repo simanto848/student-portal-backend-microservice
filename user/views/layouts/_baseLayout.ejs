@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> - <%= companyName %></title>
+    <style>
+        body,
+        table,
+        td,
+        p,
+        a,
+        li,
+        blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        /* Microsoft Outlook specific styles */
+        table,
+        td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f1f5f9;
+            color: #333;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header .logo {
+            max-width: 120px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: bold;
+        }
+        .content {
+            padding: 30px;
+        }
+        .content-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .greeting {
+            font-size: 22px;
+            font-weight: bold;
+            color: #065f46;
+            margin-bottom: 15px;
+        }
+        .description {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #374151;
+            margin-bottom: 25px;
+        }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white !important;
+            text-decoration: none;
+            padding: 12px 25px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .footer {
+            background: #f1f5f9;
+            padding: 25px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer-text {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        .footer-links {
+            margin-bottom: 15px;
+        }
+        .footer-links a {
+            color: #10b981;
+            text-decoration: none;
+            margin: 0 10px;
+            font-size: 14px;
+        }
+        .company-info {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        @media only screen and (max-width: 600px) {
+            .content,
+            .header,
+            .footer {
+                padding: 20px !important;
+            }
+        }
+        .enrollment-summary {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            background-color: #f8fafc;
+        }
+        .summary-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #065f46;
+            margin-bottom: 15px;
+        }
+        .enrollment-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #374151;
+        }
+        .info-value {
+            color: #64748b;
+        }
+        .courses-section {
+            margin-top: 30px;
+        }
+        .courses-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #065f46;
+            margin-bottom: 15px;
+        }
+        .course-item {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 15px 0;
+        }
+        .course-item:last-child {
+            border-bottom: none;
+        }
+        .course-icon {
+            width: 30px;
+            height: 30px;
+            background-color: #10b981;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        .course-details {
+            flex-grow: 1;
+        }
+        .course-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .course-code {
+            font-size: 12px;
+            color: #64748b;
+        }
+        .status-badge {
+            background-color: #e2e8f0;
+            color: #374151;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .next-steps {
+            margin-top: 30px;
+        }
+        .next-steps h3 {
+            font-size: 18px;
+            font-weight: bold;
+            color: #065f46;
+        }
+        .steps-list {
+            list-style: none;
+            padding: 0;
+        }
+        .step-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .step-number {
+            width: 30px;
+            height: 30px;
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #374151;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        .support-section {
+            margin-top: 30px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 20px;
+        }
+        .support-link {
+            color: #10b981;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+    <%- include('../partials/_header', { companyName, companyLogoUrl, title })
+    %>
+
+    <div class="content"><%- body %></div>
+
+    <%- include('../partials/_footer', { companyName, supportEmail, portalUrl,
+    helpCenterUrl }) %>
+</div>
+</body>
+</html>

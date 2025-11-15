@@ -122,24 +122,3 @@ const Admin = mongoose.model("Admin", adminSchema);
 
 export default Admin;
 
-adminSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
-    if (this.passwordChangedAt) {
-        const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
-        return JWTTimestamp < changedTimestamp;
-    }
-    return false;
-};
-
-adminSchema.methods.softDelete = function () {
-    this.deletedAt = new Date();
-    return this.save();
-};
-
-adminSchema.methods.restore = function () {
-    this.deletedAt = null;
-    return this.save();
-};
-
-const Admin = mongoose.model("Admin", adminSchema);
-
-export default Admin;

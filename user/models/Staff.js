@@ -31,6 +31,7 @@ const staffSchema = new mongoose.Schema(
         },
         departmentId: {
             type: String,
+            required: true,
         },
         joiningDate: {
             type: Date,
