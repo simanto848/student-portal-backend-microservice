@@ -79,7 +79,6 @@ const batchSchema = new mongoose.Schema(
 
 // Indexes
 batchSchema.index({ deletedAt: 1 });
-batchSchema.index({ name: 1 });
 batchSchema.index({ year: 1 });
 batchSchema.index({ programId: 1 });
 batchSchema.index({ departmentId: 1 });

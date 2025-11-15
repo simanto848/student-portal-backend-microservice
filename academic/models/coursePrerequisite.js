@@ -33,7 +33,12 @@ const coursePrerequisiteSchema = new mongoose.Schema(
     },
 );
 
+coursePrerequisiteSchema.index({ courseId: 1, prerequisiteId: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
+coursePrerequisiteSchema.index({ courseId: 1 });
+coursePrerequisiteSchema.index({ prerequisiteId: 1 });
 coursePrerequisiteSchema.index({ deletedAt: 1 });
+coursePrerequisiteSchema.index({ createdAt: -1 });
+
 coursePrerequisiteSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
     next();
