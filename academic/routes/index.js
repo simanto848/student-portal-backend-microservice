@@ -4,7 +4,11 @@ import departmentRoutes from "./departmentRoutes.js";
 import programRoutes from "./programRoutes.js";
 import sessionRoutes from "./sessionRoutes.js";
 import courseRoutes from "./courseRoutes.js";
-import coursePrerequisiteRoutes from './coursePrerequisiteRoutes.js';
+import sessionCourseRoutes from "./sessionCourseRoutes.js";
+import batchRoutes from "./batchRoutes.js";
+import classroomRoutes from "./classroomRoutes.js";
+import courseScheduleRoutes from "./courseScheduleRoutes.js";
+import courseSyllabusRoutes from "./courseSyllabusRoutes.js";
 
 const router = express.Router();
 
@@ -13,6 +17,10 @@ router.use('/departments', departmentRoutes);
 router.use('/programs', programRoutes);
 router.use('/sessions', sessionRoutes);
 router.use('/courses', courseRoutes);
-router.use('/course-prerequisites', coursePrerequisiteRoutes);
+router.use('/session-courses', sessionCourseRoutes);
+router.use('/batches', batchRoutes);
+router.use('/classrooms', classroomRoutes);
+router.use('/schedules', courseScheduleRoutes);
+router.use('/syllabus', courseSyllabusRoutes);
 
 export default router;

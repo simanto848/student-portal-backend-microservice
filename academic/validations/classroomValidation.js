@@ -37,18 +37,11 @@ export const createClassroomSchema = z.object({
             'Other'
         ]).optional().default('Lecture Hall'),
 
-        facilities: z.string()
-            .max(500, 'Facilities description must not exceed 500 characters')
-            .optional(),
-
+        facilities: z.array(z.string().min(1).max(100)).optional().default([]),
         isActive: z.boolean().optional().default(true),
-
         isUnderMaintenance: z.boolean().optional().default(false),
-
-        maintenanceNotes: z.string()
-            .max(500, 'Maintenance notes must not exceed 500 characters')
-            .optional(),
-    }),
+        maintenanceNotes: z.string().max(500, 'Maintenance notes must not exceed 500 characters').optional(),
+    })
 });
 
 export const updateClassroomSchema = z.object({
@@ -84,19 +77,11 @@ export const updateClassroomSchema = z.object({
             'Virtual',
             'Other'
         ]).optional(),
-
-        facilities: z.string()
-            .max(500, 'Facilities description must not exceed 500 characters')
-            .optional(),
-
+        facilities: z.array(z.string().min(1).max(100)).optional().default([]),
         isActive: z.boolean().optional(),
-
         isUnderMaintenance: z.boolean().optional(),
-
-        maintenanceNotes: z.string()
-            .max(500, 'Maintenance notes must not exceed 500 characters')
-            .optional(),
-    }),
+        maintenanceNotes: z.string().max(500, 'Maintenance notes must not exceed 500 characters').optional(),
+    })
 });
 
 export const getClassroomByIdSchema = z.object({
@@ -135,6 +120,5 @@ export const getClassroomsSchema = z.object({
         isUnderMaintenance: z.enum(['true', 'false']).transform(val => val === 'true').optional(),
         minCapacity: z.string().regex(/^\d+$/).transform(Number).optional(),
         search: z.string().optional(),
-    }),
+    })
 });
-

@@ -21,8 +21,8 @@ export const validate = (schema) => {
             next();
         } catch (error) {
             if (error instanceof z.ZodError) {
-                const errors = error.errors.map((err) => ({
-                    field: err.path.join('.'),
+                const errors = (error.issues || []).map((err) => ({
+                    field: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
                     message: err.message,
                 }));
 
@@ -55,8 +55,8 @@ export const validatePartial = (schema) => {
             next();
         } catch (error) {
             if (error instanceof z.ZodError) {
-                const errors = error.errors.map((err) => ({
-                    field: err.path.join('.'),
+                const errors = (error.issues || []).map((err) => ({
+                    field: Array.isArray(err.path) ? err.path.join('.') : String(err.path || ''),
                     message: err.message,
                 }));
 

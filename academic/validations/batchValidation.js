@@ -65,7 +65,7 @@ export const createBatchSchema = z.object({
             .optional()
             .default(0),
         
-        status: z.enum(['active', 'inactive']).optional().default('active'),
+        status: z.boolean().optional().default(true),
     })
     .refine((data) => {
         if (data.startDate && data.endDate) {

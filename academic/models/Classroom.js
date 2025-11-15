@@ -37,7 +37,8 @@ const classroomSchema = new mongoose.Schema(
             default: 'Lecture Hall',
         },
         facilities: {
-            type: String,
+            type: [String],
+            default: [],
         },
         isActive: {
             type: Boolean,
