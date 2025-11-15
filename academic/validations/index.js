@@ -54,10 +54,10 @@ export {
 // CoursePrerequisite validations
 export {
     createCoursePrerequisiteSchema,
+    updateCoursePrerequisiteSchema,
     getCoursePrerequisiteByIdSchema,
     deleteCoursePrerequisiteSchema,
     getCoursePrerequisitesSchema,
-    getPrerequisitesByCourseSchema,
 } from './coursePrerequisiteValidation.js';
 
 // Faculty validations
@@ -110,4 +110,3 @@ export {
     approveSyllabusSchema,
     publishSyllabusSchema,
 } from './courseSyllabusValidation.js';
-

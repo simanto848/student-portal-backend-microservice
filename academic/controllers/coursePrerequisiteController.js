@@ -42,6 +42,15 @@ class CoursePrerequisiteController {
         }
     }
 
+    async update(req, res, next) {
+        try {
+            const updated = await coursePrerequisiteService.update(req.params.id, req.body);
+            return ApiResponse.success(res, updated, 'Course prerequisite updated successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async delete(req, res, next) {
         try {
             await coursePrerequisiteService.delete(req.params.id);

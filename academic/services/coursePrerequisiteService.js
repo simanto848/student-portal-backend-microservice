@@ -97,6 +97,58 @@ class CoursePrerequisiteService {
         return this.getById(created._id);
     }
 
+    async update(id, payload) {
+        const item = await CoursePrerequisite.findById(id);
+        if (!item) {
+            throw new ApiError(404, 'Course prerequisite not found');
+        }
+
+        const newCourseId = payload.courseId || item.courseId;
+        const newPrerequisiteId = payload.prerequisiteId || item.prerequisiteId;
+        if (newCourseId === newPrerequisiteId) {
+            throw new ApiError(400, 'A course cannot be a prerequisite of itself');
+        }
+
+        const lookups = [];
+        if (payload.courseId && payload.courseId !== item.courseId) {
+            lookups.push(Course.findById(newCourseId));
+        }
+
+        if (payload.prerequisiteId && payload.prerequisiteId !== item.prerequisiteId) {
+            lookups.push(Course.findById(newPrerequisiteId));
+        }
+
+        if (lookups.length) {
+            const results = await Promise.all(lookups);
+            if (results.some(r => !r)) {
+                throw new ApiError(404, 'Referenced course not found');
+            }
+        }
+
+        if (payload.courseId || payload.prerequisiteId) {
+            const existingPair = await CoursePrerequisite.findOne({ courseId: newCourseId, prerequisiteId: newPrerequisiteId });
+            if (existingPair && existingPair._id.toString() !== id) {
+                throw new ApiError(409, 'This prerequisite relation already exists');
+            }
+
+            const reversePair = await CoursePrerequisite.findOne({ courseId: newPrerequisiteId, prerequisiteId: newCourseId });
+            if (reversePair) {
+                throw new ApiError(409, 'Circular prerequisite relation detected (reverse pair exists)');
+            }
+
+            const createsCycle = await this.#existsPath(newPrerequisiteId, newCourseId);
+            if (createsCycle) {
+                throw new ApiError(409, 'Circular prerequisite relation detected (multi-level)');
+            }
+        }
+
+        if (payload.courseId) item.courseId = payload.courseId;
+        if (payload.prerequisiteId) item.prerequisiteId = payload.prerequisiteId;
+
+        await item.save();
+        return this.getById(item._id);
+    }
+
     async delete(id) {
         const item = await CoursePrerequisite.findById(id);
         if (!item) {

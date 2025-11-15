@@ -20,6 +20,26 @@ export const createCoursePrerequisiteSchema = z.object({
     }),
 });
 
+export const updateCoursePrerequisiteSchema = z.object({
+    body: z.object({
+        courseId: z.string().uuid('Invalid course ID format').optional(),
+        prerequisiteId: z.string().uuid('Invalid prerequisite course ID format').optional(),
+    }).superRefine((data, ctx) => {
+        if (data.courseId && data.prerequisiteId && data.courseId === data.prerequisiteId) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['prerequisiteId'],
+                message: 'A course cannot be a prerequisite of itself',
+            });
+        }
+    }),
+    params: z.object({
+        id: z.string({
+            required_error: 'CoursePrerequisite ID is required',
+        }).uuid('Invalid coursePrerequisite ID format'),
+    }),
+});
+
 export const getCoursePrerequisiteByIdSchema = z.object({
     params: z.object({
         id: z.string({
@@ -46,13 +66,3 @@ export const getCoursePrerequisitesSchema = z.object({
         prerequisiteId: z.string().uuid().optional(),
     }),
 });
-
-export const getPrerequisitesByCourseSchema = z.object({
-    params: z.object({
-        courseId: z.string({
-            required_error: 'Course ID is required',
-        })
-        .uuid('Invalid course ID format'),
-    }),
-});
-
