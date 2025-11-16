@@ -31,15 +31,19 @@ const studentSchema = new mongoose.Schema(
         },
         departmentId: {
             type: String,
+            required: true,
         },
         programId: {
             type: String,
+            required: true
         },
         batchId: {
             type: String,
+            required: true
         },
         sessionId: {
             type: String,
+            required: true,
         },
         enrollmentStatus: {
             type: String,
@@ -57,9 +61,11 @@ const studentSchema = new mongoose.Schema(
         },
         currentSemester: {
             type: Number,
+            default: 1,
         },
         admissionDate: {
             type: Date,
+            default: Date.now,
         },
         expectedGraduationDate: {
             type: Date,

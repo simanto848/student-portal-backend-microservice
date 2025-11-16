@@ -1,4 +1,5 @@
 import express from "express";
+import cookieParser from "cookie-parser";
 import apiRoutes from "./routes/index.js";
 import ApiResponse, { ApiError } from "./utils/ApiResponser.js";
 
@@ -6,6 +7,7 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Routes
 app.use("/", apiRoutes);
@@ -26,7 +28,7 @@ app.get("/health", (req, res) => {
     }
 })
 
-// Global Error Handler Middleware (must be last)
+// Global Error Handler Middleware
 app.use((err, req, res, next) => {
     if (err instanceof ApiError) {
         return ApiResponse.error(res, err.message, err.statusCode, err.errors);
