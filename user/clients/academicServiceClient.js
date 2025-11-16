@@ -89,6 +89,19 @@ class AcademicServiceClient {
         }
     }
 
+    async updateBatchCurrentStudents(batchId, delta) {
+        try {
+            // Fetch current batch
+            const batchResp = await this.getBatchById(batchId);
+            const batch = batchResp.data || batchResp;
+            const newCount = Math.max(0, (batch.currentStudents || 0) + delta);
+            const response = await this.client.patch(`/batches/${batchId}`, { currentStudents: newCount });
+            return response.data;
+        } catch (error) {
+            throw this.handleError(error);
+        }
+    }
+
     // Error handler
     handleError(error) {
         if (error.response) {
@@ -102,4 +115,3 @@ class AcademicServiceClient {
 }
 
 export default new AcademicServiceClient();
-
