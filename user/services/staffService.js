@@ -214,22 +214,6 @@ class StaffService {
         }
     }
 
-    async restore(staffId) {
-        try {
-            const staff = await Staff.findOne({ _id: staffId, deletedAt: { $ne: null } });
-            if (!staff) {
-                throw new ApiError(404, 'Deleted staff not found');
-            }
-
-            await staff.restore();
-            const restoredStaff = await Staff.findById(staffId).select('-password').populate('profile').lean();
-            return restoredStaff;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error restoring staff: ' + error.message);
-        }
-    }
-
     async updateRole(staffId, newRole) {
         try {
             const staff = await Staff.findByIdAndUpdate(
@@ -295,13 +279,7 @@ class StaffService {
                 };
             }
 
-            // Otherwise, return all without pagination
-            const staffMembers = await Staff.find(baseQuery)
-                .select('-password')
-                .populate('profile')
-                .sort({ createdAt: -1 })
-                .lean();
-
+            const staffMembers = await Staff.find(baseQuery).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
             return { staff: staffMembers };
         } catch (error) {
             if (error instanceof ApiError) throw error;
@@ -337,6 +315,69 @@ class StaffService {
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching staff statistics: ' + error.message);
+        }
+    }
+
+    async addRegisteredIp(staffId, ipAddress) {
+        try {
+            const staff = await Staff.findById(staffId);
+            if (!staff) {
+                throw new ApiError(404, 'Staff not found');
+            }
+
+            if (staff.registeredIpAddress.includes(ipAddress)) {
+                throw new ApiError(409, 'IP address already registered');
+            }
+
+            staff.registeredIpAddress.push(ipAddress);
+            await staff.save({ validateModifiedOnly: true });
+
+            const updatedStaff = await Staff.findById(staffId).select('-password').populate('profile').lean();
+            return updatedStaff;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error adding registered IP: ' + error.message);
+        }
+    }
+
+    async removeRegisteredIp(staffId, ipAddress) {
+        try {
+            const staff = await Staff.findById(staffId);
+            if (!staff) {
+                throw new ApiError(404, 'Staff not found');
+            }
+
+            if (!staff.registeredIpAddress.includes(ipAddress)) {
+                throw new ApiError(404, 'IP address not found in registered list');
+            }
+
+            staff.registeredIpAddress = staff.registeredIpAddress.filter(ip => ip !== ipAddress);
+            await staff.save({ validateModifiedOnly: true });
+
+            const updatedStaff = await Staff.findById(staffId).select('-password').populate('profile').lean();
+            return updatedStaff;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error removing registered IP: ' + error.message);
+        }
+    }
+
+    async updateRegisteredIps(staffId, ipAddresses) {
+        try {
+            const staff = await Staff.findByIdAndUpdate(
+                staffId,
+                { $set: { registeredIpAddress: ipAddresses } },
+                { new: true, runValidators: false }
+            ).select('-password').populate('profile');
+
+            if (!staff) {
+                throw new ApiError(404, 'Staff not found');
+            }
+
+            return staff;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error updating registered IPs: ' + error.message);
         }
     }
 }

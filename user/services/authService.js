@@ -55,6 +55,31 @@ class AuthService {
         res.clearCookie('refreshToken', REFRESH_TOKEN_COOKIE_OPTIONS);
     }
 
+    getClientIp(req) {
+        return req.ip ||
+               req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+               req.connection?.remoteAddress ||
+               req.socket?.remoteAddress ||
+               'unknown';
+    }
+
+    validateRegisteredIp(user, clientIp, roleKey) {
+        if (roleKey === 'student') {
+            return true;
+        }
+
+        if (!user.registeredIpAddress || user.registeredIpAddress.length === 0) {
+            throw new ApiError(403, `Access denied. No registered IP addresses found for this account. Please contact administrator to register your IP address.`);
+        }
+
+        const isIpRegistered = user.registeredIpAddress.includes(clientIp);
+        if (!isIpRegistered) {
+            throw new ApiError(403, `Access denied. Your IP address (${clientIp}) is not registered for this account. Please contact administrator to add your IP address.`);
+        }
+
+        return true;
+    }
+
     async performLogin(Model, credentials, roleKey, req, res) {
         try {
             const { email, password } = credentials;
@@ -72,6 +97,9 @@ class AuthService {
                 throw new ApiError(401, `${roleKey} credentials are invalid`);
             }
 
+            const clientIp = this.getClientIp(req);
+            this.validateRegisteredIp(user, clientIp, roleKey);
+
             const payload = {
                 sub: user.id,
                 role: roleKey,
@@ -88,10 +116,10 @@ class AuthService {
             refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 30);
 
             user.lastLoginAt = new Date();
-            user.lastLoginIp = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+            user.lastLoginIp = clientIp;
             user.refreshToken = refreshToken;
             user.refreshTokenExpiresAt = refreshTokenExpiresAt;
-            await user.save();
+            await user.save({ validateModifiedOnly: true });
 
             this.setAuthCookie(res, accessToken);
             this.setRefreshTokenCookie(res, refreshToken);

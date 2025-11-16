@@ -16,8 +16,10 @@ router.get('/:id', staffController.getById);
 router.post('/', validate(createStaffSchema), staffController.create);
 router.patch('/:id', validate(updateStaffSchema), staffController.update);
 router.patch('/:id/role', validate(updateStaffRoleSchema), staffController.updateRole);
+router.post('/:id/registered-ips/add', staffController.addRegisteredIp);
+router.post('/:id/registered-ips/remove', staffController.removeRegisteredIp);
+router.put('/:id/registered-ips', staffController.updateRegisteredIps);
 router.delete('/:id', staffController.delete);
-router.post('/:id/restore', staffController.restore);
 
 export default router;
 

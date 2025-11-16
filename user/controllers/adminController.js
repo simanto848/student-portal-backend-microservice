@@ -58,16 +58,7 @@ class AdminController {
     async delete(req, res, next) {
         try {
             await adminService.delete(req.params.id);
-            return ApiResponse.noContent(res);
-        } catch (error) {
-            next(error);
-        }
-    }
-
-    async restore(req, res, next) {
-        try {
-            const admin = await adminService.restore(req.params.id);
-            return ApiResponse.success(res, admin, 'Admin restored successfully');
+            return ApiResponse.success(res, null, 'Admin deleted successfully');
         } catch (error) {
             next(error);
         }
@@ -91,7 +82,36 @@ class AdminController {
             next(error);
         }
     }
+
+    async addRegisteredIp(req, res, next) {
+        try {
+            const { ipAddress } = req.body;
+            const admin = await adminService.addRegisteredIp(req.params.id, ipAddress);
+            return ApiResponse.success(res, admin, 'IP address added successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async removeRegisteredIp(req, res, next) {
+        try {
+            const { ipAddress } = req.body;
+            const admin = await adminService.removeRegisteredIp(req.params.id, ipAddress);
+            return ApiResponse.success(res, admin, 'IP address removed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateRegisteredIps(req, res, next) {
+        try {
+            const { ipAddresses } = req.body;
+            const admin = await adminService.updateRegisteredIps(req.params.id, ipAddresses);
+            return ApiResponse.success(res, admin, 'Registered IP addresses updated successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AdminController();
-

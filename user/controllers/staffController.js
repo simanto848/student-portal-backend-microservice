@@ -64,15 +64,6 @@ class StaffController {
         }
     }
 
-    async restore(req, res, next) {
-        try {
-            const staff = await staffService.restore(req.params.id);
-            return ApiResponse.success(res, staff, 'Staff member restored successfully');
-        } catch (error) {
-            next(error);
-        }
-    }
-
     async updateRole(req, res, next) {
         try {
             const { role } = req.body;
@@ -109,6 +100,36 @@ class StaffController {
         try {
             const statistics = await staffService.getStatistics();
             return ApiResponse.success(res, statistics, 'Staff statistics retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async addRegisteredIp(req, res, next) {
+        try {
+            const { ipAddress } = req.body;
+            const staff = await staffService.addRegisteredIp(req.params.id, ipAddress);
+            return ApiResponse.success(res, staff, 'IP address added successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async removeRegisteredIp(req, res, next) {
+        try {
+            const { ipAddress } = req.body;
+            const staff = await staffService.removeRegisteredIp(req.params.id, ipAddress);
+            return ApiResponse.success(res, staff, 'IP address removed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async updateRegisteredIps(req, res, next) {
+        try {
+            const { ipAddresses } = req.body;
+            const staff = await staffService.updateRegisteredIps(req.params.id, ipAddresses);
+            return ApiResponse.success(res, staff, 'Registered IP addresses updated successfully');
         } catch (error) {
             next(error);
         }
