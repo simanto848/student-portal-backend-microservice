@@ -1,7 +1,7 @@
 import express from 'express';
 import studentProfileController from '../controllers/studentProfileController.js';
 import { authenticate, authorize } from '../middlewares/auth.js';
-import validate from '../middlewares/validate.js';
+import { validate } from '../middlewares/validate.js';
 import {
     studentProfileCreateValidation,
     studentProfileUpdateValidation,
