@@ -100,7 +100,7 @@ const studentSchema = new mongoose.Schema(
         },
         profile: {
             type: String,
-            ref: 'Profile',
+            ref: 'StudentProfile',
         },
         deletedAt: {
             type: Date,

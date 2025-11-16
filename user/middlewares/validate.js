@@ -31,3 +31,5 @@ export const validate = (validationFn) => {
         }
     };
 };
+
+export default validate;

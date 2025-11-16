@@ -1,5 +1,5 @@
 import Student from '../models/Student.js';
-import Profile from '../models/Profile.js';
+import StudentProfile from '../models/StudentProfile.js';
 import { ApiError } from '../utils/ApiResponser.js';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import PasswordGenerator from '../utils/passwordGenerator.js';
@@ -114,11 +114,11 @@ class StudentService {
 
             await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1);
 
-            // Optional profile creation AFTER student exists
-            if (data.profile && typeof data.profile === 'object') {
+            // Optional studentProfile creation AFTER student exists
+            if (data.studentProfile && typeof data.studentProfile === 'object') {
                 try {
-                    const profile = await Profile.create({ ...data.profile, user: student._id });
-                    await Student.findByIdAndUpdate(student._id, { $set: { profile: profile._id } }, { new: true, runValidators: false });
+                    const createdProfile = await StudentProfile.create({ ...data.studentProfile, studentId: student._id });
+                    await Student.findByIdAndUpdate(student._id, { $set: { profile: createdProfile._id } }, { new: true, runValidators: false });
                 } catch (profileError) {
                     // Do not fail the whole operation; log and proceed
                     console.error('Student profile creation failed:', profileError.message);
@@ -148,9 +148,9 @@ class StudentService {
             // If profile object included, upsert
             if (payload.profile && typeof payload.profile === 'object') {
                 if (existing.profile) {
-                    await Profile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
+                    await StudentProfile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
                 } else {
-                    const profile = await Profile.create({ ...payload.profile, user: undefined });
+                    const profile = await StudentProfile.create({ ...payload.profile, studentId: undefined });
                     payload.profile = profile._id;
                 }
             }
@@ -192,4 +192,3 @@ class StudentService {
 }
 
 export default new StudentService();
-
