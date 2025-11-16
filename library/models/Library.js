@@ -9,38 +9,78 @@ const librarySchema = new mongoose.Schema(
         },
         name: {
             type: String,
-            required: true,
+            required: [true, 'Library name is required'],
+            maxlength: [100, 'Library name cannot exceed 100 characters'],
+            trim: true,
+        },
+        code: {
+            type: String,
+            required: [true, 'Library code is required'],
+            unique: true,
+            maxlength: [50, 'Library code cannot exceed 50 characters'],
+            trim: true,
+            uppercase: true,
         },
         description: {
-            type: Text,
+            type: String,
+            default: '',
         },
         address: {
-            type: Text,
+            type: String,
+            default: '',
         },
         phone: {
             type: String,
-            unique: true,
+            maxlength: [20, 'Phone number cannot exceed 20 characters'],
+            trim: true,
         },
         email: {
             type: String,
-            unique: true,
+            maxlength: [100, 'Email cannot exceed 100 characters'],
+            trim: true,
+            lowercase: true,
+            validate: {
+                validator: function(v) {
+                    if (!v) return true;
+                    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+                },
+                message: 'Please provide a valid email address'
+            }
         },
         operatingHours: {
-            type: Number,
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
         },
         maxBorrowLimit: {
             type: Number,
             required: true,
-            default: 5,
+            default: 3,
+            min: [1, 'Maximum borrow limit must be at least 1'],
+        },
+        borrowDuration: {
+            type: Number,
+            required: true,
+            default: 120,
+            min: [1, 'Borrow duration must be at least 1 day'],
         },
         finePerDay: {
             type: Number,
             required: true,
             default: 50,
+            min: [0, 'Fine per day cannot be negative'],
+        },
+        facultyId: {
+            type: String,
+            ref: 'Faculty',
+            default: null,
         },
         status: {
             type: String,
-            enum: ["active", "inactive", "maintenance"],
+            enum: {
+                values: ['active', 'inactive', 'maintenance'],
+                message: 'Status must be either active, inactive, or maintenance'
+            },
+            default: 'active',
         },
         deletedAt: {
             type: Date,
@@ -74,6 +114,31 @@ librarySchema.methods.restore = function () {
     this.deletedAt = null;
     return this.save();
 };
+
+// Cascade delete
+librarySchema.pre('save', async function(next) {
+    if (this.isModified('deletedAt') && this.deletedAt !== null) {
+        const Book = mongoose.model('Book');
+        const BookCopy = mongoose.model('BookCopy');
+        const BookTakenHistory = mongoose.model('BookTakenHistory');
+
+        await Book.updateMany(
+            { libraryId: this._id, deletedAt: null },
+            { $set: { deletedAt: new Date() } }
+        );
+
+        await BookCopy.updateMany(
+            { libraryId: this._id, deletedAt: null },
+            { $set: { deletedAt: new Date() } }
+        );
+
+        await BookTakenHistory.updateMany(
+            { libraryId: this._id, deletedAt: null },
+            { $set: { deletedAt: new Date() } }
+        );
+    }
+    next();
+});
 
 const Library = mongoose.model("Library", librarySchema);
 
