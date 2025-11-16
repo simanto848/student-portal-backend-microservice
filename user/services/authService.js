@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import Admin from '../models/Admin.js';
 import Staff from '../models/Staff.js';
 import Teacher from '../models/Teacher.js';
@@ -12,14 +13,31 @@ const TOKEN_COOKIE_OPTIONS = {
     maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
+const REFRESH_TOKEN_COOKIE_OPTIONS = {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+    path: '/api/user/auth',
+};
+
 class AuthService {
     constructor() {
         this.jwtSecret = process.env.JWT_SECRET;
         this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+        this.refreshTokenExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
     }
 
-    signToken(payload) {
+    signToken(payload = {}) {
         return jwt.sign(payload, this.jwtSecret, { expiresIn: this.jwtExpiresIn });
+    }
+
+    signRefreshToken(payload = {}) {
+        return jwt.sign(payload, this.jwtSecret, { expiresIn: this.refreshTokenExpiresIn });
+    }
+
+    generateRefreshToken() {
+        return crypto.randomBytes(64).toString('hex');
     }
 
     setAuthCookie(res, token) {
@@ -27,8 +45,14 @@ class AuthService {
         return token;
     }
 
+    setRefreshTokenCookie(res, refreshToken) {
+        res.cookie('refreshToken', refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
+        return refreshToken;
+    }
+
     clearAuthCookie(res) {
         res.clearCookie('accessToken', TOKEN_COOKIE_OPTIONS);
+        res.clearCookie('refreshToken', REFRESH_TOKEN_COOKIE_OPTIONS);
     }
 
     async performLogin(Model, credentials, roleKey, req, res) {
@@ -48,10 +72,6 @@ class AuthService {
                 throw new ApiError(401, `${roleKey} credentials are invalid`);
             }
 
-            user.lastLoginAt = new Date();
-            user.lastLoginIp = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
-            await user.save();
-
             const payload = {
                 sub: user.id,
                 role: roleKey,
@@ -61,15 +81,30 @@ class AuthService {
                 email: user.email,
             };
 
-            const token = this.signToken(payload);
-            this.setAuthCookie(res, token);
+            const accessToken = this.signToken(payload);
+            const refreshToken = this.generateRefreshToken();
+
+            const refreshTokenExpiresAt = new Date();
+            refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 30);
+
+            user.lastLoginAt = new Date();
+            user.lastLoginIp = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+            user.refreshToken = refreshToken;
+            user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+            await user.save();
+
+            this.setAuthCookie(res, accessToken);
+            this.setRefreshTokenCookie(res, refreshToken);
 
             const sanitizedUser = user.toObject();
             delete sanitizedUser.password;
+            delete sanitizedUser.refreshToken;
 
             return {
-                token,
+                accessToken,
+                refreshToken,
                 user: sanitizedUser,
+                expiresIn: this.jwtExpiresIn,
             };
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, error.message);
@@ -93,8 +128,87 @@ class AuthService {
     }
 
     async logout(req, res) {
-        this.clearAuthCookie(res);
-        return { message: 'Logged out successfully' };
+        try {
+            this.clearAuthCookie(res);
+            if (req.user && req.user.sub) {
+                const models = {
+                    admin: Admin,
+                    staff: Staff,
+                    teacher: Teacher,
+                    student: Student,
+                };
+
+                const Model = models[req.user.role];
+                if (Model) {
+                    await Model.findByIdAndUpdate(req.user.sub, {
+                        refreshToken: null,
+                        refreshTokenExpiresAt: null,
+                    });
+                }
+            }
+
+            return { message: 'Logged out successfully' };
+        } catch (error) {
+            throw new ApiError(500, error.message);
+        }
+    }
+
+    async refreshAccessToken(refreshToken, req, res) {
+        try {
+            if (!refreshToken) {
+                throw new ApiError(401, 'Refresh token is required');
+            }
+
+            const models = [
+                { Model: Admin, role: 'admin' },
+                { Model: Staff, role: 'staff' },
+                { Model: Teacher, role: 'teacher' },
+                { Model: Student, role: 'student' },
+            ];
+
+            let user = null;
+            let roleKey = null;
+            for (const { Model, role } of models) {
+                user = await Model.findOne({
+                    refreshToken,
+                    refreshTokenExpiresAt: { $gt: new Date() },
+                    deletedAt: null,
+                }).select('+refreshToken');
+
+                if (user) {
+                    roleKey = role;
+                    break;
+                }
+            }
+
+            if (!user) {
+                throw new ApiError(401, 'Invalid or expired refresh token');
+            }
+
+            const payload = {
+                sub: user.id,
+                role: roleKey,
+                type: roleKey,
+                registrationNumber: user.registrationNumber,
+                fullName: user.fullName,
+                email: user.email,
+            };
+
+            const accessToken = this.signToken(payload);
+            this.setAuthCookie(res, accessToken);
+
+            const sanitizedUser = user.toObject();
+            delete sanitizedUser.password;
+            delete sanitizedUser.refreshToken;
+
+            return {
+                accessToken,
+                user: sanitizedUser,
+                expiresIn: this.jwtExpiresIn,
+            };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
     }
 }
 

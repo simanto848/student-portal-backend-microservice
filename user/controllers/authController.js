@@ -46,7 +46,16 @@ class AuthController {
             next(error);
         }
     }
+
+    async refreshToken(req, res, next) {
+        try {
+            const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+            const result = await authService.refreshAccessToken(refreshToken, req, res);
+            return ApiResponse.success(res, result, 'Access token refreshed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AuthController();
-

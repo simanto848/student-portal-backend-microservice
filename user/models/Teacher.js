@@ -60,6 +60,15 @@ const teacherSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        refreshToken: {
+            type: String,
+            default: null,
+            select: false,
+        },
+        refreshTokenExpiresAt: {
+            type: Date,
+            default: null,
+        },
         profile: {
             type: String,
             ref: 'Profile',

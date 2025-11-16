@@ -14,6 +14,7 @@ router.post('/admins/login', validate(adminLoginSchema), authController.loginAdm
 router.post('/staffs/login', validate(staffLoginSchema), authController.loginStaff);
 router.post('/teachers/login', validate(teacherLoginSchema), authController.loginTeacher);
 router.post('/students/login', validate(studentLoginSchema), authController.loginStudent);
+router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', authController.logout);
 
 export default router;

@@ -58,6 +58,15 @@ const adminSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        refreshToken: {
+            type: String,
+            default: null,
+            select: false,
+        },
+        refreshTokenExpiresAt: {
+            type: Date,
+            default: null,
+        },
         profile: {
             type: String,
             ref: 'Profile',
@@ -118,7 +127,7 @@ adminSchema.methods.restore = function () {
     return this.save();
 };
 
-const Admin = mongoose.model("Admin", adminSchema);
+const  Admin = mongoose.model("Admin", adminSchema);
 
 export default Admin;
 
