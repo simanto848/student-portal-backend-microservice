@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 8000;
 
 app.use('/api/academic', expressProxy(process.env.ACADEMIC_SERVICE_URL));
 app.use('/api/user', expressProxy(process.env.USER_SERVICE_URL));
+app.use('/api/library', expressProxy(process.env.LIBRARY_SERVICE_URL || 'http://localhost:8008'));
 
 app.listen(PORT, () => {
     console.log(`Gateway server started on http://localhost:${PORT}`.green.underline.bold);
