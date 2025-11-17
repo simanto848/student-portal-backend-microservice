@@ -31,7 +31,7 @@ app.get("/health", (req, res) => {
 });
 
 // API Routes
-app.use("/api/library", routes);
+app.use("/", routes);
 
 // Error handlers
 app.use(notFoundHandler);

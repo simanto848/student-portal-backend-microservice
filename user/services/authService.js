@@ -102,7 +102,7 @@ class AuthService {
 
             const payload = {
                 sub: user.id,
-                role: roleKey,
+                role: user.role || roleKey,
                 type: roleKey,
                 registrationNumber: user.registrationNumber,
                 fullName: user.fullName,
@@ -215,8 +215,8 @@ class AuthService {
 
             const payload = {
                 sub: user.id,
-                role: roleKey,
-                type: roleKey,
+                role: user.role || roleKey, // Use actual role from user document
+                type: roleKey, // Keep type as the model type (admin, staff, teacher, student)
                 registrationNumber: user.registrationNumber,
                 fullName: user.fullName,
                 email: user.email,

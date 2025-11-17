@@ -18,9 +18,19 @@ export const authenticate = (req, res, next) => {
 
 export const authorize = (...allowedRoles) => {
     return (req, res, next) => {
-        if (!req.user || !allowedRoles.includes(req.user.role)) {
+        if (!req.user) {
             return ApiResponse.forbidden(res, 'You do not have permission to perform this action');
         }
+
+        const userRole = req.user.role;
+        const userType = req.user.type;
+
+        const hasPermission = allowedRoles.includes(userRole) || allowedRoles.includes(userType);
+
+        if (!hasPermission) {
+            return ApiResponse.forbidden(res, 'You do not have permission to perform this action');
+        }
+
         next();
     };
 };

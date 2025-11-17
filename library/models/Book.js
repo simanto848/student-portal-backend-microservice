@@ -22,7 +22,7 @@ const bookSchema = new mongoose.Schema(
         isbn: {
             type: String,
             unique: true,
-            sparse: true, // Allows multiple null values
+            sparse: true,
             maxlength: [20, 'ISBN cannot exceed 20 characters'],
             trim: true,
         },
@@ -105,7 +105,6 @@ const bookSchema = new mongoose.Schema(
 bookSchema.index({ deletedAt: 1 });
 bookSchema.index({ title: 1 });
 bookSchema.index({ author: 1 });
-bookSchema.index({ isbn: 1 });
 bookSchema.index({ category: 1 });
 bookSchema.index({ subject: 1 });
 bookSchema.index({ status: 1 });
