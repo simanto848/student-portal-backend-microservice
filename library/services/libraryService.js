@@ -47,7 +47,7 @@ class LibraryService {
 
     async getById(id) {
         try {
-            const library = await Library.findById(id).lean();
+            const library = await Library.findOne({ _id: id, deletedAt: null }).lean();
             if (!library) throw new ApiError(404, 'Library not found');
             return library;
         } catch (error) {
@@ -57,7 +57,6 @@ class LibraryService {
 
     async create(data) {
         try {
-            // Check if library code already exists
             const existingLibrary = await Library.findOne({
                 code: data.code.toUpperCase(),
                 deletedAt: null
@@ -80,10 +79,9 @@ class LibraryService {
 
     async update(id, data) {
         try {
-            const library = await Library.findById(id);
+            const library = await Library.findOne({ _id: id, deletedAt: null });
             if (!library) throw new ApiError(404, 'Library not found');
 
-            // If code is being updated, check for conflicts
             if (data.code && data.code.toUpperCase() !== library.code) {
                 const existingLibrary = await Library.findOne({
                     code: data.code.toUpperCase(),
@@ -109,7 +107,7 @@ class LibraryService {
 
     async delete(id) {
         try {
-            const library = await Library.findById(id);
+            const library = await Library.findOne({ _id: id, deletedAt: null });
             if (!library) throw new ApiError(404, 'Library not found');
 
             await library.softDelete();

@@ -69,11 +69,6 @@ const librarySchema = new mongoose.Schema(
             default: 50,
             min: [0, 'Fine per day cannot be negative'],
         },
-        facultyId: {
-            type: String,
-            ref: 'Faculty',
-            default: null,
-        },
         status: {
             type: String,
             enum: {
@@ -100,10 +95,6 @@ const librarySchema = new mongoose.Schema(
 );
 
 librarySchema.index({ deletedAt: 1 });
-librarySchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
-    next();
-});
 
 librarySchema.methods.softDelete = function () {
     this.deletedAt = new Date();
