@@ -6,9 +6,10 @@ import { bookCopyCreateValidation, bookCopyUpdateValidation } from '../validatio
 
 const router = express.Router();
 
+router.use(authenticate);
+
 router.get('/book/:bookId/available', bookCopyController.getAvailableCopiesByBook);
 
-router.use(authenticate);
 router.use(authorize('super_admin', 'admin', 'library'));
 
 router.get('/', bookCopyController.getAll);

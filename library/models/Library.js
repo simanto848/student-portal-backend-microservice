@@ -69,6 +69,12 @@ const librarySchema = new mongoose.Schema(
             default: 50,
             min: [0, 'Fine per day cannot be negative'],
         },
+        reservationHoldDays: {
+            type: Number,
+            required: true,
+            default: 2,
+            min: [1, 'Reservation hold days must be at least 1'],
+        },
         status: {
             type: String,
             enum: {

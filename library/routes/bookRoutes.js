@@ -7,6 +7,7 @@ import { bookCreateValidation, bookUpdateValidation } from '../validations/bookV
 const router = express.Router();
 
 router.use(authenticate)
+
 router.get('/available', bookController.getAvailableBooks);
 
 router.use(authorize('super_admin', 'admin', 'library'));
