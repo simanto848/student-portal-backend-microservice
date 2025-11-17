@@ -78,10 +78,6 @@ bookCopySchema.index({ status: 1 });
 bookCopySchema.index({ condition: 1 });
 bookCopySchema.index({ copyNumber: 1, libraryId: 1 }, { unique: true, name: 'unique_copy_number_per_library' });
 
-bookCopySchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
-    next();
-});
 
 bookCopySchema.methods.softDelete = function () {
     this.deletedAt = new Date();

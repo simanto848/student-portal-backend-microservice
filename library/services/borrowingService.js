@@ -1,36 +1,32 @@
 import BookTakenHistory from '../models/BookTakenHistory.js';
 import BookCopy from '../models/BookCopy.js';
-import Book from '../models/Book.js';
 import Library from '../models/Library.js';
+import userServiceClient from '../clients/userServiceClient.js';
 import { ApiError } from '../utils/ApiResponser.js';
 
 class BorrowingService {
-    async borrowBook(borrowerId, copyId, processedById, notes = '') {
+    async borrowBook({ userType, borrowerId, copyId, libraryId, processedById, notes = '' }) {
         try {
-            // Get the book copy with related data
-            const copy = await BookCopy.findById(copyId)
-                .populate('bookId')
-                .populate('libraryId');
+            await userServiceClient.validateUser(userType, borrowerId);
+            const copy = await BookCopy.findOne({ _id: copyId, deletedAt: null }).lean();
 
             if (!copy) throw new ApiError(404, 'Book copy not found');
             if (copy.status !== 'available') {
                 throw new ApiError(400, 'This book copy is not available for borrowing');
             }
 
-            const library = copy.libraryId;
+            const library = await Library.findOne({ _id: libraryId, deletedAt: null }).lean();
+            if (!library) throw new ApiError(404, 'Library not found');
 
-            // Check if user has reached borrow limit
             const activeBorrowings = await BookTakenHistory.countDocuments({
                 borrowerId,
                 status: { $in: ['borrowed', 'overdue'] },
                 deletedAt: null
             });
-
             if (activeBorrowings >= library.maxBorrowLimit) {
                 throw new ApiError(400, `You have reached the maximum borrow limit of ${library.maxBorrowLimit} books`);
             }
 
-            // Check if user has any overdue books with unpaid fines
             const overdueWithUnpaidFines = await BookTakenHistory.findOne({
                 borrowerId,
                 status: 'overdue',
@@ -38,22 +34,19 @@ class BorrowingService {
                 fineAmount: { $gt: 0 },
                 deletedAt: null
             });
-
             if (overdueWithUnpaidFines) {
                 throw new ApiError(400, 'You have unpaid fines. Please clear them before borrowing new books');
             }
 
-            // Calculate due date
             const borrowDate = new Date();
             const dueDate = new Date(borrowDate);
             dueDate.setDate(dueDate.getDate() + library.borrowDuration);
 
-            // Create borrowing record
             const borrowing = new BookTakenHistory({
+                userType,
                 borrowerId,
-                bookId: copy.bookId._id || copy.bookId,
                 copyId: copy._id,
-                libraryId: library._id || library.id,
+                libraryId: library._id,
                 borrowDate,
                 dueDate,
                 status: 'borrowed',
@@ -64,10 +57,10 @@ class BorrowingService {
             });
 
             await borrowing.save();
-
-            // Update copy status
-            copy.status = 'borrowed';
-            await copy.save();
+            await BookCopy.updateOne(
+                { _id: copyId },
+                { $set: { status: 'borrowed' } }
+            );
 
             return borrowing.toJSON();
         } catch (error) {
@@ -80,7 +73,7 @@ class BorrowingService {
 
     async returnBook(borrowingId, processedById, notes = '') {
         try {
-            const borrowing = await BookTakenHistory.findById(borrowingId)
+            const borrowing = await BookTakenHistory.findOne({ _id: borrowingId, deletedAt: null })
                 .populate('copyId')
                 .populate('libraryId');
 
@@ -92,14 +85,12 @@ class BorrowingService {
             const returnDate = new Date();
             const dueDate = new Date(borrowing.dueDate);
 
-            // Calculate fine if overdue
             let fineAmount = 0;
             if (returnDate > dueDate) {
                 const daysOverdue = Math.ceil((returnDate - dueDate) / (1000 * 60 * 60 * 24));
                 fineAmount = daysOverdue * borrowing.libraryId.finePerDay;
             }
 
-            // Update borrowing record
             borrowing.returnDate = returnDate;
             borrowing.status = 'returned';
             borrowing.fineAmount = fineAmount;
@@ -107,8 +98,6 @@ class BorrowingService {
             if (processedById) borrowing.processedById = processedById;
 
             await borrowing.save();
-
-            // Update copy status back to available
             const copy = await BookCopy.findById(borrowing.copyId);
             if (copy) {
                 copy.status = 'available';
@@ -138,8 +127,14 @@ class BorrowingService {
 
                 const [borrowings, total] = await Promise.all([
                     BookTakenHistory.find(query)
-                        .populate('bookId', 'title author isbn category')
-                        .populate('copyId', 'copyNumber location condition')
+                        .populate({
+                            path: 'copyId',
+                            select: 'copyNumber location condition bookId',
+                            populate: {
+                                path: 'bookId',
+                                select: 'title author isbn category'
+                            }
+                        })
                         .populate('libraryId', 'name code finePerDay')
                         .sort({ borrowDate: -1 })
                         .skip(skip)
@@ -148,7 +143,6 @@ class BorrowingService {
                     BookTakenHistory.countDocuments(query),
                 ]);
 
-                // Add days until due and potential fine
                 const borrowingsWithDetails = borrowings.map(b => {
                     const dueDate = new Date(b.dueDate);
                     const today = new Date();
@@ -176,8 +170,14 @@ class BorrowingService {
             }
 
             const borrowings = await BookTakenHistory.find(query)
-                .populate('bookId', 'title author isbn category')
-                .populate('copyId', 'copyNumber location condition')
+                .populate({
+                    path: 'copyId',
+                    select: 'copyNumber location condition bookId',
+                    populate: {
+                        path: 'bookId',
+                        select: 'title author isbn category'
+                    }
+                })
                 .populate('libraryId', 'name code finePerDay')
                 .sort({ borrowDate: -1 })
                 .lean();
@@ -212,13 +212,18 @@ class BorrowingService {
             };
 
             const borrowings = await BookTakenHistory.find(query)
-                .populate('bookId', 'title author isbn category')
-                .populate('copyId', 'copyNumber location')
+                .populate({
+                    path: 'copyId',
+                    select: 'copyNumber location bookId',
+                    populate: {
+                        path: 'bookId',
+                        select: 'title author isbn category'
+                    }
+                })
                 .populate('libraryId', 'name code finePerDay')
                 .sort({ dueDate: 1 })
                 .lean();
 
-            // Calculate current fines
             const borrowingsWithFines = borrowings.map(b => {
                 const dueDate = new Date(b.dueDate);
                 const today = new Date();
@@ -253,8 +258,14 @@ class BorrowingService {
 
             const [history, total] = await Promise.all([
                 BookTakenHistory.find(query)
-                    .populate('bookId', 'title author isbn category')
-                    .populate('copyId', 'copyNumber')
+                    .populate({
+                        path: 'copyId',
+                        select: 'copyNumber bookId',
+                        populate: {
+                            path: 'bookId',
+                            select: 'title author isbn category'
+                        }
+                    })
                     .populate('libraryId', 'name code')
                     .sort({ borrowDate: -1 })
                     .skip(skip)
@@ -279,7 +290,7 @@ class BorrowingService {
 
     async updateBorrowingStatus(id, data) {
         try {
-            const borrowing = await BookTakenHistory.findById(id);
+            const borrowing = await BookTakenHistory.findOne({ _id: id, deletedAt: null });
             if (!borrowing) throw new ApiError(404, 'Borrowing record not found');
 
             Object.assign(borrowing, data);
@@ -301,8 +312,14 @@ class BorrowingService {
 
             const [borrowings, total] = await Promise.all([
                 BookTakenHistory.find(query)
-                    .populate('bookId', 'title author isbn')
-                    .populate('copyId', 'copyNumber')
+                    .populate({
+                        path: 'copyId',
+                        select: 'copyNumber bookId',
+                        populate: {
+                            path: 'bookId',
+                            select: 'title author isbn'
+                        }
+                    })
                     .populate('libraryId', 'name code')
                     .sort({ borrowDate: -1 })
                     .skip(skip)
@@ -329,8 +346,6 @@ class BorrowingService {
         try {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-
-            // Find all borrowed books that are past due date
             const result = await BookTakenHistory.updateMany(
                 {
                     status: 'borrowed',

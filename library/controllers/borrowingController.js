@@ -4,11 +4,17 @@ import borrowingService from '../services/borrowingService.js';
 class BorrowingController {
     async borrowBook(req, res, next) {
         try {
-            const borrowerId = req.user.id;
-            const { copyId, notes } = req.validatedData || req.body;
-            const processedById = req.user.id;
+            const { userType, borrowerId, copyId, libraryId, notes } = req.validatedData || req.body;
+            const processedById = req.user?.id
 
-            const borrowing = await borrowingService.borrowBook(borrowerId, copyId, processedById, notes);
+            const borrowing = await borrowingService.borrowBook({
+                userType,
+                borrowerId,
+                copyId,
+                libraryId,
+                processedById,
+                notes
+            });
             return ApiResponse.created(res, borrowing, 'Book borrowed successfully');
         } catch (error) {
             next(error);
@@ -19,7 +25,7 @@ class BorrowingController {
         try {
             const { id } = req.params;
             const { notes } = req.validatedData || req.body;
-            const processedById = req.user.id;
+            const processedById =  req.user?.id;
 
             const borrowing = await borrowingService.returnBook(id, processedById, notes);
             return ApiResponse.success(res, borrowing, 'Book returned successfully');
@@ -89,6 +95,7 @@ class BorrowingController {
         try {
             const { id } = req.params;
             const data = req.validatedData || req.body;
+            data.processedById =  req.user?.id;
 
             const borrowing = await borrowingService.updateBorrowingStatus(id, data);
             return ApiResponse.success(res, borrowing, 'Borrowing status updated successfully');

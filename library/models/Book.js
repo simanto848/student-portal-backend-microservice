@@ -111,10 +111,6 @@ bookSchema.index({ status: 1 });
 bookSchema.index({ libraryId: 1 });
 bookSchema.index({ title: 1, author: 1, libraryId: 1 }, { unique: true, name: 'unique_book_per_library' });
 
-bookSchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
-    next();
-});
 
 bookSchema.methods.softDelete = function () {
     this.deletedAt = new Date();

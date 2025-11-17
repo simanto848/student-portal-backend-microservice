@@ -7,14 +7,14 @@ const bookTakenHistorySchema = new mongoose.Schema(
             type: String,
             default: uuidv4,
         },
+        userType: {
+            type: String,
+            enum: ["student", "teacher", "staff", "admin"],
+            required: [true, 'User type is required'],
+        },
         borrowerId: {
             type: String,
             required: [true, 'Borrower ID is required'],
-        },
-        bookId: {
-            type: String,
-            required: [true, 'Book ID is required'],
-            ref: 'Book',
         },
         copyId: {
             type: String,
@@ -86,7 +86,6 @@ const bookTakenHistorySchema = new mongoose.Schema(
 // Indexes
 bookTakenHistorySchema.index({ deletedAt: 1 });
 bookTakenHistorySchema.index({ borrowerId: 1 });
-bookTakenHistorySchema.index({ bookId: 1 });
 bookTakenHistorySchema.index({ copyId: 1 });
 bookTakenHistorySchema.index({ libraryId: 1 });
 bookTakenHistorySchema.index({ status: 1 });
@@ -95,10 +94,6 @@ bookTakenHistorySchema.index({ dueDate: 1 });
 bookTakenHistorySchema.index({ returnDate: 1 });
 bookTakenHistorySchema.index({ copyId: 1 }, { unique: true, sparse: true, name: 'unique_copy_borrowing' });
 
-bookTakenHistorySchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
-    next();
-});
 
 bookTakenHistorySchema.methods.softDelete = function () {
     this.deletedAt = new Date();
