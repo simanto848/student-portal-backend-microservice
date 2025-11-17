@@ -64,7 +64,7 @@ class BorrowingService {
 
             return borrowing.toJSON();
         } catch (error) {
-            if (error.code === 11000 && error.message.includes('unique_copy_borrowing')) {
+            if (error.code === 11000 && (error.message.includes('unique_copy_borrowing') || error.message.includes('unique_active_copy_borrowing'))) {
                 throw new ApiError(400, 'This book copy is already borrowed');
             }
             throw error instanceof ApiError ? error : new ApiError(500, 'Error borrowing book: ' + error.message);
@@ -98,7 +98,8 @@ class BorrowingService {
             if (processedById) borrowing.processedById = processedById;
 
             await borrowing.save();
-            const copy = await BookCopy.findById(borrowing.copyId);
+            const copyId = borrowing.copyId._id || borrowing.copyId;
+            const copy = await BookCopy.findById(copyId);
             if (copy) {
                 copy.status = 'available';
                 await copy.save();

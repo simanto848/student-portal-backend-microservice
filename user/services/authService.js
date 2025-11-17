@@ -101,7 +101,7 @@ class AuthService {
             this.validateRegisteredIp(user, clientIp, roleKey);
 
             const payload = {
-                sub: user.id,
+                id: user.id,
                 role: user.role || roleKey,
                 type: roleKey,
                 registrationNumber: user.registrationNumber,
@@ -214,9 +214,9 @@ class AuthService {
             }
 
             const payload = {
-                sub: user.id,
-                role: user.role || roleKey, // Use actual role from user document
-                type: roleKey, // Keep type as the model type (admin, staff, teacher, student)
+                id: user.id,
+                role: user.role || roleKey,
+                type: roleKey,
                 registrationNumber: user.registrationNumber,
                 fullName: user.fullName,
                 email: user.email,

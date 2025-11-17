@@ -92,7 +92,18 @@ bookTakenHistorySchema.index({ status: 1 });
 bookTakenHistorySchema.index({ borrowDate: 1 });
 bookTakenHistorySchema.index({ dueDate: 1 });
 bookTakenHistorySchema.index({ returnDate: 1 });
-bookTakenHistorySchema.index({ copyId: 1 }, { unique: true, sparse: true, name: 'unique_copy_borrowing' });
+// Partial unique index: only one active borrowing per copy (borrowed or overdue status)
+bookTakenHistorySchema.index(
+    { copyId: 1 },
+    { 
+        unique: true,
+        partialFilterExpression: {
+            status: { $in: ['borrowed', 'overdue'] },
+            deletedAt: null
+        },
+        name: 'unique_active_copy_borrowing'
+    }
+);
 
 
 bookTakenHistorySchema.methods.softDelete = function () {

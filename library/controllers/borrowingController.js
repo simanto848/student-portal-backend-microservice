@@ -36,7 +36,7 @@ class BorrowingController {
 
     async getMyBorrowedBooks(req, res, next) {
         try {
-            const borrowerId = req.user.id;
+            const borrowerId = req.user?.id;
             const { page, limit, ...filters } = req.query;
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
@@ -52,7 +52,7 @@ class BorrowingController {
 
     async getMyOverdueBooks(req, res, next) {
         try {
-            const borrowerId = req.user.id;
+            const borrowerId = req.user?.id;
             const result = await borrowingService.getOverdueBooksByUser(borrowerId);
             return ApiResponse.success(res, result, 'Overdue books retrieved successfully');
         } catch (error) {
@@ -62,7 +62,8 @@ class BorrowingController {
 
     async getMyBorrowingHistory(req, res, next) {
         try {
-            const borrowerId = req.user.id;
+            const borrowerId = req.user?.id;
+            
             const { page, limit, ...filters } = req.query;
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
