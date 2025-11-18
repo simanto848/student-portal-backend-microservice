@@ -6,18 +6,30 @@ class ReservationController {
         try {
             const { copyId, libraryId, notes } = req.validatedData || req.body;
             const userId = req.user?.sub || req.user?.id;
-            const userType = req.user?.role || req.user?.userType;
+            const rawType = req.user?.type || req.user?.userType || req.user?.role;
+            const staffRoles = [
+                'program_controller','admission','exam','finance','library','transport','hr','it','hostel','hostel_warden','hostel_supervisor','maintenance'
+            ];
 
             const typeMapping = {
-                'student': 'student',
-                'teacher': 'teacher',
-                'staff': 'staff',
-                'admin': 'admin',
-                'library': 'staff'
+                student: 'student',
+                teacher: 'teacher',
+                faculty: 'teacher',
+                staff: 'staff',
+                admin: 'admin'
             };
-            const mappedUserType = typeMapping[userType] || userType;
+
+            let normalizedType = typeMapping[rawType];
+            if (!normalizedType && staffRoles.includes(rawType)) {
+                normalizedType = 'staff';
+            }
+
+            if (!normalizedType) {
+                return ApiResponse.badRequest(res, `Unsupported user type '${rawType}'.`);
+            }
+
             const reservation = await reservationService.createReservation({
-                userType: mappedUserType,
+                userType: normalizedType,
                 userId,
                 copyId,
                 libraryId,
