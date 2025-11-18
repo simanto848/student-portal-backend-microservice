@@ -1,0 +1,375 @@
+import CourseGrade from '../models/CourseGrade.js';
+import CourseEnrollment from '../models/CourseEnrollment.js';
+import AssessmentSubmission from '../models/AssessmentSubmission.js';
+import Assessment from '../models/Assessment.js';
+import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
+import { ApiError } from '../utils/ApiResponser.js';
+
+class CourseGradeService {
+    // Calculate grade for a student
+    async calculateStudentGrade(data, instructorId) {
+        try {
+            // Verify enrollment
+            const enrollment = await CourseEnrollment.findById(data.enrollmentId);
+            if (!enrollment) {
+                throw new ApiError(404, 'Enrollment not found');
+            }
+
+            // Verify instructor is assigned to this course
+            const assignment = await BatchCourseInstructor.findOne({
+                batchId: enrollment.batchId,
+                courseId: enrollment.courseId,
+                instructorId,
+                status: 'active',
+            });
+
+            if (!assignment) {
+                throw new ApiError(403, 'You are not assigned to teach this course');
+            }
+
+            // Check if grade already exists
+            const existingGrade = await CourseGrade.findOne({
+                studentId: data.studentId,
+                courseId: data.courseId,
+                semester: data.semester,
+                deletedAt: null,
+            });
+
+            let grade;
+            if (existingGrade) {
+                // Update existing grade
+                Object.assign(existingGrade, {
+                    totalMarksObtained: data.totalMarksObtained,
+                    totalMarks: data.totalMarks,
+                    remarks: data.remarks,
+                    calculatedBy: instructorId,
+                    calculatedAt: new Date(),
+                });
+                existingGrade.calculateGrade();
+                grade = await existingGrade.save();
+            } else {
+                // Create new grade
+                grade = await CourseGrade.create({
+                    ...data,
+                    calculatedBy: instructorId,
+                    calculatedAt: new Date(),
+                });
+                grade.calculateGrade();
+                await grade.save();
+            }
+
+            return grade;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, error.message || 'Failed to calculate grade');
+        }
+    }
+
+    // Auto-calculate grade from assessment submissions
+    async autoCalculateGrade(enrollmentId, instructorId) {
+        try {
+            const enrollment = await CourseEnrollment.findById(enrollmentId);
+            if (!enrollment) {
+                throw new ApiError(404, 'Enrollment not found');
+            }
+
+            // Verify instructor
+            const assignment = await BatchCourseInstructor.findOne({
+                batchId: enrollment.batchId,
+                courseId: enrollment.courseId,
+                instructorId,
+                status: 'active',
+            });
+
+            if (!assignment) {
+                throw new ApiError(403, 'You are not assigned to teach this course');
+            }
+
+            // Get all assessments for this course and semester
+            const assessments = await Assessment.find({
+                courseId: enrollment.courseId,
+                batchId: enrollment.batchId,
+                semester: enrollment.semester,
+                status: 'graded',
+            });
+
+            if (assessments.length === 0) {
+                throw new ApiError(400, 'No graded assessments found for this course');
+            }
+
+            // Get all graded submissions for this student
+            const submissions = await AssessmentSubmission.find({
+                studentId: enrollment.studentId,
+                assessmentId: { $in: assessments.map(a => a._id) },
+                status: 'graded',
+            });
+
+            // Calculate weighted total
+            let totalWeightedMarks = 0;
+            let totalWeightage = 0;
+
+            for (const assessment of assessments) {
+                const submission = submissions.find(s => s.assessmentId.toString() === assessment._id.toString());
+                
+                if (submission && submission.marksObtained != null) {
+                    // Calculate percentage for this assessment
+                    const percentage = (submission.marksObtained / assessment.totalMarks) * 100;
+                    // Apply weightage
+                    totalWeightedMarks += (percentage * assessment.weightage) / 100;
+                    totalWeightage += assessment.weightage;
+                }
+            }
+
+            // Normalize if total weightage is not 100
+            const finalPercentage = totalWeightage > 0 
+                ? (totalWeightedMarks / totalWeightage) * 100 
+                : 0;
+
+            // Create or update grade
+            let grade = await CourseGrade.findOne({
+                studentId: enrollment.studentId,
+                courseId: enrollment.courseId,
+                semester: enrollment.semester,
+                deletedAt: null,
+            });
+
+            const gradeData = {
+                totalMarksObtained: finalPercentage,
+                totalMarks: 100,
+                calculatedBy: instructorId,
+                calculatedAt: new Date(),
+            };
+
+            if (grade) {
+                Object.assign(grade, gradeData);
+                grade.calculateGrade();
+                await grade.save();
+            } else {
+                grade = await CourseGrade.create({
+                    studentId: enrollment.studentId,
+                    enrollmentId: enrollment._id,
+                    courseId: enrollment.courseId,
+                    batchId: enrollment.batchId,
+                    semester: enrollment.semester,
+                    ...gradeData,
+                });
+                grade.calculateGrade();
+                await grade.save();
+            }
+
+            return grade;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, error.message || 'Failed to auto-calculate grade');
+        }
+    }
+
+    // Get grade by ID
+    async getGradeById(id) {
+        const grade = await CourseGrade.findById(id);
+        if (!grade) {
+            throw new ApiError(404, 'Grade not found');
+        }
+        return grade;
+    }
+
+    // List grades with filters
+    async listGrades(filters = {}) {
+        const query = {};
+        
+        if (filters.studentId) query.studentId = filters.studentId;
+        if (filters.courseId) query.courseId = filters.courseId;
+        if (filters.batchId) query.batchId = filters.batchId;
+        if (filters.semester) query.semester = parseInt(filters.semester);
+        if (filters.isPublished !== undefined) {
+            query.isPublished = filters.isPublished === 'true';
+        }
+
+        const grades = await CourseGrade.find(query).sort({ createdAt: -1 });
+        return grades;
+    }
+
+    // Update grade
+    async updateGrade(id, data, instructorId) {
+        const grade = await this.getGradeById(id);
+
+        // Verify instructor is assigned to this course
+        const assignment = await BatchCourseInstructor.findOne({
+            batchId: grade.batchId,
+            courseId: grade.courseId,
+            instructorId,
+            status: 'active',
+        });
+
+        if (!assignment) {
+            throw new ApiError(403, 'You are not assigned to teach this course');
+        }
+
+        Object.assign(grade, data);
+        if (data.totalMarksObtained !== undefined || data.totalMarks !== undefined) {
+            grade.calculateGrade();
+        }
+        await grade.save();
+        return grade;
+    }
+
+    // Publish grade (make visible to student)
+    async publishGrade(id, instructorId) {
+        const grade = await this.getGradeById(id);
+
+        // Verify instructor
+        const assignment = await BatchCourseInstructor.findOne({
+            batchId: grade.batchId,
+            courseId: grade.courseId,
+            instructorId,
+            status: 'active',
+        });
+
+        if (!assignment) {
+            throw new ApiError(403, 'You are not assigned to teach this course');
+        }
+
+        if (grade.isPublished) {
+            throw new ApiError(400, 'Grade is already published');
+        }
+
+        grade.isPublished = true;
+        grade.publishedAt = new Date();
+        await grade.save();
+        return grade;
+    }
+
+    // Unpublish grade
+    async unpublishGrade(id, instructorId) {
+        const grade = await this.getGradeById(id);
+
+        // Verify instructor
+        const assignment = await BatchCourseInstructor.findOne({
+            batchId: grade.batchId,
+            courseId: grade.courseId,
+            instructorId,
+            status: 'active',
+        });
+
+        if (!assignment) {
+            throw new ApiError(403, 'You are not assigned to teach this course');
+        }
+
+        grade.isPublished = false;
+        grade.publishedAt = null;
+        await grade.save();
+        return grade;
+    }
+
+    // Delete grade (soft delete)
+    async deleteGrade(id, instructorId) {
+        const grade = await this.getGradeById(id);
+
+        // Verify instructor
+        const assignment = await BatchCourseInstructor.findOne({
+            batchId: grade.batchId,
+            courseId: grade.courseId,
+            instructorId,
+            status: 'active',
+        });
+
+        if (!assignment) {
+            throw new ApiError(403, 'You are not assigned to teach this course');
+        }
+
+        await grade.softDelete();
+        return grade;
+    }
+
+    // Get student's grades for a semester
+    async getStudentSemesterGrades(studentId, semester) {
+        const grades = await CourseGrade.find({
+            studentId,
+            semester,
+            isPublished: true,
+        });
+        return grades;
+    }
+
+    // Calculate semester GPA
+    async calculateSemesterGPA(studentId, semester) {
+        const grades = await CourseGrade.find({
+            studentId,
+            semester,
+            isPublished: true,
+        });
+
+        if (grades.length === 0) {
+            return {
+                gpa: 0,
+                totalCredits: 0,
+                grades: [],
+            };
+        }
+
+        // Note: This assumes all courses have equal credits
+        // In a real system, you'd fetch credit hours from the course
+        const totalGradePoints = grades.reduce((sum, grade) => sum + (grade.gradePoint || 0), 0);
+        const gpa = (totalGradePoints / grades.length).toFixed(2);
+
+        return {
+            gpa: parseFloat(gpa),
+            totalCourses: grades.length,
+            grades,
+        };
+    }
+
+    // Get course grade statistics
+    async getCourseGradeStats(courseId, batchId, semester, instructorId) {
+        // Verify instructor
+        const assignment = await BatchCourseInstructor.findOne({
+            batchId,
+            courseId,
+            instructorId,
+            status: 'active',
+        });
+
+        if (!assignment) {
+            throw new ApiError(403, 'You are not assigned to teach this course');
+        }
+
+        const grades = await CourseGrade.find({
+            courseId,
+            batchId,
+            semester,
+        });
+
+        if (grades.length === 0) {
+            return {
+                total: 0,
+                published: 0,
+                averageGPA: 0,
+            };
+        }
+
+        const stats = {
+            total: grades.length,
+            published: grades.filter(g => g.isPublished).length,
+            gradeDistribution: {},
+            averagePercentage: 0,
+            averageGPA: 0,
+        };
+
+        // Calculate distributions
+        grades.forEach(grade => {
+            const letter = grade.letterGrade || 'N/A';
+            stats.gradeDistribution[letter] = (stats.gradeDistribution[letter] || 0) + 1;
+        });
+
+        // Calculate averages
+        const totalPercentage = grades.reduce((sum, g) => sum + (g.percentage || 0), 0);
+        const totalGPA = grades.reduce((sum, g) => sum + (g.gradePoint || 0), 0);
+
+        stats.averagePercentage = (totalPercentage / grades.length).toFixed(2);
+        stats.averageGPA = (totalGPA / grades.length).toFixed(2);
+
+        return stats;
+    }
+}
+
+export default new CourseGradeService();
