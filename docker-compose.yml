@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: student-portal-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: student_portal
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - student-portal-network
+
+  academic-service:
+    build: ./academic
+    container_name: academic-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      MONGO_URI: mongodb://mongodb:27017/academic_db
+      NODE_ENV: development
+    depends_on:
+      - mongodb
+    networks:
+      - student-portal-network
+    volumes:
+      - ./academic:/app
+      - /app/node_modules
+
+  user-service:
+    build: ./user
+    container_name: user-service
+    restart: unless-stopped
+    ports:
+      - "8007:8007"
+    environment:
+      PORT: 8007
+      MONGO_URI: mongodb://mongodb:27017/user_db
+      NODE_ENV: development
+      ACADEMIC_SERVICE_URL: http://academic-service:8001
+    depends_on:
+      - mongodb
+      - academic-service
+    networks:
+      - student-portal-network
+    volumes:
+      - ./user:/app
+      - /app/node_modules
+
+  enrollment-service:
+    build: ./enrollment
+    container_name: enrollment-service
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      PORT: 3003
+      MONGO_URI: mongodb://mongodb:27017/enrollment_db
+      NODE_ENV: development
+      ACADEMIC_SERVICE_URL: http://academic-service:8001
+      USER_SERVICE_URL: http://user-service:8007
+      ENROLLMENT_SERVICE_URL: http://enrollment-service:3003
+    depends_on:
+      - mongodb
+      - academic-service
+      - user-service
+    networks:
+      - student-portal-network
+    volumes:
+      - ./enrollment:/app
+      - /app/node_modules
+
+networks:
+  student-portal-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
