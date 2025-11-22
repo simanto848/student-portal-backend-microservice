@@ -62,25 +62,21 @@ const courseEnrollmentSchema = new mongoose.Schema(
     }
 );
 
-// Indexes
-courseEnrollmentSchema.index({ studentId: 1, courseId: 1, sessionId: 1 }, { unique: true });
+courseEnrollmentSchema.index({ studentId: 1, courseId: 1, sessionId: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 courseEnrollmentSchema.index({ deletedAt: 1 });
 courseEnrollmentSchema.index({ status: 1 });
 courseEnrollmentSchema.index({ semester: 1 });
 
-// Soft delete middleware
 courseEnrollmentSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
     next();
 });
 
-// Soft delete method
 courseEnrollmentSchema.methods.softDelete = function () {
     this.deletedAt = new Date();
     return this.save();
 };
 
-// Restore method
 courseEnrollmentSchema.methods.restore = function () {
     this.deletedAt = null;
     return this.save();

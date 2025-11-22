@@ -20,7 +20,7 @@ class AssessmentController {
         }
     }
 
-    async getAssessmentById(req, res, next) {
+    async getAssessment(req, res, next) {
         try {
             const assessment = await assessmentService.getAssessmentById(req.params.id);
             return ApiResponse.success(res, assessment);
@@ -29,9 +29,9 @@ class AssessmentController {
         }
     }
 
-    async getAssessments(req, res, next) {
+    async listAssessments(req, res, next) {
         try {
-            const result = await assessmentService.getAssessments(req.query);
+            const result = await assessmentService.listAssessments(req.query);
             return ApiResponse.success(res, result);
         } catch (error) {
             next(error);
@@ -56,6 +56,15 @@ class AssessmentController {
         }
     }
 
+    async markAsGraded(req, res, next) {
+        try {
+            const assessment = await assessmentService.markAsGraded(req.params.id, req.user.sub);
+            return ApiResponse.success(res, assessment, 'Assessment marked as graded successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async deleteAssessment(req, res, next) {
         try {
             const assessment = await assessmentService.deleteAssessment(req.params.id, req.user.sub);
@@ -65,10 +74,11 @@ class AssessmentController {
         }
     }
 
-    async restoreAssessment(req, res, next) {
+    async getStudentAssessments(req, res, next) {
         try {
-            const assessment = await assessmentService.restoreAssessment(req.params.id, req.user.sub);
-            return ApiResponse.success(res, assessment, 'Assessment restored successfully');
+            const { studentId, courseId } = req.params;
+            const assessments = await assessmentService.getStudentAssessments(studentId, courseId);
+            return ApiResponse.success(res, assessments);
         } catch (error) {
             next(error);
         }
@@ -76,4 +86,3 @@ class AssessmentController {
 }
 
 export default new AssessmentController();
-

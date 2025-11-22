@@ -6,8 +6,8 @@ import {
     createAttendanceSchema,
     bulkAttendanceSchema,
     updateAttendanceSchema,
-    attendanceIdSchema,
-    attendanceQuerySchema,
+    getAttendanceSchema as attendanceIdSchema,
+    listAttendanceSchema as attendanceQuerySchema,
 } from '../validations/AttendanceValidation.js';
 
 const router = express.Router();

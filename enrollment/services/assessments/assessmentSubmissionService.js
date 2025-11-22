@@ -70,6 +70,30 @@ class AssessmentSubmissionService {
         await submission.softDelete();
         return submission;
     }
+
+    async getStudentSubmission(studentId, assessmentId) {
+        const submission = await AssessmentSubmission.findOne({
+            studentId,
+            assessmentId,
+        });
+        if (!submission) {
+            throw new ApiError(404, 'Submission not found');
+        }
+        return submission;
+    }
+
+    async getAssessmentSubmissionStats(assessmentId) {
+        const submissions = await AssessmentSubmission.find({ assessmentId });
+        const total = submissions.length;
+        const graded = submissions.filter(s => s.status === 'graded').length;
+        const pending = total - graded;
+        
+        return {
+            total,
+            graded,
+            pending,
+        };
+    }
 }
 
 export default new AssessmentSubmissionService();

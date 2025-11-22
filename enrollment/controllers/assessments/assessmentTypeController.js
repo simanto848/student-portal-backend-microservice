@@ -20,7 +20,7 @@ class AssessmentTypeController {
         }
     }
 
-    async getAssessmentTypeById(req, res, next) {
+    async getAssessmentType(req, res, next) {
         try {
             const assessmentType = await assessmentTypeService.getAssessmentTypeById(req.params.id);
             return ApiResponse.success(res, assessmentType);
@@ -29,9 +29,9 @@ class AssessmentTypeController {
         }
     }
 
-    async getAllAssessmentTypes(req, res, next) {
+    async listAssessmentTypes(req, res, next) {
         try {
-            const assessmentTypes = await assessmentTypeService.getAllAssessmentTypes();
+            const assessmentTypes = await assessmentTypeService.listAssessmentTypes();
             return ApiResponse.success(res, assessmentTypes);
         } catch (error) {
             next(error);
@@ -58,4 +58,3 @@ class AssessmentTypeController {
 }
 
 export default new AssessmentTypeController();
-

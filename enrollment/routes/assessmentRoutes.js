@@ -33,6 +33,17 @@ router.delete('/types/:id', authorize('super_admin', 'admin'), validate(getAsses
 router.get('/types', assessmentTypeController.listAssessmentTypes);
 router.get('/types/:id', validate(getAssessmentTypeSchema), assessmentTypeController.getAssessmentType);
 
+// ========== Assessment Submission Routes ==========
+router.post('/submissions', authorize('student'), validate(createSubmissionSchema), assessmentSubmissionController.submitAssessment);
+router.put('/submissions/:id', authorize('student'), validate(updateSubmissionSchema), assessmentSubmissionController.updateSubmission);
+router.delete('/submissions/:id', authorize('student'), validate(getSubmissionSchema), assessmentSubmissionController.deleteSubmission);
+router.post('/submissions/:id/grade', authorize('teacher'), validate(gradeSubmissionSchema), assessmentSubmissionController.gradeSubmission);
+router.get('/submissions', authorize('super_admin', 'admin', 'teacher', 'student'), validate(listSubmissionsSchema), assessmentSubmissionController.listSubmissions);
+router.get('/submissions/:id', authorize('super_admin', 'admin', 'teacher', 'student'), validate(getSubmissionSchema), assessmentSubmissionController.getSubmission);
+router.get('/submissions/student/:studentId/assessment/:assessmentId', authorize('super_admin', 'admin', 'teacher', 'student'), assessmentSubmissionController.getStudentSubmission);
+router.get('/:assessmentId/submissions', authorize('teacher'), assessmentSubmissionController.getAssessmentSubmissions);
+router.get('/:assessmentId/submissions/stats', authorize('teacher'), assessmentSubmissionController.getAssessmentSubmissionStats);
+
 // ========== Assessment Routes ==========
 router.post('/', authorize('teacher'), validate(createAssessmentSchema), assessmentController.createAssessment);
 router.put('/:id', authorize('teacher'), validate(updateAssessmentSchema), assessmentController.updateAssessment);
@@ -44,15 +55,6 @@ router.get('/', authorize('super_admin', 'admin', 'teacher', 'student'), validat
 router.get('/:id', authorize('super_admin', 'admin', 'teacher', 'student'), validate(getAssessmentSchema), assessmentController.getAssessment);
 router.get('/student/:studentId/course/:courseId', authorize('super_admin', 'admin', 'teacher', 'student'), assessmentController.getStudentAssessments);
 
-// ========== Assessment Submission Routes ==========
-router.post('/submissions', authorize('student'), validate(createSubmissionSchema), assessmentSubmissionController.submitAssessment);
-router.put('/submissions/:id', authorize('student'), validate(updateSubmissionSchema), assessmentSubmissionController.updateSubmission);
-router.delete('/submissions/:id', authorize('student'), validate(getSubmissionSchema), assessmentSubmissionController.deleteSubmission);
-router.post('/submissions/:id/grade', authorize('teacher'), validate(gradeSubmissionSchema), assessmentSubmissionController.gradeSubmission);
-router.get('/submissions', authorize('super_admin', 'admin', 'teacher', 'student'), validate(listSubmissionsSchema), assessmentSubmissionController.listSubmissions);
-router.get('/submissions/:id', authorize('super_admin', 'admin', 'teacher', 'student'), validate(getSubmissionSchema), assessmentSubmissionController.getSubmission);
-router.get('/submissions/student/:studentId/assessment/:assessmentId', authorize('super_admin', 'admin', 'teacher', 'student'), assessmentSubmissionController.getStudentSubmission);
-router.get('/:assessmentId/submissions', authorize('teacher'), assessmentSubmissionController.getAssessmentSubmissions);
-router.get('/:assessmentId/submissions/stats', authorize('teacher'), assessmentSubmissionController.getAssessmentSubmissionStats);
+
 
 export default router;

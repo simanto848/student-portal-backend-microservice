@@ -38,7 +38,7 @@ export const publishGradesSchema = z.object({
 export const finalizeGradeSchema = z.object({
     id: z.string().uuid({ message: "Invalid grade ID format" }),
 });
-import { z } from 'zod';
+
 
 export const createCourseGradeSchema = z.object({
     body: z.object({
@@ -85,4 +85,3 @@ export const listCourseGradesSchema = z.object({
         isPublished: z.enum(['true', 'false']).optional(),
     }),
 });
-**/

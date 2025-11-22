@@ -5,16 +5,16 @@ const validate = (schema) => {
     return async (req, res, next) => {
         try {
             const data = {
-                ...req.body,
-                ...req.params,
-                ...req.query
+                body: req.body,
+                params: req.params,
+                query: req.query
             };
 
             await schema.parseAsync(data);
             next();
         } catch (error) {
             if (error instanceof z.ZodError) {
-                const errors = error.errors.map(err => ({
+                const errors = (error.issues || error.errors).map(err => ({
                     field: err.path.join('.'),
                     message: err.message
                 }));
