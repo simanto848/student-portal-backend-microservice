@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import redis from './utils/redisClient.js';
 
 let io;
 
@@ -23,21 +24,29 @@ export const initSocket = (server) => {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     const user = socket.data.user;
     if (user) {
-      socket.join(`user:${user.id}`);
-      if (user.role) socket.join(`role:${user.role}`);
-      if (user.departmentId) socket.join(`department:${user.departmentId}`);
-      if (user.batchId) socket.join(`batch:${user.batchId}`);
-      socket.join('all');
+      const roomsToJoin = [];
+      roomsToJoin.push(`user:${user.id}`);
+      if (user.role) roomsToJoin.push(`role:${user.role}`);
+      if (user.departmentId) roomsToJoin.push(`department:${user.departmentId}`);
+      if (user.batchId) roomsToJoin.push(`batch:${user.batchId}`);
+
+      roomsToJoin.push('all');
+      for (const r of roomsToJoin) socket.join(r);
+      try {
+          await redis.sadd(`socket:rooms:${socket.id}`, roomsToJoin);
+      } catch(e){
+          // ignore
+      }
     }
-
-    socket.on('join_custom_room', (room) => socket.join(room));
-    socket.on('leave_custom_room', (room) => socket.leave(room));
-
-    socket.on('disconnect', () => {
-      // cleanup
+    socket.on('disconnect', async () => {
+      try {
+          await redis.del(`socket:rooms:${socket.id}`);
+      } catch(e){
+          // ignore
+      }
     });
   });
 

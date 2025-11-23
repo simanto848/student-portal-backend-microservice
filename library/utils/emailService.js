@@ -88,6 +88,32 @@ class EmailService {
             throw new Error('Failed to send book overdue notice: ' + error.message);
         }
     }
+
+    async sendGenericNotification(to, data) {
+        try {
+            const templatePath = path.join(__dirname, '../views/emails/genericNotification.ejs');
+            const html = await ejs.renderFile(templatePath, {
+                title: data.title,
+                summary: data.summary,
+                content: data.content,
+                publishedAt: new Date(data.publishedAt).toLocaleString(),
+                priority: data.priority,
+                companyName: this.companyName,
+                companyLogoUrl: this.companyLogoUrl,
+                supportEmail: this.supportEmail,
+                loginUrl: this.loginUrl,
+                helpCenterUrl: this.helpCenterUrl,
+            });
+            const subject = `[${data.priority}] ${data.title}`;
+            const mailOptions = { from: `"${this.from}" <${process.env.MAIL_USER}>`, to, subject, html };
+            const info = await transporter.sendMail(mailOptions);
+            console.log('Generic notification email sent:', info.messageId);
+            return { success: true, messageId: info.messageId };
+        } catch (error) {
+            console.error('Error sending generic notification email:', error);
+            throw new Error('Failed to send generic notification email: ' + error.message);
+        }
+    }
 }
 
 export default new EmailService();

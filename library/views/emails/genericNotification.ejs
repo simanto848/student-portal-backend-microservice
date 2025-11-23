@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title><%= title %></title></head>
+<body style="font-family:Arial,sans-serif;">
+  <h2><%= title %></h2>
+  <% if(summary){ %><p><strong>Summary:</strong> <%= summary %></p><% } %>
+  <div style="margin:15px 0;white-space:pre-line"><%= content %></div>
+  <p>Published: <%= publishedAt %></p>
+  <p>Priority: <%= priority %></p>
+  <hr/>
+  <small>&copy; <%= companyName %> | Need help? <a href="<%= helpCenterUrl %>">Help Center</a> | <a href="<%= loginUrl %>">Login</a></small>
+</body>
+</html>
+

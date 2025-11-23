@@ -85,7 +85,16 @@ class NotificationService {
     notification.publishedAt = new Date();
     await notification.save();
 
-    await deliveryService.deliver(notification, recipients);
+    if (recipients.length > 2000) {
+      // Emit once
+      const rooms = deliveryService.buildRooms(notification);
+      emitNotificationEvent('notification.published', notification.toJSON(), rooms);
+      await recipientResolverService.streamRecipients(notification, 1000, async (batch) => {
+        await deliveryService.deliverBatch(notification, batch);
+      });
+    } else {
+      await deliveryService.deliver(notification, recipients);
+    }
     return notification;
   }
 

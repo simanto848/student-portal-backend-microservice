@@ -43,6 +43,14 @@ class RecipientResolverService {
     const results = await Promise.all(batchIds.map(id => userServiceClient.getStudentsByBatch(id)));
     return results.flat();
   }
+
+  async streamRecipients(notification, pageSize = 500, onBatch) {
+    const all = await this.resolve(notification);
+    for (let i = 0; i < all.length; i += pageSize) {
+      const slice = all.slice(i, i + pageSize);
+      await onBatch(slice, i / pageSize + 1);
+    }
+  }
 }
 
 export default new RecipientResolverService();
