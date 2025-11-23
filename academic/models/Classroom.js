@@ -51,6 +51,11 @@ const classroomSchema = new mongoose.Schema(
         maintenanceNotes: {
             type: String,
         },
+        departmentId: {
+            type: String,
+            ref: 'Department',
+            default: null,
+        },
         deletedAt: {
             type: Date,
         }

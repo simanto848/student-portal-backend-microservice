@@ -41,10 +41,7 @@ class CourseService {
         .populate('departmentId', 'name shortName email')
         .sort({ createdAt: -1 });
 
-      return {
-        data: courses,
-        total: courses.length,
-      };
+      return { data: courses, total: courses.length };
     }
   }
 
@@ -53,10 +50,7 @@ class CourseService {
       .populate({
         path: 'departmentId',
         select: 'name shortName email facultyId',
-        populate: {
-          path: 'facultyId',
-          select: 'name email'
-        }
+        populate: { path: 'facultyId', select: 'name email' }
       });
 
     if (!course) {
@@ -67,7 +61,12 @@ class CourseService {
     return { ...course.toJSON(), sessionCoursesCount };
   }
 
-  async create(payload) {
+  async create(payload, user) {
+    if (user?.role === 'program_controller') {
+      if (!payload.departmentId || payload.departmentId !== user.departmentId) {
+        throw new ApiError(403, 'You can only create courses in your own department');
+      }
+    }
     const department = await Department.findById(payload.departmentId);
     if (!department) {
       throw new ApiError(404, 'Department not found');
@@ -91,10 +90,17 @@ class CourseService {
     return await Course.findById(course._id).populate('departmentId', 'name shortName email');
   }
 
-  async update(id, payload) {
+  async update(id, payload, user) {
     const course = await Course.findById(id);
     if (!course) {
       throw new ApiError(404, 'Course not found');
+    }
+
+    if (user?.role === 'program_controller') {
+      const targetDepartment = payload.departmentId || course.departmentId?.toString();
+      if (!targetDepartment || targetDepartment !== user.departmentId) {
+        throw new ApiError(403, 'You can only update courses in your own department');
+      }
     }
 
     if (payload.departmentId && payload.departmentId !== course.departmentId) {
@@ -137,10 +143,16 @@ class CourseService {
     return await Course.findById(id).populate('departmentId', 'name shortName email');
   }
 
-  async delete(id) {
+  async delete(id, user) {
     const course = await Course.findById(id);
     if (!course) {
       throw new ApiError(404, 'Course not found');
+    }
+
+    if (user?.role === 'program_controller') {
+      if (course.departmentId?.toString() !== user.departmentId) {
+        throw new ApiError(403, 'You can only delete courses in your own department');
+      }
     }
 
     const sessionCoursesCount = await SessionCourse.countDocuments({
@@ -158,4 +170,3 @@ class CourseService {
 }
 
 export default new CourseService();
-

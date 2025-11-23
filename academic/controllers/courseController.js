@@ -39,7 +39,7 @@ class CourseController {
 
   async create(req, res, next) {
     try {
-      const course = await courseService.create(req.body);
+      const course = await courseService.create(req.body, req.user);
       return ApiResponse.created(res, course, 'Course created successfully');
     } catch (error) {
       next(error);
@@ -48,7 +48,7 @@ class CourseController {
 
   async update(req, res, next) {
     try {
-      const course = await courseService.update(req.params.id, req.body);
+      const course = await courseService.update(req.params.id, req.body, req.user);
       return ApiResponse.success(res, course, 'Course updated successfully');
     } catch (error) {
       next(error);
@@ -57,7 +57,7 @@ class CourseController {
 
   async delete(req, res, next) {
     try {
-      await courseService.delete(req.params.id);
+      await courseService.delete(req.params.id, req.user);
       return ApiResponse.success(res, null, 'Course deleted successfully');
     } catch (error) {
       next(error);
@@ -66,4 +66,3 @@ class CourseController {
 }
 
 export default new CourseController();
-

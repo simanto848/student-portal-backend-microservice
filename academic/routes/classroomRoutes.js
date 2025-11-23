@@ -1,5 +1,7 @@
 import express from 'express';
 import { validate } from '../validations/index.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
+import { applyDepartmentFilter, canManageDepartmentResource } from '../middlewares/departmentScope.js';
 import {
     createClassroomSchema,
     updateClassroomSchema,
@@ -11,11 +13,12 @@ import classroomController from '../controllers/classroomController.js';
 
 const router = express.Router();
 
-router.get('/', validate(getClassroomsSchema), classroomController.getAll);
+router.use(authenticate);
+
+router.get('/', applyDepartmentFilter, validate(getClassroomsSchema), classroomController.getAll);
 router.get('/:id', validate(getClassroomByIdSchema), classroomController.getById);
-router.post('/', validate(createClassroomSchema), classroomController.create);
-router.patch('/:id', validate(updateClassroomSchema), classroomController.update);
-router.delete('/:id', validate(deleteClassroomSchema), classroomController.delete);
+router.post('/', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(createClassroomSchema), classroomController.create);
+router.patch('/:id', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(updateClassroomSchema), classroomController.update);
+router.delete('/:id', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(deleteClassroomSchema), classroomController.delete);
 
 export default router;
-

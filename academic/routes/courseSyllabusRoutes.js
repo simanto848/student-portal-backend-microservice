@@ -1,5 +1,7 @@
 import express from 'express';
 import { validate } from '../validations/index.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
+import { applyDepartmentFilter, canManageDepartmentResource } from '../middlewares/departmentScope.js';
 import {
     createCourseSyllabusSchema,
     updateCourseSyllabusSchema,
@@ -13,14 +15,15 @@ import courseSyllabusController from '../controllers/courseSyllabusController.js
 
 const router = express.Router();
 
-router.get('/', validate(getCourseSyllabusesSchema), courseSyllabusController.getAll);
-router.get('/:id', validate(getCourseSyllabusByIdSchema), courseSyllabusController.getById);
-router.post('/', validate(createCourseSyllabusSchema), courseSyllabusController.create);
-router.patch('/:id', validate(updateCourseSyllabusSchema), courseSyllabusController.update);
-router.delete('/:id', validate(deleteCourseSyllabusSchema), courseSyllabusController.delete);
+router.use(authenticate);
 
-router.post('/:id/approve', validate(approveSyllabusSchema), courseSyllabusController.approveSyllabus);
-router.post('/:id/publish', validate(publishSyllabusSchema), courseSyllabusController.publishSyllabus);
+router.get('/', applyDepartmentFilter, validate(getCourseSyllabusesSchema), courseSyllabusController.getAll);
+router.get('/:id', validate(getCourseSyllabusByIdSchema), courseSyllabusController.getById);
+router.post('/', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(createCourseSyllabusSchema), courseSyllabusController.create);
+router.patch('/:id', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(updateCourseSyllabusSchema), courseSyllabusController.update);
+router.delete('/:id', authorize('super_admin','admin','program_controller'), canManageDepartmentResource, validate(deleteCourseSyllabusSchema), courseSyllabusController.delete);
+
+router.post('/:id/approve', authorize('super_admin','admin'), validate(approveSyllabusSchema), courseSyllabusController.approveSyllabus);
+router.post('/:id/publish', authorize('super_admin','admin'), validate(publishSyllabusSchema), courseSyllabusController.publishSyllabus);
 
 export default router;
-
