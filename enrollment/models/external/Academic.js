@@ -36,3 +36,20 @@ courseSchema.pre(/^find/, function () {
 });
 
 export const Course = mongoose.models.Course || mongoose.model('Course', courseSchema);
+
+const batchSchema = new mongoose.Schema({
+    _id: { type: String, default: uuidv4 },
+    name: { type: String, required: true },
+    year: { type: Number, required: true },
+    programId: { type: String, required: true },
+    departmentId: { type: String, required: true },
+    sessionId: { type: String, required: true },
+    currentStudents: { type: Number, default: 0 },
+    deletedAt: { type: Date }
+});
+
+batchSchema.pre(/^find/, function () {
+    this.where({ deletedAt: null });
+});
+
+export const Batch = mongoose.models.Batch || mongoose.model('Batch', batchSchema);
