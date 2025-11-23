@@ -18,6 +18,7 @@ export {
     deleteBatchSchema,
     getBatchesSchema,
     assignCounselorSchema,
+    assignClassRepresentativeSchema,
     updateSemesterSchema,
 } from './batchValidation.js';
 

@@ -83,6 +83,25 @@ class BatchController {
             next(error);
         }
     }
+
+    async assignClassRepresentative(req, res, next) {
+        try {
+            const { studentId } = req.body;
+            const batch = await batchService.assignClassRepresentative(req.params.id, studentId);
+            return ApiResponse.success(res, batch, 'Class Representative assigned successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async removeClassRepresentative(req, res, next) {
+        try {
+            const batch = await batchService.removeClassRepresentative(req.params.id);
+            return ApiResponse.success(res, batch, 'Class Representative removed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new BatchController();

@@ -231,3 +231,18 @@ export const updateSemesterSchema = z.object({
     }),
 });
 
+export const assignClassRepresentativeSchema = z.object({
+    params: z.object({
+        id: z.string({
+            required_error: 'Batch ID is required',
+        })
+        .uuid('Invalid batch ID format'),
+    }),
+    body: z.object({
+        studentId: z.string({
+            required_error: 'Student ID is required',
+        })
+        .uuid('Invalid student ID format'),
+    }),
+});
+

@@ -140,12 +140,40 @@ class BatchService {
         if (semester < batch.currentSemester) {
             throw new ApiError(400, 'Cannot decrease current semester');
         }
-        if (semester > 20) { // arbitrary upper bound
+        if (semester > 20) {
             throw new ApiError(400, 'Semester exceeds allowed maximum');
         }
         batch.currentSemester = semester;
         await batch.save();
         return batch;
+    }
+
+    async assignClassRepresentative(id, studentId) {
+        const batch = await Batch.findById(id);
+        if (!batch) throw new ApiError(404, 'Batch not found');
+
+        // TODO: inject StudentService to verify.
+        batch.classRepresentativeId = studentId;
+        await batch.save();
+        return await Batch.findById(id)
+            .populate('programId', 'name shortName')
+            .populate('departmentId', 'name shortName')
+            .populate('sessionId', 'name year')
+            .populate('counselorId', 'fullName email registrationNumber')
+            .populate('classRepresentativeId', 'fullName email registrationNumber');
+    }
+
+    async removeClassRepresentative(id) {
+        const batch = await Batch.findById(id);
+        if (!batch) throw new ApiError(404, 'Batch not found');
+        
+        batch.classRepresentativeId = null;
+        await batch.save();
+        return await Batch.findById(id)
+            .populate('programId', 'name shortName')
+            .populate('departmentId', 'name shortName')
+            .populate('sessionId', 'name year')
+            .populate('counselorId', 'fullName email registrationNumber');
     }
 }
 
