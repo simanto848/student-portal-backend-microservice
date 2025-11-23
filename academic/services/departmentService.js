@@ -5,8 +5,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class DepartmentService {
     async getAll(options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
         const query = { ...filters };
         if (search) {
             query.$or = [
@@ -17,26 +16,39 @@ class DepartmentService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [departments, total] = await Promise.all([
-            Department.find(query)
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [departments, total] = await Promise.all([
+                Department.find(query)
+                    .populate('facultyId', 'name email')
+                    .populate('departmentHeadId', 'fullName email registrationNumber')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                Department.countDocuments(query),
+            ]);
+
+            return {
+                data: departments,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            const departments = await Department.find(query)
                 .populate('facultyId', 'name email')
                 .populate('departmentHeadId', 'fullName email registrationNumber')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Department.countDocuments(query),
-        ]);
+                .sort({ createdAt: -1 });
 
-        return {
-            data: departments,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: departments,
+                total: departments.length,
+            };
+        }
     }
 
     async getById(id) {
@@ -143,8 +155,7 @@ class DepartmentService {
     }
 
     async getProgramsByDepartment(departmentId, options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
         const department = await Department.findById(departmentId);
         if (!department) {
             throw new ApiError(404, 'Department not found');
@@ -158,24 +169,31 @@ class DepartmentService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [programs, total] = await Promise.all([
-            Program.find(query)
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Program.countDocuments(query),
-        ]);
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [programs, total] = await Promise.all([
+                Program.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+                Program.countDocuments(query),
+            ]);
 
-        return {
-            data: programs,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: programs,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            const programs = await Program.find(query).sort({ createdAt: -1 });
+
+            return {
+                data: programs,
+                total: programs.length,
+            };
+        }
     }
 
     async assignDepartmentHead(departmentId, headId, isActingHead = false) {

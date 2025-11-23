@@ -5,8 +5,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class ProgramService {
     async getAll(options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
         const query = { ...filters };
         if (search) {
             query.$or = [
@@ -16,25 +15,37 @@ class ProgramService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [programs, total] = await Promise.all([
-            Program.find(query)
-                .populate('departmentId', 'name shortName email facultyId')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Program.countDocuments(query),
-        ]);
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [programs, total] = await Promise.all([
+                Program.find(query)
+                    .populate('departmentId', 'name shortName email facultyId')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                Program.countDocuments(query),
+            ]);
 
-        return {
-            data: programs,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: programs,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            const programs = await Program.find(query)
+                .populate('departmentId', 'name shortName email facultyId')
+                .sort({ createdAt: -1 });
+
+            return {
+                data: programs,
+                total: programs.length,
+            };
+        }
     }
 
     async getById(id) {

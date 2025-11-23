@@ -3,8 +3,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class ClassroomService {
 	async getAll(options = {}) {
-		const { filters = {}, pagination = {}, search } = options;
-		const { page = 1, limit = 10 } = pagination;
+		const { filters = {}, pagination, search } = options;
 		const query = { ...filters };
 
 		if (search) {
@@ -15,24 +14,35 @@ class ClassroomService {
 			];
 		}
 
-		const skip = (page - 1) * limit;
-		const [classrooms, total] = await Promise.all([
-			Classroom.find(query)
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(parseInt(limit)),
-			Classroom.countDocuments(query),
-		]);
+		if (pagination && (pagination.page || pagination.limit)) {
+			const { page = 1, limit = 10 } = pagination;
+			const skip = (page - 1) * limit;
+			const [classrooms, total] = await Promise.all([
+				Classroom.find(query)
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(parseInt(limit)),
+				Classroom.countDocuments(query),
+			]);
 
-		return {
-			data: classrooms,
-			pagination: {
-				page: parseInt(page),
-				limit: parseInt(limit),
-				total,
-				pages: Math.ceil(total / limit),
-			},
-		};
+			return {
+				data: classrooms,
+				pagination: {
+					page: parseInt(page),
+					limit: parseInt(limit),
+					total,
+					pages: Math.ceil(total / limit),
+				},
+			};
+		} else {
+			const classrooms = await Classroom.find(query)
+				.sort({ createdAt: -1 });
+
+			return {
+				data: classrooms,
+				total: classrooms.length,
+			};
+		}
 	}
 
 	async getById(id) {

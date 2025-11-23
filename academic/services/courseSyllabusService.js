@@ -12,8 +12,7 @@ const VALID_STATUS_FLOW = {
 
 class CourseSyllabusService {
 	async getAll(options = {}) {
-		const { filters = {}, pagination = {}, search } = options;
-		const { page = 1, limit = 10 } = pagination;
+		const { filters = {}, pagination, search } = options;
 		const query = { ...filters };
 		if (search) {
 			query.$or = [
@@ -23,20 +22,32 @@ class CourseSyllabusService {
 			];
 		}
 
-		const skip = (page - 1) * limit;
-		const [syllabi, total] = await Promise.all([
-			CourseSyllabus.find(query)
-				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(parseInt(limit)),
-			CourseSyllabus.countDocuments(query),
-		]);
+		if (pagination && (pagination.page || pagination.limit)) {
+			const { page = 1, limit = 10 } = pagination;
+			const skip = (page - 1) * limit;
+			const [syllabi, total] = await Promise.all([
+				CourseSyllabus.find(query)
+					.populate('sessionCourseId', 'sessionId courseId semester departmentId')
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(parseInt(limit)),
+				CourseSyllabus.countDocuments(query),
+			]);
 
-		return {
-			data: syllabi,
-			pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
-		};
+			return {
+				data: syllabi,
+				pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+			};
+		} else {
+			const syllabi = await CourseSyllabus.find(query)
+				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
+				.sort({ createdAt: -1 });
+
+			return {
+				data: syllabi,
+				total: syllabi.length,
+			};
+		}
 	}
 
 	async getById(id) {
@@ -63,7 +74,6 @@ class CourseSyllabusService {
 			if (!sc) throw new ApiError(404, 'Session course not found');
 		}
 
-		// Prevent direct status manipulation outside dedicated methods
 		if (payload.status && payload.status !== syllabus.status) {
 			throw new ApiError(400, 'Status must be changed via approve/publish/archive methods');
 		}
@@ -119,7 +129,6 @@ class CourseSyllabusService {
 	}
 
 	async changeStatus(id, nextStatus, actorId) {
-		// Generic flow method (optional use)
 		const syllabus = await CourseSyllabus.findById(id);
 		if (!syllabus) throw new ApiError(404, 'Course syllabus not found');
 		const allowed = VALID_STATUS_FLOW[syllabus.status] || [];

@@ -5,8 +5,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class CourseService {
   async getAll(options = {}) {
-    const { filters = {}, pagination = {}, search } = options;
-    const { page = 1, limit = 10 } = pagination;
+    const { filters = {}, pagination, search } = options;
     const query = { ...filters };
     if (search) {
       query.$or = [
@@ -16,25 +15,37 @@ class CourseService {
       ];
     }
 
-    const skip = (page - 1) * limit;
-    const [courses, total] = await Promise.all([
-      Course.find(query)
-        .populate('departmentId', 'name shortName email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Course.countDocuments(query),
-    ]);
+    if (pagination && (pagination.page || pagination.limit)) {
+      const { page = 1, limit = 10 } = pagination;
+      const skip = (page - 1) * limit;
+      const [courses, total] = await Promise.all([
+        Course.find(query)
+          .populate('departmentId', 'name shortName email')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit)),
+        Course.countDocuments(query),
+      ]);
 
-    return {
-      data: courses,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    };
+      return {
+        data: courses,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } else {
+      const courses = await Course.find(query)
+        .populate('departmentId', 'name shortName email')
+        .sort({ createdAt: -1 });
+
+      return {
+        data: courses,
+        total: courses.length,
+      };
+    }
   }
 
   async getById(id) {

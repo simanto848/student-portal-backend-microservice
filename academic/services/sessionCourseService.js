@@ -7,26 +7,39 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class SessionCourseService {
 	async getAll(options = {}) {
-		const { filters = {}, pagination = {} } = options; // no generic search field per design
-		const { page = 1, limit = 10 } = pagination;
+		const { filters = {}, pagination } = options;
 		const query = { ...filters };
 
-		const skip = (page - 1) * limit;
-		const [items, total] = await Promise.all([
-			SessionCourse.find(query)
+		if (pagination && (pagination.page || pagination.limit)) {
+			const { page = 1, limit = 10 } = pagination;
+			const skip = (page - 1) * limit;
+			const [items, total] = await Promise.all([
+				SessionCourse.find(query)
+					.populate('sessionId', 'name year')
+					.populate('courseId', 'name code departmentId')
+					.populate('departmentId', 'name shortName')
+					.sort({ createdAt: -1 })
+					.skip(skip)
+					.limit(parseInt(limit)),
+				SessionCourse.countDocuments(query),
+			]);
+
+			return {
+				data: items,
+				pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
+			};
+		} else {
+			const items = await SessionCourse.find(query)
 				.populate('sessionId', 'name year')
 				.populate('courseId', 'name code departmentId')
 				.populate('departmentId', 'name shortName')
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(parseInt(limit)),
-			SessionCourse.countDocuments(query),
-		]);
+				.sort({ createdAt: -1 });
 
-		return {
-			data: items,
-			pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
-		};
+			return {
+				data: items,
+				total: items.length,
+			};
+		}
 	}
 
 	async getById(id) {
@@ -48,7 +61,6 @@ class SessionCourseService {
 		if (!course) throw new ApiError(404, 'Course not found');
 		if (!department) throw new ApiError(404, 'Department not found');
 
-		// Uniqueness (sessionId, courseId, semester, departmentId)
 		const existing = await SessionCourse.findOne({
 			sessionId: payload.sessionId,
 			courseId: payload.courseId,
@@ -81,7 +93,6 @@ class SessionCourseService {
 			if (!department) throw new ApiError(404, 'Department not found');
 		}
 
-		// Check prospective uniqueness if relevant fields changed
 		const prospective = {
 			sessionId: payload.sessionId || sc.sessionId,
 			courseId: payload.courseId || sc.courseId,
@@ -112,7 +123,6 @@ class SessionCourseService {
 	async getBatchSessionCourses(batchId, options = {}) {
 		const batch = await Batch.findById(batchId);
 		if (!batch) throw new ApiError(404, 'Batch not found');
-		// Infer session + department relation as batch-based
 		const { pagination = {} } = options;
 		const { page = 1, limit = 10 } = pagination;
 		const skip = (page - 1) * limit;

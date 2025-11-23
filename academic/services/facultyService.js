@@ -4,8 +4,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class FacultyService {
     async getAll(options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
 
         const query = { ...filters };
         if (search) {
@@ -16,25 +15,37 @@ class FacultyService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [faculties, total] = await Promise.all([
-            Faculty.find(query)
-                .populate('deanId', 'fullName email registrationNumber')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Faculty.countDocuments(query),
-        ]);
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [faculties, total] = await Promise.all([
+                Faculty.find(query)
+                    .populate('deanId', 'fullName email registrationNumber')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                Faculty.countDocuments(query),
+            ]);
 
-        return {
-            data: faculties,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: faculties,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            const faculties = await Faculty.find(query)
+                .populate('deanId', 'fullName email registrationNumber')
+                .sort({ createdAt: -1 });
+
+            return {
+                data: faculties,
+                total: faculties.length,
+            };
+        }
     }
 
     async getById(id) {
@@ -129,8 +140,7 @@ class FacultyService {
     }
 
     async getDepartmentsByFaculty(facultyId, options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
         const faculty = await Faculty.findById(facultyId);
         if (!faculty) {
             throw new ApiError(404, 'Faculty not found');
@@ -145,25 +155,39 @@ class FacultyService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [departments, total] = await Promise.all([
-            Department.find(query)
-                .populate('departmentHeadId', 'fullName email')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Department.countDocuments(query),
-        ]);
+        // If pagination is provided, use it; otherwise return all data
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [departments, total] = await Promise.all([
+                Department.find(query)
+                    .populate('departmentHeadId', 'fullName email')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                Department.countDocuments(query),
+            ]);
 
-        return {
-            data: departments,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: departments,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            // Return all data without pagination
+            const departments = await Department.find(query)
+                .populate('departmentHeadId', 'fullName email')
+                .sort({ createdAt: -1 });
+
+            return {
+                data: departments,
+                total: departments.length,
+            };
+        }
     }
 
     async assignDean(facultyId, deanId) {

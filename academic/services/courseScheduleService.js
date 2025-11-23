@@ -3,7 +3,6 @@ import Batch from '../models/Batch.js';
 import SessionCourse from '../models/SessionCourse.js';
 import { ApiError } from '../utils/ApiResponser.js';
 
-// Helper to compare time strings HH:MM
 const timeToMinutes = (t) => {
 	if (!/^\d{2}:\d{2}$/.test(t)) return null;
 	const [h, m] = t.split(':').map(Number);
@@ -12,8 +11,7 @@ const timeToMinutes = (t) => {
 
 class CourseScheduleService {
 	async getAll(options = {}) {
-		const { filters = {}, pagination = {}, search } = options;
-		const { page = 1, limit = 10 } = pagination;
+		const { filters = {}, pagination, search } = options;
 		const query = { ...filters };
 
 		if (search) {
@@ -25,26 +23,39 @@ class CourseScheduleService {
 			];
 		}
 
-		const skip = (page - 1) * limit;
-		const [schedules, total] = await Promise.all([
-			CourseSchedule.find(query)
+		if (pagination && (pagination.page || pagination.limit)) {
+			const { page = 1, limit = 10 } = pagination;
+			const skip = (page - 1) * limit;
+			const [schedules, total] = await Promise.all([
+				CourseSchedule.find(query)
+					.populate('batchId', 'name year programId departmentId')
+					.populate('sessionCourseId', 'sessionId courseId semester departmentId')
+					.sort({ startDate: -1, dayOfWeek: 1, startTime: 1 })
+					.skip(skip)
+					.limit(parseInt(limit)),
+				CourseSchedule.countDocuments(query),
+			]);
+
+			return {
+				data: schedules,
+				pagination: {
+					page: parseInt(page),
+					limit: parseInt(limit),
+					total,
+					pages: Math.ceil(total / limit),
+				},
+			};
+		} else {
+			const schedules = await CourseSchedule.find(query)
 				.populate('batchId', 'name year programId departmentId')
 				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-				.sort({ startDate: -1, dayOfWeek: 1, startTime: 1 })
-				.skip(skip)
-				.limit(parseInt(limit)),
-			CourseSchedule.countDocuments(query),
-		]);
+				.sort({ startDate: -1, dayOfWeek: 1, startTime: 1 });
 
-		return {
-			data: schedules,
-			pagination: {
-				page: parseInt(page),
-				limit: parseInt(limit),
-				total,
-				pages: Math.ceil(total / limit),
-			},
-		};
+			return {
+				data: schedules,
+				total: schedules.length,
+			};
+		}
 	}
 
 	async getById(id) {
@@ -63,7 +74,6 @@ class CourseScheduleService {
 		if (!batch) throw new ApiError(404, 'Batch not found');
 		if (!sessionCourse) throw new ApiError(404, 'Session course not found');
 
-		// Basic time validation
 		const startM = timeToMinutes(payload.startTime);
 		const endM = timeToMinutes(payload.endTime);
 		if (startM === null || endM === null) {
@@ -73,7 +83,6 @@ class CourseScheduleService {
 			throw new ApiError(400, 'endTime must be greater than startTime');
 		}
 
-		// Overlap check for same batch/day
 		const overlap = await CourseSchedule.findOne({
 			batchId: payload.batchId,
 			dayOfWeek: payload.dayOfWeek,

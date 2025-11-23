@@ -29,29 +29,42 @@ class CoursePrerequisiteService {
     }
 
     async getAll(options = {}) {
-        const { filters = {}, pagination = {} } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination } = options;
         const query = { ...filters };
-        const skip = (page - 1) * limit;
-        const [items, total] = await Promise.all([
-            CoursePrerequisite.find(query)
+
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [items, total] = await Promise.all([
+                CoursePrerequisite.find(query)
+                    .populate('courseId', 'name code credit departmentId')
+                    .populate('prerequisiteId', 'name code credit departmentId')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                CoursePrerequisite.countDocuments(query),
+            ]);
+
+            return {
+                data: items,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit) || 1,
+                },
+            };
+        } else {
+            const items = await CoursePrerequisite.find(query)
                 .populate('courseId', 'name code credit departmentId')
                 .populate('prerequisiteId', 'name code credit departmentId')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            CoursePrerequisite.countDocuments(query),
-        ]);
+                .sort({ createdAt: -1 });
 
-        return {
-            data: items,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit) || 1,
-            },
-        };
+            return {
+                data: items,
+                total: items.length,
+            };
+        }
     }
 
     async getById(id) {

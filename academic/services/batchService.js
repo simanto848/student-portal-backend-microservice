@@ -6,8 +6,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class BatchService {
     async getAll(options = {}) {
-        const { filters = {}, pagination = {}, search } = options;
-        const { page = 1, limit = 10 } = pagination;
+        const { filters = {}, pagination, search } = options;
         const query = { ...filters };
 
         if (search) {
@@ -18,28 +17,43 @@ class BatchService {
             ];
         }
 
-        const skip = (page - 1) * limit;
-        const [batches, total] = await Promise.all([
-            Batch.find(query)
+        if (pagination && (pagination.page || pagination.limit)) {
+            const { page = 1, limit = 10 } = pagination;
+            const skip = (page - 1) * limit;
+            const [batches, total] = await Promise.all([
+                Batch.find(query)
+                    .populate('programId', 'name shortName')
+                    .populate('departmentId', 'name shortName')
+                    .populate('sessionId', 'name year')
+                    .populate('counselorId', 'fullName email registrationNumber')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(parseInt(limit)),
+                Batch.countDocuments(query),
+            ]);
+
+            return {
+                data: batches,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit),
+                },
+            };
+        } else {
+            const batches = await Batch.find(query)
                 .populate('programId', 'name shortName')
                 .populate('departmentId', 'name shortName')
                 .populate('sessionId', 'name year')
                 .populate('counselorId', 'fullName email registrationNumber')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(parseInt(limit)),
-            Batch.countDocuments(query),
-        ]);
+                .sort({ createdAt: -1 });
 
-        return {
-            data: batches,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / limit),
-            },
-        };
+            return {
+                data: batches,
+                total: batches.length,
+            };
+        }
     }
 
     async getById(id) {
@@ -56,7 +70,6 @@ class BatchService {
     }
 
     async create(payload) {
-        // Validate related entities
         const [program, department, session] = await Promise.all([
             Program.findById(payload.programId),
             Department.findById(payload.departmentId),
@@ -66,7 +79,6 @@ class BatchService {
         if (!department) throw new ApiError(404, 'Department not found');
         if (!session) throw new ApiError(404, 'Session not found');
 
-        // Unique name check
         if (payload.name) {
             const existing = await Batch.findOne({ name: payload.name });
             if (existing) throw new ApiError(409, 'Batch with this name already exists');
@@ -84,7 +96,6 @@ class BatchService {
         const batch = await Batch.findById(id);
         if (!batch) throw new ApiError(404, 'Batch not found');
 
-        // Validate related changes
         if (payload.programId && payload.programId !== batch.programId) {
             const program = await Program.findById(payload.programId);
             if (!program) throw new ApiError(404, 'Program not found');

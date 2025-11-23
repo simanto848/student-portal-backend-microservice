@@ -5,8 +5,7 @@ import { ApiError } from '../utils/ApiResponser.js';
 
 class SessionService {
   async getAll(options = {}) {
-    const { filters = {}, pagination = {}, search } = options;
-    const { page = 1, limit = 10 } = pagination;
+    const { filters = {}, pagination, search } = options;
     const query = { ...filters };
     if (search) {
       const year = parseInt(search, 10);
@@ -16,24 +15,35 @@ class SessionService {
       ];
     }
 
-    const skip = (page - 1) * limit;
-    const [sessions, total] = await Promise.all([
-      Session.find(query)
-        .sort({ startDate: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Session.countDocuments(query),
-    ]);
+    if (pagination && (pagination.page || pagination.limit)) {
+      const { page = 1, limit = 10 } = pagination;
+      const skip = (page - 1) * limit;
+      const [sessions, total] = await Promise.all([
+        Session.find(query)
+          .sort({ startDate: -1 })
+          .skip(skip)
+          .limit(parseInt(limit)),
+        Session.countDocuments(query),
+      ]);
 
-    return {
-      data: sessions,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    };
+      return {
+        data: sessions,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } else {
+      const sessions = await Session.find(query)
+        .sort({ startDate: -1 });
+
+      return {
+        data: sessions,
+        total: sessions.length,
+      };
+    }
   }
 
   async getById(id) {
