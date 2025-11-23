@@ -36,6 +36,10 @@ const batchSchema = new mongoose.Schema(
             type: String,
             ref: 'Teacher',
         },
+        classRepresentativeId: {
+            type: String,
+            ref: 'Student',
+        },
         currentSemester: {
             type: Number,
             default: 1,

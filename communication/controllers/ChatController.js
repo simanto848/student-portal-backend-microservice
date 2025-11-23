@@ -1,0 +1,107 @@
+import ChatService from "../services/ChatService.js";
+
+class ChatController {
+    async createBatchChatGroup(req, res) {
+        try {
+            const { batchId, counselorId } = req.body;
+            const chatGroup = await ChatService.getOrCreateBatchChatGroup(batchId, counselorId);
+            res.status(200).json({ success: true, data: chatGroup });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async createCourseChatGroup(req, res) {
+        try {
+            const { batchId, courseId, sessionId, instructorId } = req.body;
+            const chatGroup = await ChatService.getOrCreateCourseChatGroup(batchId, courseId, sessionId, instructorId);
+            res.status(200).json({ success: true, data: chatGroup });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async sendMessage(req, res) {
+        try {
+            const { chatGroupId, chatGroupType, content, attachments } = req.body;
+            const senderId = req.user.id;
+            const senderModel = req.user.role === 'student' ? 'Student' : 'Teacher';
+
+            const message = await ChatService.sendMessage({
+                chatGroupId,
+                chatGroupType,
+                senderId,
+                senderModel,
+                content,
+                attachments
+            });
+            res.status(201).json({ success: true, data: message });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async getMessages(req, res) {
+        try {
+            const { chatGroupId } = req.params;
+            const { limit, skip } = req.query;
+            const messages = await ChatService.getMessages(chatGroupId, parseInt(limit), parseInt(skip));
+            res.status(200).json({ success: true, data: messages });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async editMessage(req, res) {
+        try {
+            const { messageId } = req.params;
+            const { content } = req.body;
+            const userId = req.user.id;
+
+            const message = await ChatService.editMessage(messageId, userId, content);
+            res.status(200).json({ success: true, data: message });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async deleteMessage(req, res) {
+        try {
+            const { messageId } = req.params;
+            const userId = req.user.id;
+
+            await ChatService.deleteMessage(messageId, userId);
+            res.status(200).json({ success: true, message: "Message deleted" });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async pinMessage(req, res) {
+        try {
+            const { messageId } = req.params;
+            const userId = req.user.id;
+            const userRole = req.user.role;
+
+            const message = await ChatService.pinMessage(messageId, userId, userRole);
+            res.status(200).json({ success: true, data: message });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async reactToMessage(req, res) {
+        try {
+            const { messageId } = req.params;
+            const { reaction } = req.body;
+            const userId = req.user.id;
+
+            const message = await ChatService.reactToMessage(messageId, userId, reaction);
+            res.status(200).json({ success: true, data: message });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+}
+
+export default new ChatController();
