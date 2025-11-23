@@ -69,7 +69,7 @@ courseEnrollmentSchema.index({ semester: 1 });
 
 courseEnrollmentSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
-    next();
+    if(next) next();
 });
 
 courseEnrollmentSchema.methods.softDelete = function () {

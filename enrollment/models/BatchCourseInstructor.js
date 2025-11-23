@@ -58,30 +58,25 @@ const batchCourseInstructorSchema = new mongoose.Schema(
     }
 );
 
-// Indexes for efficient queries
 batchCourseInstructorSchema.index({ deletedAt: 1 });
 batchCourseInstructorSchema.index({ batchId: 1, courseId: 1, semester: 1 });
 batchCourseInstructorSchema.index({ instructorId: 1, status: 1 });
 
-// Unique constraint: One instructor per batch-course-semester combination
 batchCourseInstructorSchema.index(
     { batchId: 1, courseId: 1, semester: 1, deletedAt: 1 },
     { unique: true, name: 'unique_batch_course_semester_assignment' }
 );
 
-// Soft delete pre-hook
 batchCourseInstructorSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
-    next();
+    if(next) next();
 });
 
-// Soft delete method
 batchCourseInstructorSchema.methods.softDelete = function () {
     this.deletedAt = new Date();
     return this.save();
 };
 
-// Restore method
 batchCourseInstructorSchema.methods.restore = function () {
     this.deletedAt = null;
     return this.save();

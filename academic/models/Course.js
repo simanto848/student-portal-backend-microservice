@@ -65,7 +65,7 @@ const courseSchema = new mongoose.Schema(
 courseSchema.index({ deletedAt: 1 });
 courseSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
-    next();
+    if(next) next();
 });
 
 courseSchema.methods.softDelete = function () {
