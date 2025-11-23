@@ -24,6 +24,7 @@ router.get('/', authorize('super_admin', 'admin', 'teacher', 'student'), validat
 router.get('/:id', authorize('super_admin', 'admin', 'teacher', 'student'), validate(getCourseGradeSchema), courseGradeController.getGrade);
 router.get('/student/:studentId/semester/:semester', authorize('super_admin', 'admin', 'teacher', 'student'), courseGradeController.getStudentSemesterGrades);
 router.get('/student/:studentId/semester/:semester/gpa', authorize('super_admin', 'admin', 'teacher', 'student'), courseGradeController.calculateSemesterGPA);
+router.get('/student/:studentId/cgpa', authorize('super_admin', 'admin', 'teacher', 'student'), courseGradeController.calculateCGPA);
 router.get('/stats/course', authorize('teacher'), courseGradeController.getCourseGradeStats);
 
 export default router;

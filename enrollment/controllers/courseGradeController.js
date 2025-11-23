@@ -108,6 +108,19 @@ class CourseGradeController {
         }
     }
 
+    async calculateCGPA(req, res, next) {
+        try {
+            const { studentId } = req.params;
+            if (req.user.type === 'student' && req.user.sub !== studentId) {
+                return ApiResponse.forbidden(res, 'You can only view your own CGPA');
+            }
+            const result = await courseGradeService.calculateCGPA(studentId);
+            return ApiResponse.success(res, result);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getCourseGradeStats(req, res, next) {
         try {
             const { courseId, batchId, semester } = req.query;

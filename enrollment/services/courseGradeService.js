@@ -4,6 +4,7 @@ import AssessmentSubmission from '../models/AssessmentSubmission.js';
 import Assessment from '../models/Assessment.js';
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
 import { ApiError } from '../utils/ApiResponser.js';
+import { Course } from '../models/external/Academic.js';
 
 class CourseGradeService {
     async calculateStudentGrade(data, instructorId) {
@@ -273,13 +274,92 @@ class CourseGradeService {
             };
         }
 
-        const totalGradePoints = grades.reduce((sum, grade) => sum + (grade.gradePoint || 0), 0);
-        const gpa = (totalGradePoints / grades.length).toFixed(2);
+        let totalWeightedPoints = 0;
+        let totalCredits = 0;
+        const gradeDetails = [];
+
+        for (const grade of grades) {
+            const course = await Course.findById(grade.courseId);
+            const credits = course ? course.credit : 0;
+            
+            if (credits > 0) {
+                totalWeightedPoints += (grade.gradePoint || 0) * credits;
+                totalCredits += credits;
+            }
+            
+            gradeDetails.push({
+                ...grade.toJSON(),
+                courseCode: course ? course.code : 'UNKNOWN',
+                courseName: course ? course.name : 'Unknown Course',
+                credits
+            });
+        }
+
+        const gpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
 
         return {
             gpa: parseFloat(gpa),
+            totalCredits,
             totalCourses: grades.length,
-            grades,
+            grades: gradeDetails,
+        };
+    }
+
+    async calculateCGPA(studentId) {
+        const grades = await CourseGrade.find({
+            studentId,
+            isPublished: true,
+        });
+
+        if (grades.length === 0) {
+            return {
+                cgpa: 0,
+                totalCredits: 0,
+                totalCourses: 0,
+                semesterBreakdown: {}
+            };
+        }
+
+        let totalWeightedPoints = 0;
+        let totalCredits = 0;
+        const semesterBreakdown = {};
+
+        for (const grade of grades) {
+            const course = await Course.findById(grade.courseId);
+            const credits = course ? course.credit : 0;
+
+            if (credits > 0) {
+                totalWeightedPoints += (grade.gradePoint || 0) * credits;
+                totalCredits += credits;
+            }
+
+            // Semester breakdown
+            if (!semesterBreakdown[grade.semester]) {
+                semesterBreakdown[grade.semester] = {
+                    totalWeightedPoints: 0,
+                    totalCredits: 0,
+                    courses: 0
+                };
+            }
+            semesterBreakdown[grade.semester].totalWeightedPoints += (grade.gradePoint || 0) * credits;
+            semesterBreakdown[grade.semester].totalCredits += credits;
+            semesterBreakdown[grade.semester].courses += 1;
+        }
+
+        const cgpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
+
+        // Calculate GPA for each semester in breakdown
+        Object.keys(semesterBreakdown).forEach(sem => {
+            const data = semesterBreakdown[sem];
+            data.gpa = data.totalCredits > 0 ? parseFloat((data.totalWeightedPoints / data.totalCredits).toFixed(2)) : 0;
+            delete data.totalWeightedPoints; // Cleanup intermediate data
+        });
+
+        return {
+            cgpa: parseFloat(cgpa),
+            totalCredits,
+            totalCourses: grades.length,
+            semesterBreakdown
         };
     }
 
