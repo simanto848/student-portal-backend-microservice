@@ -9,6 +9,7 @@ import batchRoutes from "./batchRoutes.js";
 import classroomRoutes from "./classroomRoutes.js";
 import courseScheduleRoutes from "./courseScheduleRoutes.js";
 import courseSyllabusRoutes from "./courseSyllabusRoutes.js";
+import examCommitteeRoutes from "./examCommitteeRoutes.js";
 
 const router = express.Router();
 
@@ -22,5 +23,6 @@ router.use('/batches', batchRoutes);
 router.use('/classrooms', classroomRoutes);
 router.use('/schedules', courseScheduleRoutes);
 router.use('/syllabus', courseSyllabusRoutes);
+router.use('/exam-committees', examCommitteeRoutes);
 
 export default router;

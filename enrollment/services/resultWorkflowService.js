@@ -1,7 +1,8 @@
 import ResultWorkflow from '../models/ResultWorkflow.js';
 import CourseGrade from '../models/CourseGrade.js';
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
-import { Course, Batch } from '../models/external/Academic.js';
+import { Course, Batch, Department } from '../models/external/Academic.js';
+import { ExamCommittee } from '../models/external/ExamCommittee.js';
 import { ApiError } from '../utils/ApiResponser.js';
 
 class ResultWorkflowService {
@@ -41,6 +42,23 @@ class ResultWorkflowService {
             throw new ApiError(400, 'Result is not pending committee approval');
         }
 
+        const batch = await Batch.findById(workflow.batchId);
+        if (!batch) throw new ApiError(404, 'Batch not found');
+
+        const isMember = await ExamCommittee.findOne({
+            departmentId: batch.departmentId,
+            teacherId: committeeMemberId,
+            status: 'ACTIVE',
+            $or: [
+                { batchId: null },
+                { batchId: workflow.batchId }
+            ]
+        });
+
+        if (!isMember) {
+            throw new ApiError(403, 'You are not a member of the Exam Committee for this batch/department');
+        }
+
         workflow.status = 'COMMITTEE_APPROVED';
         workflow.history.push({
             status: 'COMMITTEE_APPROVED',
@@ -76,7 +94,15 @@ class ResultWorkflowService {
             throw new ApiError(400, 'Result must be approved by committee first');
         }
 
-        // TODO: Verify if headId is actually the Department Head (requires Academic Service call or trusted role)
+        const batch = await Batch.findById(workflow.batchId);
+        if (!batch) throw new ApiError(404, 'Batch not found');
+
+        const department = await Department.findById(batch.departmentId);
+        if (!department) throw new ApiError(404, 'Department not found');
+
+        if (department.departmentHeadId !== headId) {
+            throw new ApiError(403, 'Only the Department Head can publish results');
+        }
         
         workflow.status = 'PUBLISHED';
         workflow.history.push({
@@ -117,6 +143,16 @@ class ResultWorkflowService {
 
         if (!workflow.returnRequested) {
             throw new ApiError(400, 'No return request pending');
+        }
+
+        const batch = await Batch.findById(workflow.batchId);
+        if (!batch) throw new ApiError(404, 'Batch not found');
+
+        const department = await Department.findById(batch.departmentId);
+        if (!department) throw new ApiError(404, 'Department not found');
+
+        if (department.departmentHeadId !== headId) {
+            throw new ApiError(403, 'Only the Department Head can approve return requests');
         }
 
         workflow.status = 'RETURNED_TO_TEACHER';
