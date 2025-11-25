@@ -1,7 +1,7 @@
 import Session from '../models/Session.js';
 import Batch from '../models/Batch.js';
 import SessionCourse from '../models/SessionCourse.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class SessionService {
   async getAll(options = {}) {

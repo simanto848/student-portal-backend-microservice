@@ -1,5 +1,5 @@
 import Staff from '../models/Staff.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
 import academicServiceClient from '../clients/academicServiceClient.js';

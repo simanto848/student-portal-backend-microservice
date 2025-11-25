@@ -1,6 +1,6 @@
 import express from "express";
 import ChatController from "../controllers/ChatController.js";
-import { authenticate } from "../middlewares/auth.js";
+import { authenticate, authorize } from 'shared';
 
 const router = express.Router();
 

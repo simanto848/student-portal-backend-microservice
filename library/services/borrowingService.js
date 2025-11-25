@@ -2,7 +2,7 @@ import BookTakenHistory from '../models/BookTakenHistory.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class BorrowingService {
     async borrowBook({ userType, borrowerId, copyId, libraryId, processedById, notes = '' }) {

@@ -3,7 +3,7 @@ import Session from '../models/Session.js';
 import Course from '../models/Course.js';
 import Department from '../models/Department.js';
 import Batch from '../models/Batch.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class SessionCourseService {
 	async getAll(options = {}) {

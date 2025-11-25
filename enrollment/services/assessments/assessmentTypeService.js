@@ -1,5 +1,5 @@
 import AssessmentType from '../../models/AssessmentType.js';
-import { ApiError } from '../../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class AssessmentTypeService {
     async createAssessmentType(data) {

@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from 'shared';
 import { validate } from '../validations/index.js';
 import {
     createBatchSchema,

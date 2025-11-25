@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate, submissionSchema, gradeSchema, feedbackSchema } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
+import { submissionSchema, gradeSchema, feedbackSchema } from '../validations/schemas.js';
 import submissionController from '../controllers/submissionController.js';
 
 const router = Router();

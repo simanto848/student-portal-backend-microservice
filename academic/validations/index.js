@@ -1,5 +1,5 @@
 // Validation middleware
-export { validate, validatePartial } from './validate.js';
+export { validate, validatePartial } from 'shared';
 
 // Session validations
 export {

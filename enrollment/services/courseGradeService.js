@@ -3,7 +3,7 @@ import CourseEnrollment from '../models/CourseEnrollment.js';
 import AssessmentSubmission from '../models/AssessmentSubmission.js';
 import Assessment from '../models/Assessment.js';
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 import { Course } from '../models/external/Academic.js';
 
 class CourseGradeService {

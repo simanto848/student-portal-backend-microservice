@@ -24,3 +24,8 @@ pnpm-debug.log*
 .env.production.local
 
 docs
+
+# Test files
+coverage
+tests
+jest.*

@@ -1,5 +1,5 @@
 import enrollmentService from '../services/enrollmentService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class EnrollmentController {
     async enrollStudent(req, res, next) {

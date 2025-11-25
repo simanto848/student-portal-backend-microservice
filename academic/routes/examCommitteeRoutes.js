@@ -1,7 +1,7 @@
 import express from 'express';
 import examCommitteeController from '../controllers/examCommitteeController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import validate from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
 import { addMemberSchema } from '../validations/examCommitteeValidation.js';
 
 const router = express.Router();

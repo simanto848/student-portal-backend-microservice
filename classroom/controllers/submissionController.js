@@ -1,5 +1,5 @@
 import SubmissionService from '../services/submissionService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class SubmissionController {
   async submitOrUpdate(req, res, next) {

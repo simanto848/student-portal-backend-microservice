@@ -1,6 +1,6 @@
 import express from 'express';
 import { validate } from '../validations/index.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from 'shared';
 import { applyDepartmentFilter, canManageDepartmentResource } from '../middlewares/departmentScope.js';
 import {
     createClassroomSchema,

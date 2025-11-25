@@ -1,5 +1,5 @@
 import notificationService from '../services/notificationService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class NotificationController {
   async create(req, res) {

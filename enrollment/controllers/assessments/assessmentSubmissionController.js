@@ -1,5 +1,5 @@
 import assessmentSubmissionService from '../../services/assessments/assessmentSubmissionService.js';
-import ApiResponse from '../../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class AssessmentSubmissionController {
     async submitAssessment(req, res, next) {

@@ -1,7 +1,7 @@
 import express from 'express';
 import enrollmentController from '../controllers/enrollmentController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import validate from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
 import {
     createEnrollmentSchema,
     bulkEnrollSchema,

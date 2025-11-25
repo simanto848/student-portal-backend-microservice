@@ -4,8 +4,9 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import connectDB from "./config/db.js";
+import { ApiResponse, ApiError } from 'shared';
 import routes from "./routes/index.js";
-import { errorHandler, notFoundHandler } from "./middlewares/errorHandler.js";
+import { errorHandler, notFoundHandler } from 'shared';
 
 config();
 

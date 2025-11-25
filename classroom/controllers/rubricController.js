@@ -1,6 +1,6 @@
 import Rubric from '../models/Rubric.js';
 import Workspace from '../models/Workspace.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class RubricController {
   async create(req,res,next){ try { const { workspaceId, name, criteria } = req.body; const ws = await Workspace.findById(workspaceId); if(!ws) return ApiResponse.notFound(res,'Workspace not found'); if (req.user.role==='teacher' && !ws.teacherIds.includes(req.user.id)) return ApiResponse.forbidden(res,'Not owner'); const r = await Rubric.create({ workspaceId, name, criteria }); return ApiResponse.created(res,r,'Rubric created'); } catch(e){ next(e);} }

@@ -1,5 +1,5 @@
 import batchCourseInstructorService from '../services/batchCourseInstructorService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class BatchCourseInstructorController {
     async assignInstructor(req, res, next) {

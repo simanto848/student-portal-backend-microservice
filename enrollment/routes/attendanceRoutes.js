@@ -1,7 +1,7 @@
 import express from 'express';
 import attendanceController from '../controllers/attendanceController.js';
-import validate from '../middlewares/validate.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { validate } from 'shared';
+import { authenticate, authorize } from 'shared';
 import {
     createAttendanceSchema,
     bulkAttendanceSchema,

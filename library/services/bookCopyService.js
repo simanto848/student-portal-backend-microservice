@@ -1,7 +1,7 @@
 import BookCopy from '../models/BookCopy.js';
 import Book from '../models/Book.js';
 import Library from '../models/Library.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class BookCopyService {
     async getAll(options = {}) {

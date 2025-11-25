@@ -1,6 +1,6 @@
 import CourseSyllabus from '../models/CourseSyllabus.js';
 import SessionCourse from '../models/SessionCourse.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 const VALID_STATUS_FLOW = {
 	Draft: ['Pending Approval'],

@@ -2,7 +2,7 @@ import BookReservation from '../models/BookReservation.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class ReservationService {
     async createReservation({ userType, userId, copyId, libraryId, notes = '' }) {

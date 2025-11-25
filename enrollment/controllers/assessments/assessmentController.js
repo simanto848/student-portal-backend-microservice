@@ -1,5 +1,5 @@
 import assessmentService from '../../services/assessments/assessmentService.js';
-import ApiResponse from '../../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class AssessmentController {
     async createAssessment(req, res, next) {

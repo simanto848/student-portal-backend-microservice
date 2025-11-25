@@ -1,6 +1,6 @@
 import Topic from '../models/Topic.js';
 import Workspace from '../models/Workspace.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class TopicController {
   async create(req,res,next){

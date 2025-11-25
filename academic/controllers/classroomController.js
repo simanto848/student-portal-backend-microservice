@@ -1,4 +1,4 @@
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 import classroomService from '../services/classroomService.js';
 
 class ClassroomController {

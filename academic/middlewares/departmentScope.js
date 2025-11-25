@@ -1,4 +1,4 @@
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 const globalManagers = new Set(['super_admin','admin']);
 

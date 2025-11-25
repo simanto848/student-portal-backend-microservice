@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import ApiResponse from '../utils/ApiResponser.js';
+import ApiResponse from '../utils/ApiResponse.js';
 
 export const authenticate = (req, res, next) => {
     const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
@@ -23,4 +23,19 @@ export const authorize = (...allowedRoles) => {
         }
         next();
     };
+};
+
+export const optionalAuth = (req, res, next) => {
+    const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
+    if (!token) {
+        return next();
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+    } catch (error) {
+        // Ignore invalid tokens for optional auth
+    }
+    next();
 };

@@ -1,5 +1,5 @@
 import attendanceService from '../services/attendanceService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class AttendanceController {
     async markAttendance(req, res, next) {

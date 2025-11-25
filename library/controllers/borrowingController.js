@@ -1,4 +1,4 @@
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 import borrowingService from '../services/borrowingService.js';
 
 class BorrowingController {

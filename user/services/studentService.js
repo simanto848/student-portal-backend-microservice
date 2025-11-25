@@ -1,6 +1,6 @@
 import Student from '../models/Student.js';
 import StudentProfile from '../models/StudentProfile.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';

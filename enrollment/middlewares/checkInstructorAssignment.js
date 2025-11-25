@@ -1,5 +1,5 @@
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 export const checkInstructorAssignment = async (req, res, next) => {
     try {

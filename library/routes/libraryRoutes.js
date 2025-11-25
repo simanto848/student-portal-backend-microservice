@@ -1,7 +1,7 @@
 import express from 'express';
 import libraryController from '../controllers/libraryController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
 import { libraryCreateValidation, libraryUpdateValidation } from '../validations/libraryValidation.js';
 
 const router = express.Router();

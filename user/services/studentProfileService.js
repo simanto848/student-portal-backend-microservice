@@ -1,6 +1,6 @@
 import StudentProfile from '../models/StudentProfile.js';
 import Student from '../models/Student.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class StudentProfileService {
     async getByStudentId(studentId) {

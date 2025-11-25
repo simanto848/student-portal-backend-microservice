@@ -1,5 +1,5 @@
 import courseGradeService from '../services/courseGradeService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class CourseGradeController {
     async calculateGrade(req, res, next) {

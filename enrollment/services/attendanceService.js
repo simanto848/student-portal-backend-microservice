@@ -1,7 +1,7 @@
 import Attendance from '../models/Attendance.js';
 import CourseEnrollment from '../models/CourseEnrollment.js';
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class AttendanceService {
     validateAttendanceDate(date) {

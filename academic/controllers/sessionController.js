@@ -1,4 +1,4 @@
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 import sessionService from '../services/sessionService.js';
 
 class SessionController {

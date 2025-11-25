@@ -3,7 +3,7 @@ import CourseGrade from '../models/CourseGrade.js';
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
 import { Course, Batch, Department } from '../models/external/Academic.js';
 import { ExamCommittee } from '../models/external/ExamCommittee.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class ResultWorkflowService {
     async getWorkflow(batchId, courseId, semester) {

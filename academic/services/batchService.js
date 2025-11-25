@@ -2,7 +2,7 @@ import Batch from '../models/Batch.js';
 import Program from '../models/Program.js';
 import Department from '../models/Department.js';
 import Session from '../models/Session.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class BatchService {
     async getAll(options = {}) {

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from 'shared';
 import rubricController from '../controllers/rubricController.js';
 
 const router = Router();

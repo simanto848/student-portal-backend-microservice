@@ -1,6 +1,6 @@
 import CoursePrerequisite from '../models/coursePrerequisite.js';
 import Course from '../models/Course.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class CoursePrerequisiteService {
     async #existsPath(startId, targetId, maxDepth = 50) {

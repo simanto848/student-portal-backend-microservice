@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate, topicCreateSchema } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
+import { topicCreateSchema } from '../validations/schemas.js';
 import topicController from '../controllers/topicController.js';
 
 const router = Router();

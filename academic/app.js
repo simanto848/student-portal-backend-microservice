@@ -1,6 +1,6 @@
 import express from "express";
 import apiRoutes from "./routes/index.js";
-import ApiResponse, { ApiError } from "./utils/ApiResponser.js";
+import { ApiResponse, ApiError } from 'shared';
 
 const app = express();
 

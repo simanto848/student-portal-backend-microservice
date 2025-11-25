@@ -1,7 +1,7 @@
 import express from 'express';
 import bookController from '../controllers/bookController.js';
-import { authenticate, authorize, optionalAuth } from '../middlewares/auth.js';
-import { validate } from '../middlewares/validate.js';
+import { authenticate, authorize, optionalAuth } from 'shared';
+import { validate } from 'shared';
 import { bookCreateValidation, bookUpdateValidation } from '../validations/bookValidation.js';
 
 const router = express.Router();

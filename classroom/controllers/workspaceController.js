@@ -1,5 +1,5 @@
 import WorkspaceService from '../services/workspaceService.js';
-import ApiResponse, { ApiError } from '../utils/ApiResponser.js';
+import { ApiResponse, ApiError } from 'shared';
 
 class WorkspaceController {
   async create(req, res, next) {

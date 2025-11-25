@@ -1,5 +1,5 @@
 import Classroom from '../models/Classroom.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class ClassroomService {
 	async getAll(options = {}) {

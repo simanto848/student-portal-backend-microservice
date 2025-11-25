@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate, materialCreateSchema } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
+import { materialCreateSchema } from '../validations/schemas.js';
 import materialController from '../controllers/materialController.js';
 
 const router = Router();

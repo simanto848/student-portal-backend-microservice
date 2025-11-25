@@ -1,6 +1,6 @@
 import express from 'express';
 import studentProfileController from '../controllers/studentProfileController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from 'shared';
 import { validate } from '../middlewares/validate.js';
 import {
     studentProfileCreateValidation,

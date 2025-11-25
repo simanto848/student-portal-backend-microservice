@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate, workspaceCreateSchema } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
+import { workspaceCreateSchema } from '../validations/schemas.js';
 import workspaceController from '../controllers/workspaceController.js';
 
 const router = Router();

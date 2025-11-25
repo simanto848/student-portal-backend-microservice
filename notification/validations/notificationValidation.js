@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 const baseSchema = {
   title: z.string().min(3),

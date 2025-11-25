@@ -1,7 +1,7 @@
 import express from 'express';
 import borrowingController from '../controllers/borrowingController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
 import { borrowBookValidation, returnBookValidation, updateBorrowingValidation } from '../validations/borrowingValidation.js';
 
 const router = express.Router();

@@ -1,6 +1,6 @@
 import StreamItem from '../models/StreamItem.js';
 import Workspace from '../models/Workspace.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class StreamController {
   async list(req,res,next){

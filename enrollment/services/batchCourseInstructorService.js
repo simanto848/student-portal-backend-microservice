@@ -1,5 +1,5 @@
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 import userServiceClient from '../client/userServiceClient.js';
 import academicServiceClient from '../client/academicServiceClient.js';
 

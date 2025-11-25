@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate, assignmentCreateSchema } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
+import { assignmentCreateSchema } from '../validations/schemas.js';
 import assignmentController from '../controllers/assignmentController.js';
 
 const router = Router();

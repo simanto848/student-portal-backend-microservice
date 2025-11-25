@@ -1,5 +1,5 @@
 import examCommitteeService from '../services/examCommitteeService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class ExamCommitteeController {
     async addMember(req, res, next) {

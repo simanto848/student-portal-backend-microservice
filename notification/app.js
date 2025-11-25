@@ -4,8 +4,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import apiRoutes from './routes/index.js';
-import ApiResponse, { ApiError } from './utils/ApiResponser.js';
-import { authenticate } from './middlewares/auth.js';
+import { ApiResponse, ApiError } from 'shared';
+import { authenticate } from 'shared';
 
 dotenv.config();
 

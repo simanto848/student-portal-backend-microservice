@@ -4,7 +4,7 @@ import Admin from '../models/Admin.js';
 import Staff from '../models/Staff.js';
 import Teacher from '../models/Teacher.js';
 import Student from '../models/Student.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 const TOKEN_COOKIE_OPTIONS = {
     httpOnly: true,

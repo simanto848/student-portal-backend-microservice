@@ -1,5 +1,5 @@
 import MaterialService from '../services/materialService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class MaterialController {
   async create(req, res, next) {

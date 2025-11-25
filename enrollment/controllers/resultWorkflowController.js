@@ -1,5 +1,5 @@
 import resultWorkflowService from '../services/resultWorkflowService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class ResultWorkflowController {
     async getWorkflow(req, res, next) {

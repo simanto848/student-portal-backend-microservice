@@ -1,7 +1,8 @@
+
 import Assessment from '../../models/Assessment.js';
 import AssessmentType from '../../models/AssessmentType.js';
 import BatchCourseInstructor from '../../models/BatchCourseInstructor.js';
-import { ApiError } from '../../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 import academicServiceClient from '../../client/academicServiceClient.js';
 
 class AssessmentService {

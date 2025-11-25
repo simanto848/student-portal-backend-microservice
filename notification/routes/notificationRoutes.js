@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import notificationController from '../controllers/notificationController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
+import { authenticate, authorize } from 'shared';
 import { validateNotificationCreate, validateNotificationUpdate } from '../validations/notificationValidation.js';
 import { notificationWriteLimiter, notificationReadLimiter } from '../middlewares/rateLimit.js';
 

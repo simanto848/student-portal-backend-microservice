@@ -1,7 +1,7 @@
 import express from 'express';
 import bookCopyController from '../controllers/bookCopyController.js';
-import { authenticate, authorize } from '../middlewares/auth.js';
-import { validate } from '../middlewares/validate.js';
+import { authenticate, authorize } from 'shared';
+import { validate } from 'shared';
 import { bookCopyCreateValidation, bookCopyUpdateValidation } from '../validations/bookCopyValidation.js';
 
 const router = express.Router();

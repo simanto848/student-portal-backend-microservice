@@ -1,6 +1,6 @@
 import AssessmentSubmission from '../../models/AssessmentSubmission.js';
-import Assessment from '../../models/Assessment.js';
-import { ApiError } from '../../utils/ApiResponser.js';
+import { ApiError } from 'shared';
+
 import userServiceClient from '../../client/userServiceClient.js';
 
 class AssessmentSubmissionService {

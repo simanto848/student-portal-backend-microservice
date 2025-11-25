@@ -1,5 +1,5 @@
 import Library from '../models/Library.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class LibraryService {
     async getAll(options = {}) {

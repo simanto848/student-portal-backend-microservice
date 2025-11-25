@@ -1,7 +1,7 @@
 import Department from '../models/Department.js';
 import Faculty from '../models/Faculty.js';
 import Program from '../models/Program.js';
-import { ApiError } from '../utils/ApiResponser.js';
+import { ApiError } from 'shared';
 
 class DepartmentService {
     async getAll(options = {}) {

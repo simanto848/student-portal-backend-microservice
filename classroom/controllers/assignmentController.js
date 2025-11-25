@@ -1,5 +1,5 @@
 import AssignmentService from '../services/assignmentService.js';
-import ApiResponse from '../utils/ApiResponser.js';
+import { ApiResponse } from 'shared';
 
 class AssignmentController {
   async create(req, res, next) {
