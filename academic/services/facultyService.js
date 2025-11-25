@@ -15,20 +15,34 @@ class FacultyService {
             ];
         }
 
+        const populateDepartmentsCount = async (faculties) => {
+            return Promise.all(faculties.map(async (faculty) => {
+                const departmentsCount = await Department.countDocuments({
+                    facultyId: faculty._id,
+                    deletedAt: null
+                });
+                return {
+                    ...faculty.toJSON(),
+                    departmentsCount
+                };
+            }));
+        };
+
         if (pagination && (pagination.page || pagination.limit)) {
             const { page = 1, limit = 10 } = pagination;
             const skip = (page - 1) * limit;
             const [faculties, total] = await Promise.all([
                 Faculty.find(query)
-                    .populate('deanId', 'fullName email registrationNumber')
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(parseInt(limit)),
                 Faculty.countDocuments(query),
             ]);
 
+            const facultiesWithCount = await populateDepartmentsCount(faculties);
+
             return {
-                data: faculties,
+                data: facultiesWithCount,
                 pagination: {
                     page: parseInt(page),
                     limit: parseInt(limit),
@@ -38,18 +52,19 @@ class FacultyService {
             };
         } else {
             const faculties = await Faculty.find(query)
-                .populate('deanId', 'fullName email registrationNumber')
                 .sort({ createdAt: -1 });
 
+            const facultiesWithCount = await populateDepartmentsCount(faculties);
+
             return {
-                data: faculties,
+                data: facultiesWithCount,
                 total: faculties.length,
             };
         }
     }
 
     async getById(id) {
-        const faculty = await Faculty.findById(id).populate('deanId', 'fullName email registrationNumber designation');
+        const faculty = await Faculty.findById(id);
         if (!faculty) {
             throw new ApiError(404, 'Faculty not found');
         }
@@ -155,13 +170,11 @@ class FacultyService {
             ];
         }
 
-        // If pagination is provided, use it; otherwise return all data
         if (pagination && (pagination.page || pagination.limit)) {
             const { page = 1, limit = 10 } = pagination;
             const skip = (page - 1) * limit;
             const [departments, total] = await Promise.all([
                 Department.find(query)
-                    .populate('departmentHeadId', 'fullName email')
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(parseInt(limit)),
@@ -178,9 +191,7 @@ class FacultyService {
                 },
             };
         } else {
-            // Return all data without pagination
             const departments = await Department.find(query)
-                .populate('departmentHeadId', 'fullName email')
                 .sort({ createdAt: -1 });
 
             return {
