@@ -3,11 +3,16 @@ import expressProxy from "express-http-proxy";
 import morgan from "morgan";
 import { config } from "dotenv";
 import colors from "colors";
+import cors from "cors";
 
 config();
 
 const app = express();
 app.use(morgan("dev"));
+app.use(cors({
+    origin: "http://localhost:3000",
+    credentials: true
+}));
 
 const PORT = process.env.PORT || 8000;
 
