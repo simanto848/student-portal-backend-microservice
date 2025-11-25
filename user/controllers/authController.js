@@ -56,6 +56,83 @@ class AuthController {
             next(error);
         }
     }
+
+    async verify2FA(req, res, next) {
+        try {
+            const { tempToken, otp } = req.body;
+            const result = await authService.verify2FALogin(tempToken, otp, req, res);
+            return ApiResponse.success(res, result, '2FA verification successful');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async forgotPassword(req, res, next) {
+        try {
+            const { email, role } = req.body;
+            const result = await authService.forgotPassword(email, role);
+            return ApiResponse.success(res, result, 'Password reset initiated');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async resetPassword(req, res, next) {
+        try {
+            const { email, otp, newPassword, role } = req.body;
+            const result = await authService.resetPassword(email, otp, newPassword, role);
+            return ApiResponse.success(res, result, 'Password reset successful');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async changePassword(req, res, next) {
+        try {
+            const { currentPassword, newPassword } = req.body;
+            const userId = req.user.id;
+            const role = req.user.role;
+            const result = await authService.changePassword(userId, currentPassword, newPassword, role);
+            return ApiResponse.success(res, result, 'Password changed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async enable2FA(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const role = req.user.role;
+            const result = await authService.enable2FA(userId, role);
+            return ApiResponse.success(res, result, '2FA setup initiated');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async confirmEnable2FA(req, res, next) {
+        try {
+            const { otp } = req.body;
+            const userId = req.user.id;
+            const role = req.user.role;
+            const result = await authService.confirmEnable2FA(userId, otp, role);
+            return ApiResponse.success(res, result, '2FA enabled successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async disable2FA(req, res, next) {
+        try {
+            const { password } = req.body;
+            const userId = req.user.id;
+            const role = req.user.role;
+            const result = await authService.disable2FA(userId, password, role);
+            return ApiResponse.success(res, result, '2FA disabled successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AuthController();

@@ -4,6 +4,8 @@ import Admin from '../models/Admin.js';
 import Staff from '../models/Staff.js';
 import Teacher from '../models/Teacher.js';
 import Student from '../models/Student.js';
+import otpService from './otpService.js';
+import OTP_PURPOSES from '../constants/OTP_PURPOSE.js';
 import { ApiError } from 'shared';
 
 const TOKEN_COOKIE_OPTIONS = {
@@ -100,41 +102,102 @@ class AuthService {
             const clientIp = this.getClientIp(req);
             this.validateRegisteredIp(user, clientIp, roleKey);
 
-            const payload = {
-                id: user.id,
-                role: user.role || roleKey,
-                type: roleKey,
-                registrationNumber: user.registrationNumber,
-                fullName: user.fullName,
-                email: user.email,
-            };
+            // Check for 2FA
+            if (user.twoFactorEnabled) {
+                const otp = otpService.generateOTP(6);
+                await otpService.saveOTP(user.id, otp, OTP_PURPOSES.TWO_FACTOR_AUTH, 5); // 5 mins expiry
+                await otpService.sendOTPEmail(user.email, otp, OTP_PURPOSES.TWO_FACTOR_AUTH, user.fullName);
 
-            const accessToken = this.signToken(payload);
-            const refreshToken = this.generateRefreshToken();
+                // Generate temporary token for 2FA verification
+                const tempPayload = {
+                    id: user.id,
+                    role: roleKey,
+                    type: '2fa_pending',
+                    email: user.email
+                };
+                const tempToken = jwt.sign(tempPayload, this.jwtSecret, { expiresIn: '5m' });
 
-            const refreshTokenExpiresAt = new Date();
-            refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 30);
+                return {
+                    twoFactorRequired: true,
+                    tempToken,
+                    message: '2FA OTP sent to your email'
+                };
+            }
 
-            user.lastLoginAt = new Date();
-            user.lastLoginIp = clientIp;
-            user.refreshToken = refreshToken;
-            user.refreshTokenExpiresAt = refreshTokenExpiresAt;
-            await user.save({ validateModifiedOnly: true });
-
-            this.setAuthCookie(res, accessToken);
-            this.setRefreshTokenCookie(res, refreshToken);
-
-            const sanitizedUser = user.toObject();
-            delete sanitizedUser.password;
-            delete sanitizedUser.refreshToken;
-
-            return {
-                accessToken,
-                refreshToken,
-                user: sanitizedUser,
-                expiresIn: this.jwtExpiresIn,
-            };
+            return this.generateAuthTokens(user, roleKey, clientIp, res);
         } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async generateAuthTokens(user, roleKey, clientIp, res) {
+        const payload = {
+            id: user.id,
+            role: user.role || roleKey,
+            type: roleKey,
+            registrationNumber: user.registrationNumber,
+            fullName: user.fullName,
+            email: user.email,
+        };
+
+        const accessToken = this.signToken(payload);
+        const refreshToken = this.generateRefreshToken();
+
+        const refreshTokenExpiresAt = new Date();
+        refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 30);
+
+        user.lastLoginAt = new Date();
+        user.lastLoginIp = clientIp;
+        user.refreshToken = refreshToken;
+        user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+        await user.save({ validateModifiedOnly: true });
+
+        this.setAuthCookie(res, accessToken);
+        this.setRefreshTokenCookie(res, refreshToken);
+
+        const sanitizedUser = user.toObject();
+        delete sanitizedUser.password;
+        delete sanitizedUser.refreshToken;
+
+        return {
+            accessToken,
+            refreshToken,
+            user: sanitizedUser,
+            expiresIn: this.jwtExpiresIn,
+        };
+    }
+
+    async verify2FALogin(tempToken, otp, req, res) {
+        try {
+            const decoded = jwt.verify(tempToken, this.jwtSecret);
+            if (decoded.type !== '2fa_pending') {
+                throw new ApiError(401, 'Invalid token type');
+            }
+
+            const isValid = await otpService.verifyOTP(decoded.id, otp, OTP_PURPOSES.TWO_FACTOR_AUTH);
+            if (!isValid) {
+                throw new ApiError(400, 'Invalid or expired OTP');
+            }
+
+            const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+
+            const Model = models[decoded.role];
+            const user = await Model.findById(decoded.id);
+            if (!user) {
+                throw new ApiError(404, 'User not found');
+            }
+
+            const clientIp = this.getClientIp(req);
+            return this.generateAuthTokens(user, decoded.role, clientIp, res);
+        } catch (error) {
+            if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+                throw new ApiError(401, 'Invalid or expired session');
+            }
             throw error instanceof ApiError ? error : new ApiError(500, error.message);
         }
     }
@@ -234,6 +297,192 @@ class AuthService {
                 user: sanitizedUser,
                 expiresIn: this.jwtExpiresIn,
             };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+    async forgotPassword(email, role) {
+        try {
+            const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+
+            // If role is provided, search only that model. Otherwise search all (optional feature)
+            // For now, let's assume role is required or we search all
+            let user = null;
+            let Model = null;
+
+            if (role && models[role]) {
+                Model = models[role];
+                user = await Model.findOne({ email, deletedAt: null });
+            } else {
+                // Search all models
+                for (const key of Object.keys(models)) {
+                    Model = models[key];
+                    user = await Model.findOne({ email, deletedAt: null });
+                    if (user) break;
+                }
+            }
+
+            if (!user) {
+                // Return success even if user not found to prevent enumeration
+                return { message: 'If an account exists with this email, an OTP has been sent.' };
+            }
+
+            const otp = otpService.generateOTP(6);
+            await otpService.saveOTP(user.id, otp, OTP_PURPOSES.PASSWORD_RESET, 10);
+            await otpService.sendOTPEmail(user.email, otp, OTP_PURPOSES.PASSWORD_RESET, user.fullName);
+
+            return { message: 'If an account exists with this email, an OTP has been sent.' };
+        } catch (error) {
+            throw new ApiError(500, error.message);
+        }
+    }
+
+    async resetPassword(email, otp, newPassword, role) {
+        try {
+             const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+
+            let user = null;
+            let Model = null;
+
+            if (role && models[role]) {
+                Model = models[role];
+                user = await Model.findOne({ email, deletedAt: null });
+            } else {
+                 for (const key of Object.keys(models)) {
+                    Model = models[key];
+                    user = await Model.findOne({ email, deletedAt: null });
+                    if (user) break;
+                }
+            }
+
+            if (!user) {
+                throw new ApiError(400, 'Invalid request');
+            }
+
+            const isValid = await otpService.verifyOTP(user.id, otp, OTP_PURPOSES.PASSWORD_RESET);
+            if (!isValid) {
+                throw new ApiError(400, 'Invalid or expired OTP');
+            }
+
+            user.password = newPassword;
+            await user.save();
+
+            return { message: 'Password reset successful. You can now login with your new password.' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async changePassword(userId, currentPassword, newPassword, role) {
+        try {
+            const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+            
+            const Model = models[role];
+            if (!Model) throw new ApiError(400, 'Invalid role');
+
+            const user = await Model.findById(userId).select('+password');
+            if (!user) throw new ApiError(404, 'User not found');
+
+            const isMatch = await user.comparePassword(currentPassword);
+            if (!isMatch) throw new ApiError(400, 'Incorrect current password');
+
+            user.password = newPassword;
+            await user.save();
+
+            return { message: 'Password changed successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async enable2FA(userId, role) {
+        try {
+             const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+            const Model = models[role];
+            const user = await Model.findById(userId);
+            if (!user) throw new ApiError(404, 'User not found');
+
+            if (user.twoFactorEnabled) {
+                throw new ApiError(400, '2FA is already enabled');
+            }
+
+            const otp = otpService.generateOTP(6);
+            await otpService.saveOTP(user.id, otp, OTP_PURPOSES.TWO_FACTOR_AUTH, 10);
+            await otpService.sendOTPEmail(user.email, otp, OTP_PURPOSES.TWO_FACTOR_AUTH, user.fullName);
+
+            return { message: 'OTP sent to email to confirm 2FA enablement' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async confirmEnable2FA(userId, otp, role) {
+        try {
+             const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+            const Model = models[role];
+            const user = await Model.findById(userId);
+            if (!user) throw new ApiError(404, 'User not found');
+
+            const isValid = await otpService.verifyOTP(user.id, otp, OTP_PURPOSES.TWO_FACTOR_AUTH);
+            if (!isValid) throw new ApiError(400, 'Invalid or expired OTP');
+
+            user.twoFactorEnabled = true;
+            await user.save();
+
+            return { message: 'Two-Factor Authentication enabled successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async disable2FA(userId, password, role) {
+        try {
+             const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+            const Model = models[role];
+            const user = await Model.findById(userId).select('+password');
+            if (!user) throw new ApiError(404, 'User not found');
+
+            if (!user.twoFactorEnabled) {
+                throw new ApiError(400, '2FA is not enabled');
+            }
+
+            const isMatch = await user.comparePassword(password);
+            if (!isMatch) throw new ApiError(400, 'Incorrect password');
+
+            user.twoFactorEnabled = false;
+            await user.save();
+
+            return { message: 'Two-Factor Authentication disabled successfully' };
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, error.message);
         }
