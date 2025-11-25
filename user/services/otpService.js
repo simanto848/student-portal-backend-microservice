@@ -14,7 +14,7 @@ class OtpService {
         const mailConfig = {
             host: process.env.MAIL_HOST,
             port: process.env.MAIL_PORT,
-            secure: process.env.MAIL_PORT === '465', // true for 465, false for other ports
+            secure: process.env.MAIL_PORT === '465',
             auth: {
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASS,
@@ -28,11 +28,6 @@ class OtpService {
         this.transporter = nodemailer.createTransport(mailConfig);
     }
 
-    /**
-     * Generate a numeric OTP of given length
-     * @param {number} length 
-     * @returns {string}
-     */
     generateOTP(length = 6) {
         let otp = '';
         for (let i = 0; i < length; i++) {
@@ -41,22 +36,15 @@ class OtpService {
         return otp;
     }
 
-    /**
-     * Save OTP to database
-     * @param {string} userId 
-     * @param {string} otp 
-     * @param {string} purpose 
-     * @param {number} expiresInMinutes 
-     */
+
     async saveOTP(userId, otp, purpose, expiresInMinutes = 10) {
         const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
         
-        // Invalidate previous OTPs for the same user and purpose
         await UserOTP.deleteMany({ user: userId, purpose });
 
         const userOTP = await UserOTP.create({
             user: userId,
-            otp, // In a real app, you might want to hash this
+            otp,
             purpose,
             expiresAt,
         });
@@ -64,13 +52,6 @@ class OtpService {
         return userOTP;
     }
 
-    /**
-     * Verify OTP
-     * @param {string} userId 
-     * @param {string} otp 
-     * @param {string} purpose 
-     * @returns {boolean}
-     */
     async verifyOTP(userId, otp, purpose) {
         const userOTP = await UserOTP.findOne({
             user: userId,
@@ -86,24 +67,10 @@ class OtpService {
             return false;
         }
 
-        // OTP is valid, delete it (one-time use)
         await UserOTP.deleteOne({ _id: userOTP._id });
         return true;
     }
 
-    /**
-     * Send OTP via Email
-     * @param {string} email 
-     * @param {string} otp 
-     * @param {string} purpose 
-     */
-    /**
-     * Send OTP via Email
-     * @param {string} email 
-     * @param {string} otp 
-     * @param {string} purpose 
-     * @param {string} userName 
-     */
     async sendOTPEmail(email, otp, purpose, userName = 'User') {
         let subject = 'Your OTP Code';
         let title = 'Verification Code';
@@ -127,6 +94,36 @@ class OtpService {
                 message = 'Please enter the code below to complete your login.';
                 expiryMinutes = 5;
                 break;
+            case 'result_submission':
+                subject = 'Result Submission Verification';
+                title = 'Result Submission';
+                message = 'Please use the code below to verify your result submission.';
+                expiryMinutes = 5;
+                break;
+            case 'result_approval':
+                subject = 'Result Approval Verification';
+                title = 'Result Approval';
+                message = 'Please use the code below to verify your result approval.';
+                expiryMinutes = 5;
+                break;
+            case 'result_publication':
+                subject = 'Result Publication Verification';
+                title = 'Result Publication';
+                message = 'Please use the code below to verify result publication.';
+                expiryMinutes = 5;
+                break;
+            case 'result_return':
+                subject = 'Result Return Verification';
+                title = 'Result Return';
+                message = 'Please use the code below to verify returning the result.';
+                expiryMinutes = 5;
+                break;
+            case 'result_return_approval':
+                subject = 'Result Return Approval Verification';
+                title = 'Return Approval';
+                message = 'Please use the code below to verify approving the return request.';
+                expiryMinutes = 5;
+                break;
         }
 
         try {
@@ -138,25 +135,21 @@ class OtpService {
                 expiryMinutes,
                 userName,
                 subject,
-                companyName: 'Student Portal', // Or from env
+                companyName: 'Dhaka International University',
             });
 
             const mailOptions = {
-                from: process.env.MAIL_FROM || '"Student Portal" <noreply@studentportal.com>',
+                from: process.env.MAIL_FROM || '"Dhaka International University" <noreply@studentportal.com>',
                 to: email,
                 subject,
                 html,
             };
 
             await this.transporter.sendMail(mailOptions);
-            console.log(`OTP sent to ${email} for ${purpose}`);
         } catch (error) {
-            console.error('Error sending OTP email:', error);
-            // In development, don't block the flow if email fails
             if (process.env.NODE_ENV === 'production') {
                 throw new ApiError(500, 'Failed to send OTP email');
             }
-            console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
         }
     }
 }

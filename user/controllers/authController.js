@@ -133,6 +133,29 @@ class AuthController {
             next(error);
         }
     }
+
+    async generateOTP(req, res, next) {
+        try {
+            const { purpose } = req.body;
+            const userId = req.user.id;
+            const role = req.user.role;
+            const result = await authService.generateGenericOTP(userId, purpose, role);
+            return ApiResponse.success(res, result, 'OTP generated successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async verifyOTP(req, res, next) {
+        try {
+            const { otp, purpose } = req.body;
+            const userId = req.user.id;
+            const result = await authService.verifyGenericOTP(userId, otp, purpose);
+            return ApiResponse.success(res, result, 'OTP verified successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AuthController();

@@ -487,6 +487,47 @@ class AuthService {
             throw error instanceof ApiError ? error : new ApiError(500, error.message);
         }
     }
+
+    async generateGenericOTP(userId, purpose, role) {
+        try {
+            const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+            const Model = models[role];
+            const user = await Model.findById(userId);
+            if (!user) throw new ApiError(404, 'User not found');
+
+            if (!Object.values(OTP_PURPOSES).includes(purpose)) {
+                throw new ApiError(400, 'Invalid OTP purpose');
+            }
+
+            const otp = otpService.generateOTP(6);
+            await otpService.saveOTP(user.id, otp, purpose, 5); // 5 mins expiry
+            await otpService.sendOTPEmail(user.email, otp, purpose, user.fullName);
+
+            return { message: 'OTP sent successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
+    async verifyGenericOTP(userId, otp, purpose) {
+        try {
+            if (!Object.values(OTP_PURPOSES).includes(purpose)) {
+                throw new ApiError(400, 'Invalid OTP purpose');
+            }
+
+            const isValid = await otpService.verifyOTP(userId, otp, purpose);
+            if (!isValid) throw new ApiError(400, 'Invalid or expired OTP');
+
+            return { isValid: true, message: 'OTP verified successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
 }
 
 export default new AuthService();

@@ -40,5 +40,9 @@ router.post('/2fa/enable', authenticate, authController.enable2FA);
 router.post('/2fa/confirm', authenticate, validate(confirm2FASchema), authController.confirmEnable2FA);
 router.post('/2fa/disable', authenticate, validate(disable2FASchema), authController.disable2FA);
 
+// Generic OTP Routes
+router.post('/otp/generate', authenticate, authController.generateOTP);
+router.post('/otp/verify', authenticate, authController.verifyOTP);
+
 export default router;
 
