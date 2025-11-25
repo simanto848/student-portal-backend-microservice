@@ -156,6 +156,14 @@ class AuthController {
             next(error);
         }
     }
+    async getMe(req, res, next) {
+        try {
+            const user = req.user;
+            return ApiResponse.success(res, { user }, 'User profile fetched successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AuthController();

@@ -44,5 +44,8 @@ router.post('/2fa/disable', authenticate, validate(disable2FASchema), authContro
 router.post('/otp/generate', authenticate, authController.generateOTP);
 router.post('/otp/verify', authenticate, authController.verifyOTP);
 
+// Profile Route
+router.get('/me', authenticate, authController.getMe);
+
 export default router;
 
