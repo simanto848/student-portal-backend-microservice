@@ -77,6 +77,15 @@ class SessionCourseController {
             next(error);
         }
     }
+
+    async sync(req, res, next) {
+        try {
+            await sessionCourseService.sync(req.body);
+            return ApiResponse.success(res, null, 'Session courses synced successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new SessionCourseController();

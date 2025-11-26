@@ -19,6 +19,7 @@ router.patch('/:id', validate(updateSessionCourseSchema), sessionCourseControlle
 router.delete('/:id', validate(deleteSessionCourseSchema), sessionCourseController.delete);
 
 router.get('/batch/:batchId', validate(getBatchSessionCoursesSchema), sessionCourseController.getBatchSessionCourses);
+router.post('/sync', sessionCourseController.sync);
 
 export default router;
 

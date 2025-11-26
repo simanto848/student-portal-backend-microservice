@@ -143,6 +143,38 @@ class SessionCourseService {
 			pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
 		};
 	}
+
+    async sync(payload) {
+        const { sessionId, departmentId, semester, courseIds } = payload;
+        const [session, department] = await Promise.all([
+            Session.findById(sessionId),
+            Department.findById(departmentId),
+        ]);
+        if (!session) throw new ApiError(404, 'Session not found');
+        if (!department) throw new ApiError(404, 'Department not found');
+
+        const existingCourses = await SessionCourse.find({
+            sessionId,
+            departmentId,
+            semester,
+        });
+
+        const existingCourseIds = existingCourses.map(sc => sc.courseId.toString());
+        const toAdd = courseIds.filter(id => !existingCourseIds.includes(id));
+        const toRemove = existingCourses.filter(sc => !courseIds.includes(sc.courseId.toString()));
+
+        await Promise.all([
+            ...toAdd.map(courseId => SessionCourse.create({
+                sessionId,
+                departmentId,
+                semester,
+                courseId
+            })),
+            ...toRemove.map(sc => sc.softDelete())
+        ]);
+
+        return true;
+    }
 }
 
 export default new SessionCourseService();
