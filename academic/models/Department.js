@@ -25,6 +25,7 @@ const departmentSchema = new mongoose.Schema(
         phone: {
             type: String,
             unique: true,
+            sparse: true,
         },
         facultyId: {
             type: String,
@@ -33,7 +34,6 @@ const departmentSchema = new mongoose.Schema(
         },
         departmentHeadId: {
             type: String,
-            ref: "User"
         },
         isActingHead: {
             type: Boolean,

@@ -22,7 +22,6 @@ class DepartmentService {
             const [departments, total] = await Promise.all([
                 Department.find(query)
                     .populate('facultyId', 'name email')
-                    .populate('departmentHeadId', 'fullName email registrationNumber')
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(parseInt(limit)),
@@ -41,7 +40,6 @@ class DepartmentService {
         } else {
             const departments = await Department.find(query)
                 .populate('facultyId', 'name email')
-                .populate('departmentHeadId', 'fullName email registrationNumber')
                 .sort({ createdAt: -1 });
 
             return {
@@ -53,8 +51,7 @@ class DepartmentService {
 
     async getById(id) {
         const department = await Department.findById(id)
-            .populate('facultyId', 'name email')
-            .populate('departmentHeadId', 'fullName email registrationNumber designation');
+            .populate('facultyId', 'name email');
 
         if (!department) {
             throw new ApiError(404, 'Department not found');
@@ -75,14 +72,12 @@ class DepartmentService {
                 { name: payload.name },
                 { shortName: payload.shortName },
                 { email: payload.email },
-                ...(payload.phone ? [{ phone: payload.phone }] : []),
             ],
         });
         if (existingDepartment) {
             const conflictField =
                 existingDepartment.name === payload.name ? 'name' :
-                existingDepartment.shortName === payload.shortName ? 'short name' :
-                existingDepartment.email === payload.email ? 'email' : 'phone';
+                existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
 
             throw new ApiError(409, `Department with this ${conflictField} already exists`);
         }
@@ -104,7 +99,7 @@ class DepartmentService {
             }
         }
 
-        if (payload.name || payload.shortName || payload.email || payload.phone) {
+        if (payload.name || payload.shortName || payload.email) {
             const conflictQuery = { _id: { $ne: id }, $or: [] };
 
             if (payload.name) {
@@ -116,17 +111,13 @@ class DepartmentService {
             if (payload.email) {
                 conflictQuery.$or.push({ email: payload.email });
             }
-            if (payload.phone) {
-                conflictQuery.$or.push({ phone: payload.phone });
-            }
 
             if (conflictQuery.$or.length > 0) {
                 const existingDepartment = await Department.findOne(conflictQuery);
                 if (existingDepartment) {
                     const conflictField =
                         existingDepartment.name === payload.name ? 'name' :
-                        existingDepartment.shortName === payload.shortName ? 'short name' :
-                        existingDepartment.email === payload.email ? 'email' : 'phone';
+                        existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
 
                     throw new ApiError(409, `Department with this ${conflictField} already exists`);
                 }
