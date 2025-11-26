@@ -17,17 +17,17 @@ export const createCourseScheduleSchema = z.object({
         })
         .uuid('Invalid teacher ID format'),
 
-        dayOfWeek: z.enum([
+        daysOfWeek: z.array(z.enum([
             'Sunday',
             'Monday',
             'Tuesday',
             'Wednesday',
             'Thursday',
             'Friday',
-            'Saturday'
-        ], {
-            required_error: 'Day of week is required',
-        }),
+            'Saturday',
+        ]), {
+            required_error: 'Days of week are required',
+        }).min(1, 'At least one day must be selected'),
 
         startTime: z.string({
             required_error: 'Start time is required',
@@ -39,7 +39,7 @@ export const createCourseScheduleSchema = z.object({
         })
         .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM (24-hour format)'),
 
-        roomNumber: z.string()
+        classroomId: z.string()
             .uuid('Invalid classroom ID format')
             .optional(),
 
@@ -108,7 +108,7 @@ export const updateCourseScheduleSchema = z.object({
             .uuid('Invalid teacher ID format')
             .optional(),
 
-        dayOfWeek: z.enum([
+        daysOfWeek: z.array(z.enum([
             'Sunday',
             'Monday',
             'Tuesday',
@@ -116,7 +116,7 @@ export const updateCourseScheduleSchema = z.object({
             'Thursday',
             'Friday',
             'Saturday'
-        ]).optional(),
+        ])).min(1, 'At least one day must be selected').optional(),
 
         startTime: z.string()
             .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM (24-hour format)')
@@ -126,7 +126,7 @@ export const updateCourseScheduleSchema = z.object({
             .regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format. Use HH:MM (24-hour format)')
             .optional(),
 
-        roomNumber: z.string()
+        classroomId: z.string()
             .uuid('Invalid classroom ID format')
             .optional()
             .nullable(),
@@ -210,7 +210,7 @@ export const getCourseSchedulesSchema = z.object({
         batchId: z.string().uuid().optional(),
         sessionCourseId: z.string().uuid().optional(),
         teacherId: z.string().uuid().optional(),
-        dayOfWeek: z.enum([
+        daysOfWeek: z.array(z.enum([
             'Sunday',
             'Monday',
             'Tuesday',
@@ -218,7 +218,7 @@ export const getCourseSchedulesSchema = z.object({
             'Thursday',
             'Friday',
             'Saturday'
-        ]).optional(),
+        ])).optional(),
         classType: z.enum([
             'Lecture',
             'Tutorial',
@@ -229,6 +229,7 @@ export const getCourseSchedulesSchema = z.object({
         ]).optional(),
         isActive: z.enum(['true', 'false']).transform(val => val === 'true').optional(),
         search: z.string().optional(),
+        classroomId: z.string().uuid('Invalid classroom ID format').optional(),
     }),
 });
 

@@ -16,8 +16,8 @@ class CourseScheduleService {
 
 		if (search) {
 			query.$or = [
-				{ dayOfWeek: { $regex: search, $options: 'i' } },
-				{ roomNumber: { $regex: search, $options: 'i' } },
+				{ daysOfWeek: { $in: [search] } },
+				{ classroomId: { $regex: search, $options: 'i' } },
 				{ building: { $regex: search, $options: 'i' } },
 				{ teacherId: { $regex: search, $options: 'i' } },
 			];
@@ -29,8 +29,16 @@ class CourseScheduleService {
 			const [schedules, total] = await Promise.all([
 				CourseSchedule.find(query)
 					.populate('batchId', 'name year programId departmentId')
-					.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-					.sort({ startDate: -1, dayOfWeek: 1, startTime: 1 })
+					.populate({
+						path: 'sessionCourseId',
+						select: 'sessionId courseId semester departmentId',
+						populate: {
+							path: 'courseId',
+							select: 'name code credits'
+						}
+					})
+					.populate('classroomId', 'roomNumber buildingName floor capacity')
+					.sort({ startDate: -1, startTime: 1 })
 					.skip(skip)
 					.limit(parseInt(limit)),
 				CourseSchedule.countDocuments(query),
@@ -48,8 +56,16 @@ class CourseScheduleService {
 		} else {
 			const schedules = await CourseSchedule.find(query)
 				.populate('batchId', 'name year programId departmentId')
-				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-				.sort({ startDate: -1, dayOfWeek: 1, startTime: 1 });
+				.populate({
+					path: 'sessionCourseId',
+					select: 'sessionId courseId semester departmentId',
+					populate: {
+						path: 'courseId',
+						select: 'name code credits'
+					}
+				})
+				.populate('classroomId', 'roomNumber buildingName floor capacity')
+				.sort({ startDate: -1, startTime: 1 });
 
 			return {
 				data: schedules,
@@ -61,7 +77,15 @@ class CourseScheduleService {
 	async getById(id) {
 		const schedule = await CourseSchedule.findById(id)
 			.populate('batchId', 'name year programId departmentId')
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity');
 		if (!schedule) throw new ApiError(404, 'Course schedule not found');
 		return schedule;
 	}
@@ -85,7 +109,7 @@ class CourseScheduleService {
 
 		const overlap = await CourseSchedule.findOne({
 			batchId: payload.batchId,
-			dayOfWeek: payload.dayOfWeek,
+			daysOfWeek: { $in: payload.daysOfWeek },
 			deletedAt: null,
 			$or: [
 				{ startTime: payload.startTime },
@@ -103,7 +127,15 @@ class CourseScheduleService {
 		const schedule = await CourseSchedule.create(payload);
 		return await CourseSchedule.findById(schedule._id)
 			.populate('batchId', 'name year programId departmentId')
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity');
 	}
 
 	async update(id, payload) {
@@ -134,7 +166,15 @@ class CourseScheduleService {
 		await schedule.save();
 		return await CourseSchedule.findById(id)
 			.populate('batchId', 'name year programId departmentId')
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity');
 	}
 
 	async delete(id) {
@@ -153,8 +193,16 @@ class CourseScheduleService {
 		const query = { batchId };
 		const [schedules, total] = await Promise.all([
 			CourseSchedule.find(query)
-				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-				.sort({ dayOfWeek: 1, startTime: 1 })
+				.populate({
+					path: 'sessionCourseId',
+					select: 'sessionId courseId semester departmentId',
+					populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity')
+			.sort({ startTime: 1 })
 				.skip(skip)
 				.limit(parseInt(limit)),
 			CourseSchedule.countDocuments(query),
@@ -173,8 +221,16 @@ class CourseScheduleService {
 		const [schedules, total] = await Promise.all([
 			CourseSchedule.find(query)
 				.populate('batchId', 'name year programId departmentId')
-				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
-				.sort({ dayOfWeek: 1, startTime: 1 })
+				.populate({
+					path: 'sessionCourseId',
+					select: 'sessionId courseId semester departmentId',
+					populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity')
+			.sort({ startTime: 1 })
 				.skip(skip)
 				.limit(parseInt(limit)),
 			CourseSchedule.countDocuments(query),
@@ -187,4 +243,3 @@ class CourseScheduleService {
 }
 
 export default new CourseScheduleService();
-

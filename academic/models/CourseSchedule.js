@@ -19,9 +19,10 @@ const scheduleSchema = new mongoose.Schema(
         },
         teacherId: {
             type: String,
+            ref: 'Teacher',
         },
-        dayOfWeek: {
-            type: String,
+        daysOfWeek: {
+            type: [String],
             enum: [
                 'Sunday',
                 'Monday',
@@ -41,7 +42,7 @@ const scheduleSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
-        roomNumber: {
+        classroomId: {
             type: String,
             ref: 'Classroom',
         },
@@ -79,6 +80,16 @@ const scheduleSchema = new mongoose.Schema(
             type: Date,
             default: null,
         }
+    },
+    {
+        timestamps: true,
+        toJSON: {
+            transform(doc, ret) {
+                ret.id = ret._id;
+                delete ret._id;
+                delete ret.__v;
+            },
+        },
     }
 );
 
