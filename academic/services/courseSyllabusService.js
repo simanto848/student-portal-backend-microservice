@@ -27,7 +27,14 @@ class CourseSyllabusService {
 			const skip = (page - 1) * limit;
 			const [syllabi, total] = await Promise.all([
 				CourseSyllabus.find(query)
-					.populate('sessionCourseId', 'sessionId courseId semester departmentId')
+					.populate({
+						path: 'sessionCourseId',
+						select: 'sessionId courseId semester departmentId',
+						populate: {
+							path: 'courseId',
+							select: 'name code credits'
+						}
+					})
 					.sort({ createdAt: -1 })
 					.skip(skip)
 					.limit(parseInt(limit)),
@@ -40,7 +47,14 @@ class CourseSyllabusService {
 			};
 		} else {
 			const syllabi = await CourseSyllabus.find(query)
-				.populate('sessionCourseId', 'sessionId courseId semester departmentId')
+				.populate({
+					path: 'sessionCourseId',
+					select: 'sessionId courseId semester departmentId',
+					populate: {
+						path: 'courseId',
+						select: 'name code credits'
+					}
+				})
 				.sort({ createdAt: -1 });
 
 			return {
@@ -52,7 +66,14 @@ class CourseSyllabusService {
 
 	async getById(id) {
 		const syllabus = await CourseSyllabus.findById(id)
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			});
 		if (!syllabus) throw new ApiError(404, 'Course syllabus not found');
 		return syllabus;
 	}
@@ -62,7 +83,14 @@ class CourseSyllabusService {
 		if (!sessionCourse) throw new ApiError(404, 'Session course not found');
 		const syllabus = await CourseSyllabus.create(payload);
 		return await CourseSyllabus.findById(syllabus._id)
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			});
 	}
 
 	async update(id, payload) {
@@ -75,13 +103,23 @@ class CourseSyllabusService {
 		}
 
 		if (payload.status && payload.status !== syllabus.status) {
-			throw new ApiError(400, 'Status must be changed via approve/publish/archive methods');
+			const allowed = VALID_STATUS_FLOW[syllabus.status] || [];
+			if (!allowed.includes(payload.status) && !(syllabus.status === 'Draft' && payload.status === 'Pending Approval')) {
+				throw new ApiError(400, `Invalid status transition from ${syllabus.status} to ${payload.status}`);
+			}
 		}
 
 		Object.assign(syllabus, payload);
 		await syllabus.save();
 		return await CourseSyllabus.findById(id)
-			.populate('sessionCourseId', 'sessionId courseId semester departmentId');
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: {
+					path: 'courseId',
+					select: 'name code credits'
+				}
+			});
 	}
 
 	async delete(id) {
