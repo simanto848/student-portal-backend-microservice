@@ -41,6 +41,7 @@ export const createClassroomSchema = z.object({
         isActive: z.boolean().optional().default(true),
         isUnderMaintenance: z.boolean().optional().default(false),
         maintenanceNotes: z.string().max(500, 'Maintenance notes must not exceed 500 characters').optional(),
+        departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
     })
 });
 
@@ -81,6 +82,7 @@ export const updateClassroomSchema = z.object({
         isActive: z.boolean().optional(),
         isUnderMaintenance: z.boolean().optional(),
         maintenanceNotes: z.string().max(500, 'Maintenance notes must not exceed 500 characters').optional(),
+        departmentId: z.string().uuid('Invalid department ID').optional().nullable(),
     })
 });
 

@@ -143,7 +143,7 @@ export const updateBatchSchema = z.object({
             .min(0, 'Current students must be at least 0')
             .optional(),
         
-        status: z.enum(['active', 'inactive']).optional(),
+        status: z.boolean().optional(),
     })
     .refine((data) => {
         if (data.startDate && data.endDate) {
@@ -194,7 +194,7 @@ export const getBatchesSchema = z.object({
         departmentId: z.string().uuid().optional(),
         sessionId: z.string().uuid().optional(),
         counselorId: z.string().uuid().optional(),
-        status: z.enum(['active', 'inactive']).optional(),
+        status: z.enum(['true', 'false']).transform((val) => val === 'true').optional(),
         search: z.string().optional(),
     }),
 });

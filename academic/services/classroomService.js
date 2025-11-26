@@ -1,4 +1,5 @@
 import Classroom from '../models/Classroom.js';
+import Department from '../models/Department.js';
 import { ApiError } from 'shared';
 
 class ClassroomService {
@@ -19,6 +20,7 @@ class ClassroomService {
 			const skip = (page - 1) * limit;
 			const [classrooms, total] = await Promise.all([
 				Classroom.find(query)
+					.populate('departmentId', 'name id')
 					.sort({ createdAt: -1 })
 					.skip(skip)
 					.limit(parseInt(limit)),
@@ -36,6 +38,7 @@ class ClassroomService {
 			};
 		} else {
 			const classrooms = await Classroom.find(query)
+				.populate('departmentId', 'name id')
 				.sort({ createdAt: -1 });
 
 			return {
@@ -46,7 +49,7 @@ class ClassroomService {
 	}
 
 	async getById(id) {
-		const classroom = await Classroom.findById(id);
+		const classroom = await Classroom.findById(id).populate('departmentId', 'name id');
 		if (!classroom) throw new ApiError(404, 'Classroom not found');
 		return classroom;
 	}
@@ -69,8 +72,17 @@ class ClassroomService {
 			if (existing) throw new ApiError(409, 'Classroom with this room number already exists');
 		}
 
+		if (payload.departmentId) {
+			const department = await Department.findById(payload.departmentId);
+			if (!department) throw new ApiError(404, 'Department not found');
+		}
+
 		Object.assign(classroom, payload);
 		await classroom.save();
+		
+		// Populate department details before returning
+		await classroom.populate('departmentId', 'name id');
+		
 		return classroom;
 	}
 
