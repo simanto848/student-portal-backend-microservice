@@ -77,6 +77,16 @@ class AuthController {
         }
     }
 
+    async verifyResetOTP(req, res, next) {
+        try {
+            const { email, otp, role } = req.body;
+            const result = await authService.verifyResetOTP(email, otp, role);
+            return ApiResponse.success(res, result, 'OTP verified successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async resetPassword(req, res, next) {
         try {
             const { email, otp, newPassword, role } = req.body;

@@ -52,7 +52,7 @@ class OtpService {
         return userOTP;
     }
 
-    async verifyOTP(userId, otp, purpose) {
+    async verifyOTP(userId, otp, purpose, deleteOtp = true) {
         const userOTP = await UserOTP.findOne({
             user: userId,
             purpose,
@@ -67,7 +67,9 @@ class OtpService {
             return false;
         }
 
-        await UserOTP.deleteOne({ _id: userOTP._id });
+        if (deleteOtp) {
+            await UserOTP.deleteOne({ _id: userOTP._id });
+        }
         return true;
     }
 

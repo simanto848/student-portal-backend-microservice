@@ -55,3 +55,14 @@ export const disable2FASchema = (data) => {
     });
     return schema.safeParse(data);
 };
+
+export const verifyResetOTPSchema = (data) => {
+    const schema = z.object({
+        email: z.string({ required_error: 'Email is required' }).email('Invalid email address'),
+        otp: z.string({ required_error: 'OTP is required' })
+            .length(6, 'OTP must be 6 digits')
+            .regex(/^\d+$/, 'OTP must be numeric'),
+        role: z.enum(['admin', 'staff', 'teacher', 'student']).optional(),
+    });
+    return schema.safeParse(data);
+};

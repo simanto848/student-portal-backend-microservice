@@ -13,6 +13,7 @@ import {
 import {
     verify2FASchema,
     forgotPasswordSchema,
+    verifyResetOTPSchema,
     resetPasswordSchema,
     changePasswordSchema,
     confirm2FASchema,
@@ -32,6 +33,7 @@ router.post('/logout', authController.logout);
 // 2FA & Password Management Routes
 router.post('/verify-2fa', validate(verify2FASchema), authController.verify2FA);
 router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
+router.post('/verify-reset-otp', validate(verifyResetOTPSchema), authController.verifyResetOTP);
 router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
 
 // Protected Routes

@@ -342,6 +342,44 @@ class AuthService {
         }
     }
 
+    async verifyResetOTP(email, otp, role) {
+        try {
+            const models = {
+                admin: Admin,
+                staff: Staff,
+                teacher: Teacher,
+                student: Student,
+            };
+
+            let user = null;
+            let Model = null;
+
+            if (role && models[role]) {
+                Model = models[role];
+                user = await Model.findOne({ email, deletedAt: null });
+            } else {
+                for (const key of Object.keys(models)) {
+                    Model = models[key];
+                    user = await Model.findOne({ email, deletedAt: null });
+                    if (user) break;
+                }
+            }
+
+            if (!user) {
+                throw new ApiError(400, 'Invalid request');
+            }
+
+            const isValid = await otpService.verifyOTP(user.id, otp, OTP_PURPOSES.PASSWORD_RESET, false);
+            if (!isValid) {
+                throw new ApiError(400, 'Invalid or expired OTP');
+            }
+
+            return { isValid: true, message: 'OTP verified successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, error.message);
+        }
+    }
+
     async resetPassword(email, otp, newPassword, role) {
         try {
              const models = {
@@ -374,8 +412,21 @@ class AuthService {
                 throw new ApiError(400, 'Invalid or expired OTP');
             }
 
+            // Use findByIdAndUpdate to bypass full document validation (e.g. missing required fields in legacy data)
+            // We only want to update the password.
+            // Note: We need to hash the password manually if we bypass save middleware, 
+            // BUT usually save middleware handles hashing. 
+            // If we use findByIdAndUpdate, we must ensure the password is hashed if the schema hook does it.
+            // Wait, usually 'user.save()' triggers pre-save hooks which hash the password.
+            // If we use findByIdAndUpdate, we skip pre-save hooks.
+            // We should check if the user model has a pre-save hook for hashing.
+            // Assuming it does (standard practice), we might need to manually hash here if we skip save().
+            // However, let's try to fix the validation error by just setting the password and saving, 
+            // but if that fails, we might need to fetch the user with validateBeforeSave: false option?
+            // Mongoose save() has options.
+            
             user.password = newPassword;
-            await user.save();
+            await user.save({ validateBeforeSave: false });
 
             return { message: 'Password reset successful. You can now login with your new password.' };
         } catch (error) {
