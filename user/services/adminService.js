@@ -149,6 +149,40 @@ class AdminService {
         }
     }
 
+    async getDeletedAdmins() {
+        try {
+            const admins = await Admin.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
+            return admins;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error fetching deleted admins: ' + error.message);
+        }
+    }
+
+    async deletePermanently(adminId) {
+        try {
+            const admin = await Admin.findByIdAndDelete(adminId);
+            if (!admin) {
+                throw new ApiError(404, 'Admin not found');
+            }
+            return { message: 'Admin deleted permanently successfully' };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error deleting admin permanently: ' + error.message);
+        }
+    }
+
+    async restore(adminId) {
+        try {
+            const admin = await Admin.findById(adminId);
+            if (!admin) throw new ApiError(404, 'Admin not found');
+            await admin.restore();
+            return { message: 'Admin restored successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring admin: ' + error.message);
+        }
+    }
+
     async updateRole(adminId, newRole) {
         try {
             const admin = await Admin.findByIdAndUpdate(

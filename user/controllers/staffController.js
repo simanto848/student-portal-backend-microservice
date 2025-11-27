@@ -64,6 +64,29 @@ class StaffController {
         }
     }
 
+    async getDeletedStaffs(req, res, next) {
+        try {
+            const st = await staffService.getDeletedStaffs();
+            return ApiResponse.success(res, st, 'Deleted staffs retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+    
+    async deletePermanently(req, res, next) {
+        try {
+            const r = await staffService.deletePermanently(req.params.id);
+            return ApiResponse.success(res, r, 'Staff deleted permanently successfully');
+        } catch (error) { next(error); }
+    }
+
+    async restore(req, res, next) {
+        try {
+            const r = await staffService.restore(req.params.id);
+            return ApiResponse.success(res, r, 'Staff restored successfully');
+        } catch (error) { next(error); }
+    }
+
     async updateRole(req, res, next) {
         try {
             const { role } = req.body;

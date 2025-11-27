@@ -21,12 +21,13 @@ export const teacherCreateValidation = (data) => {
         })
             .trim()
             .min(1, { message: 'Full name cannot be empty' }),
+        phone: z.string().optional(),
         departmentId: z.string({
             required_error: 'Department ID is required',
         })
             .trim()
             .min(1, { message: 'Department ID cannot be empty' }),
-        designation: z.enum(['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'instructor', 'adjunct_professor', 'visiting_professor', 'emeritus_professor']).optional(),
+        designation: z.enum(['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'senior_lecturer']).optional(),
         joiningDate: dateCoerceOptional(),
         registeredIpAddress: z.array(z.string()).optional(),
         profile: z.any().optional(),
@@ -41,7 +42,8 @@ export const teacherUpdateValidation = (data) => {
             .trim()
             .min(1, { message: 'Full name cannot be empty' })
             .optional(),
-        designation: z.enum(['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'instructor', 'adjunct_professor', 'visiting_professor', 'emeritus_professor']).optional(),
+        phone: z.string().optional(),
+        designation: z.enum(['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'senior_lecturer']).optional(),
         joiningDate: dateCoerceOptional(),
         registeredIpAddress: z.array(z.string()).optional(),
         departmentId: z.string().optional(),

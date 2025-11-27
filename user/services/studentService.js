@@ -79,7 +79,6 @@ class StudentService {
 
             const temporaryPassword = PasswordGenerator.generate(12);
 
-            // Send welcome email with credentials; fail if email fails
             try {
                 await emailService.sendWelcomeEmailWithCredentials(data.email, {
                     fullName: data.fullName,
@@ -113,14 +112,11 @@ class StudentService {
             const student = await Student.create(studentPayload);
 
             await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1);
-
-            // Optional studentProfile creation AFTER student exists
             if (data.studentProfile && typeof data.studentProfile === 'object') {
                 try {
                     const createdProfile = await StudentProfile.create({ ...data.studentProfile, studentId: student._id });
                     await Student.findByIdAndUpdate(student._id, { $set: { profile: createdProfile._id } }, { new: true, runValidators: false });
                 } catch (profileError) {
-                    // Do not fail the whole operation; log and proceed
                     console.error('Student profile creation failed:', profileError.message);
                 }
             }
@@ -133,10 +129,10 @@ class StudentService {
 
     async update(id, payload) {
         try {
-            // Disallow protected fields
-            delete payload.password; delete payload.registrationNumber; delete payload.email;
+            delete payload.password;
+            delete payload.registrationNumber;
+            delete payload.email;
 
-            // If moving to new batch, adjust counts
             const existing = await Student.findById(id);
             if (!existing) throw new ApiError(404, 'Student not found');
 
@@ -145,7 +141,6 @@ class StudentService {
                 await academicServiceClient.updateBatchCurrentStudents(payload.batchId, +1);
             }
 
-            // If profile object included, upsert
             if (payload.profile && typeof payload.profile === 'object') {
                 if (existing.profile) {
                     await StudentProfile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
@@ -168,7 +163,6 @@ class StudentService {
             const st = await Student.findById(id);
             if (!st) throw new ApiError(404, 'Student not found');
             await st.softDelete();
-            // Decrement batch count
             await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1);
             return { message: 'Student deleted successfully' };
         } catch (error) {
@@ -181,12 +175,32 @@ class StudentService {
             const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
             if (!st) throw new ApiError(404, 'Deleted student not found');
             await st.restore();
-            // Increment batch count back
             await academicServiceClient.updateBatchCurrentStudents(st.batchId, +1);
             const restored = await Student.findById(id).select('-password').populate('profile').lean();
             return restored;
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring student: ' + error.message);
+        }
+    }
+
+    async getDeletedStudents() {
+        try {
+            const deletedStudents = await Student.find({ deletedAt: { $ne: null } }).select('-password').populate('profile').lean();
+            return deletedStudents;
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error fetching deleted students: ' + error.message);
+        }
+    }
+
+    async deletePermanently(id) {
+        try {
+            const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
+            if (!st) throw new ApiError(404, 'Deleted student not found');
+            await st.deletePermanently();
+            await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1);
+            return { message: 'Student deleted permanently successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error deleting student permanently: ' + error.message);
         }
     }
 }

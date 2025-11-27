@@ -18,8 +18,8 @@ export const staffCreateValidation = (data) => {
             invalid_type_error: 'Joining date must be a valid date',
         }).optional(),
         registeredIpAddress: z.array(z.string()).optional(),
-        role: z.enum(['program_controller', 'admission', 'exam', 'finance', 'library', 'transport', 'hr', 'it', 'hostel', 'hostel_warden', 'hostel_supervisor', 'maintenance'], {
-            errorMap: () => ({ message: 'Role must be one of: program_controller, admission, exam, finance, library, transport, hr, it, hostel, hostel_warden, hostel_supervisor, maintenance' }),
+        role: z.enum(["program_controller", "admission", "library", "it",], {
+            errorMap: () => ({ message: 'Role must be one of: program_controller, admission, library, it' }),
         }).optional(),
     });
 
@@ -37,8 +37,8 @@ export const staffUpdateValidation = (data) => {
             invalid_type_error: 'Joining date must be a valid date',
         }).optional(),
         registeredIpAddress: z.array(z.string()).optional(),
-        role: z.enum(['program_controller', 'admission', 'exam', 'finance', 'library', 'transport', 'hr', 'it', 'hostel', 'hostel_warden', 'hostel_supervisor', 'maintenance'], {
-            errorMap: () => ({ message: 'Role must be one of: program_controller, admission, exam, finance, library, transport, hr, it, hostel, hostel_warden, hostel_supervisor, maintenance' }),
+        role: z.enum(['program_controller', 'admission', 'library', 'it',], {
+            errorMap: () => ({ message: 'Role must be one of: program_controller, admission, library, it' }),
         }).optional(),
     }).refine(obj => Object.keys(obj).length > 0, {
         message: 'At least one field must be provided',
@@ -49,7 +49,7 @@ export const staffUpdateValidation = (data) => {
 
 export const staffUpdateRoleValidation = (data) => {
     const schema = z.object({
-        role: z.enum(['program_controller', 'admission', 'exam', 'finance', 'library', 'transport', 'hr', 'it', 'hostel', 'hostel_warden', 'hostel_supervisor', 'maintenance'], {
+        role: z.enum(['program_controller', 'admission', 'library', 'it',], {
             required_error: 'Role is required',
             invalid_type_error: 'Invalid role',
         }),

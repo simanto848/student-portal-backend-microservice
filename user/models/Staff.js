@@ -45,12 +45,8 @@ const staffSchema = new mongoose.Schema(
       enum: [
         "program_controller",
         "admission",
-        "finance",
         "library",
-        "transport",
-        "hr",
         "it",
-        "maintenance",
       ],
       required: true,
     },

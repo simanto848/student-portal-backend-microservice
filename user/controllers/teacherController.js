@@ -34,6 +34,29 @@ class TeacherController {
         catch (error) { next(error); }
     }
 
+    async getDeletedTeachers(req, res, next) {
+        try {
+            const st = await teacherService.getDeletedTeachers();
+            return ApiResponse.success(res, st, 'Deleted teachers retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+    
+    async deletePermanently(req, res, next) {
+        try {
+            const r = await teacherService.deletePermanently(req.params.id);
+            return ApiResponse.success(res, r, 'Teacher deleted permanently successfully');
+        } catch (error) { next(error); }
+    }
+
+    async restore(req, res, next) {
+        try {
+            const r = await teacherService.restore(req.params.id);
+            return ApiResponse.success(res, r, 'Teacher restored successfully');
+        } catch (error) { next(error); }
+    }
+
     async addRegisteredIp(req, res, next) {
         try {
             const { ipAddress } = req.body;

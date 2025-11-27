@@ -143,6 +143,37 @@ class TeacherService {
         }
     }
 
+    async getDeletedTeachers() {
+        try {
+            const t = await Teacher.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
+            return t;
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error getting deleted teachers: ' + error.message);
+        }
+    }
+
+    async deletePermanently(id) {
+        try {
+            const t = await Teacher.findById(id);
+            if (!t) throw new ApiError(404, 'Teacher not found');
+            await t.deleteOne();
+            return { message: 'Teacher deleted permanently successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error deleting teacher permanently: ' + error.message);
+        }
+    }
+
+    async restore(id) {
+        try {
+            const t = await Teacher.findById(id);
+            if (!t) throw new ApiError(404, 'Teacher not found');
+            await t.restore();
+            return { message: 'Teacher restored successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring teacher: ' + error.message);
+        }
+    }
+
     async addRegisteredIp(teacherId, ipAddress) {
         try {
             const t = await Teacher.findById(teacherId);

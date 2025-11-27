@@ -15,6 +15,11 @@ const teacherSchema = new mongoose.Schema(
             lowercase: true,
             trim: true,
         },
+        phone: {
+            type: String,
+            trim: true,
+            default: null,
+        },
         password: {
             type: String,
             required: [true, 'Password is required.'],
@@ -35,7 +40,7 @@ const teacherSchema = new mongoose.Schema(
         },
         designation: {
             type: String,
-            enum: ['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'instructor', 'adjunct_professor', 'visiting_professor', 'emeritus_professor'],
+            enum: ['professor', 'associate_professor', 'assistant_professor', 'lecturer', 'senior_lecturer'],
         },
         joiningDate: {
             type: Date,

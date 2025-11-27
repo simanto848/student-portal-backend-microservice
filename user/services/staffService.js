@@ -214,6 +214,40 @@ class StaffService {
         }
     }
 
+    async getDeletedStaffs() {
+        try {
+            const staffs = await Staff.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
+            return staffs;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error fetching deleted staffs: ' + error.message);
+        }
+    }
+
+    async deletePermanently(staffId) {
+        try {
+            const staff = await Staff.findByIdAndDelete(staffId);
+            if (!staff) {
+                throw new ApiError(404, 'Staff not found');
+            }
+            return { message: 'Staff deleted permanently successfully' };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error deleting staff permanently: ' + error.message);
+        }
+    }
+
+    async restore(staffId) {
+        try {
+            const staff = await Staff.findById(staffId);
+            if (!staff) throw new ApiError(404, 'Staff not found');
+            await staff.restore();
+            return { message: 'Staff restored successfully' };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring staff: ' + error.message);
+        }
+    }
+
     async updateRole(staffId, newRole) {
         try {
             const staff = await Staff.findByIdAndUpdate(

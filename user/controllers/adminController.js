@@ -64,6 +64,33 @@ class AdminController {
         }
     }
 
+    async getDeletedAdmins(req, res, next) {
+        try {
+            const admins = await adminService.getDeletedAdmins();
+            return ApiResponse.success(res, admins, 'Admins retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async deletePermanently(req, res, next) {
+        try {
+            await adminService.deletePermanently(req.params.id);
+            return ApiResponse.success(res, null, 'Admin deleted permanently successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async restore(req, res, next) {
+        try {
+            const admin = await adminService.restore(req.params.id);
+            return ApiResponse.success(res, admin, 'Admin restored successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async updateRole(req, res, next) {
         try {
             const { role } = req.body;
