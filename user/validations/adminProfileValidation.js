@@ -1,6 +1,15 @@
 import { z } from 'zod';
 
 export const adminProfileCreateValidation = (data) => {
+    const addressSchema = z.object({
+        street: z.string().trim().optional(),
+        city: z.string().trim().optional(),
+        state: z.string().trim().optional(),
+        zipCode: z.string().trim().optional(),
+        country: z.string().trim().optional(),
+        isPrimary: z.boolean().optional(),
+    });
+
     const schema = z.object({
         firstName: z.string({
             required_error: 'First name is required',
@@ -17,12 +26,22 @@ export const adminProfileCreateValidation = (data) => {
         }).optional(),
         phoneNumber: z.string().trim().optional(),
         avatar: z.string().url({ message: 'Avatar must be a valid URL' }).optional(),
+        addresses: z.array(addressSchema).optional(),
     });
 
     return schema.safeParse(data);
 };
 
 export const adminProfileUpdateValidation = (data) => {
+    const addressSchema = z.object({
+        street: z.string().trim().optional(),
+        city: z.string().trim().optional(),
+        state: z.string().trim().optional(),
+        zipCode: z.string().trim().optional(),
+        country: z.string().trim().optional(),
+        isPrimary: z.boolean().optional(),
+    });
+
     const schema = z.object({
         firstName: z.string().trim().min(1, { message: 'First name cannot be empty' }).optional(),
         lastName: z.string().trim().min(1, { message: 'Last name cannot be empty' }).optional(),
@@ -35,10 +54,10 @@ export const adminProfileUpdateValidation = (data) => {
         }).optional(),
         phoneNumber: z.string().trim().optional(),
         avatar: z.string().url({ message: 'Avatar must be a valid URL' }).optional(),
+        addresses: z.array(addressSchema).optional(),
     }).refine(obj => Object.keys(obj).length > 0, {
         message: 'At least one field must be provided',
     });
 
     return schema.safeParse(data);
 };
-
