@@ -29,11 +29,36 @@ class TeacherService {
                     Teacher.countDocuments(query),
                 ]);
 
-                return { teachers, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+                const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
+                    if (teacher.departmentId) {
+                        try {
+                            const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
+                            teacher.department = dept.data || dept;
+                        } catch (e) {
+                            console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
+                        }
+                    }
+                    return teacher;
+                }));
+
+                return { teachers: teachersWithDept, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
             }
 
             const teachers = await Teacher.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
-            return { teachers };
+            
+            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
+                if (teacher.departmentId) {
+                    try {
+                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
+                        teacher.department = dept.data || dept;
+                    } catch (e) {
+                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
+                    }
+                }
+                return teacher;
+            }));
+
+            return { teachers: teachersWithDept };
         } catch (error) {
             throw new ApiError(500, 'Error fetching teachers: ' + error.message);
         }
@@ -145,8 +170,24 @@ class TeacherService {
 
     async getDeletedTeachers() {
         try {
-            const t = await Teacher.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
-            return t;
+            const teachers = await Teacher.find({ deletedAt: { $ne: null } })
+                .select('-password')
+                .populate('profile')
+                .lean();
+
+            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
+                if (teacher.departmentId) {
+                    try {
+                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
+                        teacher.department = dept.data || dept;
+                    } catch (e) {
+                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
+                    }
+                }
+                return teacher;
+            }));
+
+            return teachersWithDept;
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error getting deleted teachers: ' + error.message);
         }
@@ -154,7 +195,7 @@ class TeacherService {
 
     async deletePermanently(id) {
         try {
-            const t = await Teacher.findById(id);
+            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } });
             if (!t) throw new ApiError(404, 'Teacher not found');
             await t.deleteOne();
             return { message: 'Teacher deleted permanently successfully' };
@@ -165,7 +206,7 @@ class TeacherService {
 
     async restore(id) {
         try {
-            const t = await Teacher.findById(id);
+            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } });
             if (!t) throw new ApiError(404, 'Teacher not found');
             await t.restore();
             return { message: 'Teacher restored successfully' };

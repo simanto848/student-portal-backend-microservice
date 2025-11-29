@@ -19,6 +19,7 @@ router.use(authenticate);
 
 router.get("/", adminController.getAll);
 router.get("/statistics", adminController.getStatistics);
+router.get("/deleted", adminController.getDeletedAdmins);
 router.get("/:id", adminController.getById);
 router.post("/", validate(createAdminSchema), adminController.create);
 router.patch("/:id", validate(updateAdminSchema), adminController.update);
@@ -34,7 +35,6 @@ router.post("/:id/registered-ips/add", adminController.addRegisteredIp);
 router.post("/:id/registered-ips/remove", adminController.removeRegisteredIp);
 router.put("/:id/registered-ips", adminController.updateRegisteredIps);
 router.delete("/:id", adminController.delete);
-router.get("/deleted", adminController.getDeletedAdmins);
 router.delete("/:id/permanently", adminController.deletePermanently);
 router.post("/:id/restore", adminController.restore);
 

@@ -97,7 +97,9 @@ const teacherSchema = new mongoose.Schema(
 
 teacherSchema.index({ deletedAt: 1 });
 teacherSchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
+    if (this.getQuery().deletedAt === undefined) {
+        this.where({ deletedAt: null });
+    }
     next();
 });
 

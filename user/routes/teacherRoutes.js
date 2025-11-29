@@ -17,11 +17,11 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get("/", teacherController.getAll);
+router.get("/deleted", teacherController.getDeletedTeachers);
 router.get("/:id", teacherController.getById);
 router.post("/", validate(createTeacherSchema), teacherController.create);
 router.patch("/:id", validate(updateTeacherSchema), teacherController.update);
 router.delete("/:id", teacherController.delete);
-router.get("/deleted", teacherController.getDeletedTeachers);
 router.delete("/:id/permanently", teacherController.deletePermanently);
 router.post("/:id/restore", teacherController.restore);
 
