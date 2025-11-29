@@ -10,14 +10,14 @@ import { ApiError } from 'shared';
 
 const TOKEN_COOKIE_OPTIONS = {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     secure: process.env.NODE_ENV === 'production',
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: '/api/user/auth',
