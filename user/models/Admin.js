@@ -90,7 +90,9 @@ const adminSchema = new mongoose.Schema(
 
 adminSchema.index({ deletedAt: 1 });
 adminSchema.pre(/^find/, function (next) {
-    this.where({ deletedAt: null });
+    if (this.getOptions().includeDeleted !== true) {
+        this.where({ deletedAt: null });
+    }
     next();
 });
 

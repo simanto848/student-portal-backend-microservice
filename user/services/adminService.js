@@ -151,7 +151,10 @@ class AdminService {
 
     async getDeletedAdmins() {
         try {
-            const admins = await Admin.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
+            const admins = await Admin.find({ deletedAt: { $ne: null } })
+                .setOptions({ includeDeleted: true })
+                .select('-password')
+                .populate('profile');
             return admins;
         } catch (error) {
             if (error instanceof ApiError) throw error;
@@ -161,7 +164,7 @@ class AdminService {
 
     async deletePermanently(adminId) {
         try {
-            const admin = await Admin.findByIdAndDelete(adminId);
+            const admin = await Admin.findByIdAndDelete(adminId).setOptions({ includeDeleted: true });
             if (!admin) {
                 throw new ApiError(404, 'Admin not found');
             }
@@ -174,7 +177,7 @@ class AdminService {
 
     async restore(adminId) {
         try {
-            const admin = await Admin.findById(adminId);
+            const admin = await Admin.findById(adminId).setOptions({ includeDeleted: true });
             if (!admin) throw new ApiError(404, 'Admin not found');
             await admin.restore();
             return { message: 'Admin restored successfully' };
