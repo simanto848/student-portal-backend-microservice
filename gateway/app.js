@@ -24,6 +24,10 @@ app.use('/api/notification', expressProxy(process.env.NOTIFICATION_SERVICE_URL))
 app.use('/api/communication', expressProxy(process.env.COMMUNICATION_SERVICE_URL));
 app.use('/api/classroom', expressProxy(process.env.CLASSROOM_SERVICE_URL));
 
-app.listen(PORT, () => {
-    console.log(`Gateway server started on http://localhost:${PORT}`.green.underline.bold);
-})
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Gateway server started on http://localhost:${PORT}`.green.underline.bold);
+    })
+}
+
+export default app;
