@@ -4,7 +4,6 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
@@ -17,6 +16,7 @@
     "bcrypt": "^6.0.0",
     "colors": "^1.4.0",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
@@ -27,8 +27,8 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.10",
     "redis": "^5.9.0",
+    "shared": "file:../shared",
     "uuid": "^13.0.0",
-    "zod": "^4.1.12",
-    "shared": "file:../shared"
+    "zod": "^4.1.12"
   }
 }

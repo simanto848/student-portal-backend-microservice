@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -6,6 +7,11 @@ import apiRoutes from "./routes/index.js";
 import { ApiResponse, ApiError } from 'shared';
 
 const app = express();
+
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

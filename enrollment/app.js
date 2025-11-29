@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -11,6 +12,11 @@ import { errorHandler, notFoundHandler } from 'shared';
 config();
 
 const app = express();
+
+app.use(cors({
+    origin: true,
+    credentials: true
+}));
 
 // Connect to MongoDB
 connectDB();
