@@ -10,11 +10,16 @@ import {
     removeDepartmentHeadSchema,
 } from '../validations/index.js';
 import departmentController from '../controllers/departmentController.js';
+import { authenticate, authorize } from 'shared';
 
 const router = express.Router();
 
 router.get('/', validate(getDepartmentsSchema), departmentController.getAll);
 router.get('/:id', validate(getDepartmentByIdSchema), departmentController.getById);
+
+router.use(authenticate);
+router.use(authorize(['super_admin', 'admin']));
+
 router.post('/', validate(createDepartmentSchema), departmentController.create);
 router.patch('/:id', validate(updateDepartmentSchema), departmentController.update);
 router.delete('/:id', validate(deleteDepartmentSchema), departmentController.delete);

@@ -9,8 +9,12 @@ import {
     getBatchSessionCoursesSchema,
 } from '../validations/index.js';
 import sessionCourseController from '../controllers/sessionCourseController.js';
+import { authenticate, authorize } from 'shared';
 
 const router = express.Router();
+
+router.use(authenticate);
+router.use(authorize(['super_admin', 'admin']));
 
 router.get('/', validate(getSessionCoursesSchema), sessionCourseController.getAll);
 router.get('/:id', validate(getSessionCourseByIdSchema), sessionCourseController.getById);
