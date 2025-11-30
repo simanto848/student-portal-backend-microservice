@@ -7,6 +7,11 @@ import {
   updateStaffRoleSchema,
 } from "../validations/staffValidation.js";
 import { authenticate } from "shared";
+import staffProfileController from "../controllers/staffProfileController.js";
+import {
+  staffProfileCreateValidation as createProfileSchema,
+  staffProfileUpdateValidation as updateProfileSchema,
+} from "../validations/staffProfileValidation.js";
 
 const router = express.Router();
 
@@ -28,5 +33,14 @@ router.delete("/:id", staffController.delete);
 router.get("/deleted", staffController.getDeletedStaffs);
 router.delete("/:id/permanently", staffController.deletePermanently);
 router.post("/:id/restore", staffController.restore);
+
+
+
+// Staff Profile routes
+router.get("/:id/profile", staffProfileController.getByStaffId);
+router.post("/:id/profile", validate(createProfileSchema), staffProfileController.create);
+router.put("/:id/profile", validate(createProfileSchema), staffProfileController.upsert);
+router.patch("/:id/profile", validate(updateProfileSchema), staffProfileController.update);
+router.delete("/:id/profile", staffProfileController.delete);
 
 export default router;
