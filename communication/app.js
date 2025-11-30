@@ -21,7 +21,7 @@ app.use("/", apiRoutes);
 app.get("/health", (req, res) => {
     try {
         res.status(200).json({
-            message: "Welcome to User Service",
+            message: "Welcome to Communication Service",
             status: true,
             statusCode: 200
         })
