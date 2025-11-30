@@ -1,0 +1,28 @@
+{
+    "name": "student-portal-backend",
+    "version": "1.0.0",
+    "private": true,
+    "workspaces": [
+        "user",
+        "academic",
+        "gateway",
+        "shared",
+        "enrollment",
+        "communication",
+        "library",
+        "notification",
+        "classroom"
+    ],
+    "scripts": {
+        "install:all": "npm install",
+        "start:user": "npm start -w user",
+        "start:academic": "npm start -w accademic",
+        "start:gateway": "npm start -w gateway",
+        "start:enrollment": "npm start -w enrollment",
+        "start:communication": "npm start -w communication",
+        "start:library": "npm start -w library",
+        "start:notification": "npm start -w notification",
+        "start:classroom": "npm start -w classroom"
+    },
+    "devDependencies": {}
+}
