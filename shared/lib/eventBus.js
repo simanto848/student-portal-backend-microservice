@@ -30,7 +30,8 @@ const buildChannelName = (eventName) => `${getNamespace()}:${eventName}`;
 
 export const EVENTS = Object.freeze({
     STUDENT_ENROLLED: 'STUDENT_ENROLLED',
-    RESULT_PUBLISHED: 'RESULT_PUBLISHED'
+    RESULT_PUBLISHED: 'RESULT_PUBLISHED',
+    SEND_EMAIL: 'SEND_EMAIL'
 });
 
 export const publishEvent = async (eventName, payload = {}) => {
