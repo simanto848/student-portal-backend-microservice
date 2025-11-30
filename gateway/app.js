@@ -16,6 +16,22 @@ app.use(cors({
 
 const PORT = process.env.PORT || 8000;
 
+app.get("/health", (req, res) => {
+    try {
+        res.status(200).json({
+            message: "Welcome to Gateway Service",
+            status: true,
+            statusCode: 200
+        })
+    } catch (error) {
+        res.status(500).json({
+            message: "Internal Server Error",
+            status: false,
+            statusCode: 500
+        })
+    }
+})
+
 app.use('/api/academic', expressProxy(process.env.ACADEMIC_SERVICE_URL));
 app.use('/api/user', expressProxy(process.env.USER_SERVICE_URL));
 app.use('/api/library', expressProxy(process.env.LIBRARY_SERVICE_URL));
