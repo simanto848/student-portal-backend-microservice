@@ -54,6 +54,10 @@ class StudentController {
 
     async delete(req, res, next) {
         try {
+            const { role } = req.user;
+            if (role === 'admission_staff') {
+                throw new ApiError(403, 'Admission Staff cannot delete students. Please contact Admin.');
+            }
             const r = await studentService.delete(req.params.id);
             return ApiResponse.success(res, r, 'Student deleted successfully');
         } catch (error) {
@@ -63,6 +67,10 @@ class StudentController {
 
     async restore(req, res, next) {
         try {
+            const { role } = req.user;
+            if (role === 'admission_staff') {
+                throw new ApiError(403, 'Admission Staff cannot restore students. Please contact Admin.');
+            }
             const st = await studentService.restore(req.params.id);
             return ApiResponse.success(res, st, 'Student restored successfully');
         } catch (error) {
@@ -81,6 +89,10 @@ class StudentController {
 
     async deletePermanently(req, res, next) {
         try {
+            const { role } = req.user;
+            if (role === 'admission_staff') {
+                throw new ApiError(403, 'Admission Staff cannot permanently delete students. Please contact Admin.');
+            }
             const r = await studentService.deletePermanently(req.params.id);
             return ApiResponse.success(res, r, 'Student deleted permanently successfully');
         } catch (error) {
