@@ -9,10 +9,12 @@ const subscriber = createClient({ url: getRedisUrl() });
 let isPublisherReady = false;
 let isSubscriberReady = false;
 
-publisher.on('error', (err) => console.error('[EventBus] Publisher error:', err.message));
-subscriber.on('error', (err) => console.error('[EventBus] Subscriber error:', err.message));
-
 const ensureConnections = async () => {
+    if (process.env.DISABLE_EVENT_BUS === 'true') {
+        console.warn('[EventBus] Event Bus is disabled via configuration');
+        return;
+    }
+
     if (!isPublisherReady) {
         await publisher.connect();
         isPublisherReady = true;
@@ -25,6 +27,15 @@ const ensureConnections = async () => {
         console.log('[EventBus] Subscriber connected');
     }
 };
+
+publisher.on('error', (err) => {
+    if (process.env.DISABLE_EVENT_BUS === 'true') return;
+    console.error('[EventBus] Publisher error:', err.message || err);
+});
+subscriber.on('error', (err) => {
+    if (process.env.DISABLE_EVENT_BUS === 'true') return;
+    console.error('[EventBus] Subscriber error:', err.message || err);
+});
 
 const buildChannelName = (eventName) => `${getNamespace()}:${eventName}`;
 
