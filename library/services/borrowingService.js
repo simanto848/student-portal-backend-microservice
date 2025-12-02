@@ -2,6 +2,7 @@ import BookTakenHistory from '../models/BookTakenHistory.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
+import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
 
 class BorrowingService {
@@ -329,8 +330,10 @@ class BorrowingService {
                 BookTakenHistory.countDocuments(query),
             ]);
 
+            const populatedBorrowings = await this.populateBorrowerDetails(borrowings);
+
             return {
-                borrowings,
+                borrowings: populatedBorrowings,
                 pagination: {
                     page,
                     limit,
@@ -341,6 +344,47 @@ class BorrowingService {
         } catch (error) {
             throw new ApiError(500, 'Error fetching all borrowings: ' + error.message);
         }
+    }
+
+
+
+    async populateBorrowerDetails(borrowings) {
+        return await Promise.all(borrowings.map(async (borrowing) => {
+            try {
+                const user = await userServiceClient.validateUser(borrowing.userType, borrowing.borrowerId);
+                let departmentName = null;
+
+                if (user.departmentId) {
+                    try {
+                        const dept = await academicServiceClient.getDepartmentById(user.departmentId);
+                        departmentName = dept.data?.name || dept.name;
+                    } catch (err) {
+                        // Ignore department fetch error
+                    }
+                }
+
+                return {
+                    ...borrowing,
+                    borrower: {
+                        id: user.id || user._id,
+                        fullName: user.fullName,
+                        email: user.email,
+                        departmentId: user.departmentId,
+                        departmentName,
+                        registrationNumber: user.registrationNumber
+                    }
+                };
+            } catch (error) {
+                return {
+                    ...borrowing,
+                    borrower: {
+                        id: borrowing.borrowerId,
+                        fullName: 'Unknown User',
+                        error: 'Failed to fetch user details'
+                    }
+                };
+            }
+        }));
     }
 
     async checkAndUpdateOverdueBooks() {
