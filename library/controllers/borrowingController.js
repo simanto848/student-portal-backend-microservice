@@ -7,6 +7,7 @@ class BorrowingController {
             const { userType, borrowerId, copyId, libraryId, notes } = req.validatedData || req.body;
             const processedById = req.user?.id
 
+            const token = req.headers.authorization?.split(' ')[1];
             const borrowing = await borrowingService.borrowBook({
                 userType,
                 borrowerId,
@@ -14,7 +15,7 @@ class BorrowingController {
                 libraryId,
                 processedById,
                 notes
-            });
+            }, token);
             return ApiResponse.created(res, borrowing, 'Book borrowed successfully');
         } catch (error) {
             next(error);
@@ -25,7 +26,7 @@ class BorrowingController {
         try {
             const { id } = req.params;
             const { notes } = req.validatedData || req.body;
-            const processedById =  req.user?.id;
+            const processedById = req.user?.id;
 
             const borrowing = await borrowingService.returnBook(id, processedById, notes);
             return ApiResponse.success(res, borrowing, 'Book returned successfully');
@@ -63,7 +64,7 @@ class BorrowingController {
     async getMyBorrowingHistory(req, res, next) {
         try {
             const borrowerId = req.user?.id;
-            
+
             const { page, limit, ...filters } = req.query;
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
@@ -85,7 +86,8 @@ class BorrowingController {
             };
             if (Object.keys(filters).length > 0) options.filters = filters;
 
-            const result = await borrowingService.getAllBorrowings(options);
+            const token = req.headers.authorization?.split(' ')[1];
+            const result = await borrowingService.getAllBorrowings(options, token);
             return ApiResponse.success(res, result, 'All borrowings retrieved successfully');
         } catch (error) {
             next(error);
@@ -96,7 +98,7 @@ class BorrowingController {
         try {
             const { id } = req.params;
             const data = req.validatedData || req.body;
-            data.processedById =  req.user?.id;
+            data.processedById = req.user?.id;
 
             const borrowing = await borrowingService.updateBorrowingStatus(id, data);
             return ApiResponse.success(res, borrowing, 'Borrowing status updated successfully');

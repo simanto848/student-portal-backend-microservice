@@ -6,9 +6,9 @@ import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
 
 class BorrowingService {
-    async borrowBook({ userType, borrowerId, copyId, libraryId, processedById, notes = '' }) {
+    async borrowBook({ userType, borrowerId, copyId, libraryId, processedById, notes = '' }, token) {
         try {
-            await userServiceClient.validateUser(userType, borrowerId);
+            await userServiceClient.validateUser(userType, borrowerId, token);
             const copy = await BookCopy.findOne({ _id: copyId, deletedAt: null }).lean();
 
             if (!copy) throw new ApiError(404, 'Book copy not found');
@@ -303,7 +303,7 @@ class BorrowingService {
         }
     }
 
-    async getAllBorrowings(options = {}) {
+    async getAllBorrowings(options = {}, token) {
         try {
             const { pagination, search, filters = {} } = options;
             const query = { deletedAt: null, ...filters };
@@ -330,7 +330,7 @@ class BorrowingService {
                 BookTakenHistory.countDocuments(query),
             ]);
 
-            const populatedBorrowings = await this.populateBorrowerDetails(borrowings);
+            const populatedBorrowings = await this.populateBorrowerDetails(borrowings, token);
 
             return {
                 borrowings: populatedBorrowings,
@@ -346,12 +346,10 @@ class BorrowingService {
         }
     }
 
-
-
-    async populateBorrowerDetails(borrowings) {
+    async populateBorrowerDetails(borrowings, token) {
         return await Promise.all(borrowings.map(async (borrowing) => {
             try {
-                const user = await userServiceClient.validateUser(borrowing.userType, borrowing.borrowerId);
+                const user = await userServiceClient.validateUser(borrowing.userType, borrowing.borrowerId, token);
                 let departmentName = null;
 
                 if (user.departmentId) {
