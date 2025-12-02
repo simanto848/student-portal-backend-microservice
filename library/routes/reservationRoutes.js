@@ -19,6 +19,7 @@ router.get('/my-reservations', reservationController.getMyReservations);
 
 router.post('/:id/fulfill', authorize('super_admin', 'admin', 'library'), validate(fulfillReservationValidation), reservationController.fulfillReservation);
 router.get('/all', authorize('super_admin', 'admin', 'library'), reservationController.getAllReservations);
+router.get('/:id', authorize('super_admin', 'admin', 'library'), reservationController.getReservationById);
 router.patch('/:id', authorize('super_admin', 'admin', 'library'), validate(updateReservationValidation), reservationController.updateReservationStatus);
 router.post('/check-expired', authorize('super_admin', 'admin', 'library'), reservationController.checkExpiredReservations);
 

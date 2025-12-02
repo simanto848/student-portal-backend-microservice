@@ -4,38 +4,45 @@ import reservationService from '../services/reservationService.js';
 class ReservationController {
     async createReservation(req, res, next) {
         try {
-            const { copyId, libraryId, notes } = req.validatedData || req.body;
-            const userId = req.user?.sub || req.user?.id;
-            const rawType = req.user?.type || req.user?.userType || req.user?.role;
-            const staffRoles = [
-                'program_controller','admission','exam','finance','library','transport','hr','it','hostel','hostel_warden','hostel_supervisor','maintenance'
-            ];
+            const { copyId, libraryId, notes, userId: bodyUserId, userType: bodyUserType } = req.validatedData || req.body;
 
-            const typeMapping = {
-                student: 'student',
-                teacher: 'teacher',
-                faculty: 'teacher',
-                staff: 'staff',
-                admin: 'admin'
-            };
+            // Use body userId/type if present (for admin creating for others), otherwise use auth user
+            const userId = bodyUserId || req.user?.sub || req.user?.id;
 
-            let normalizedType = typeMapping[rawType];
-            if (!normalizedType && staffRoles.includes(rawType)) {
-                normalizedType = 'staff';
+            let normalizedType = bodyUserType;
+            if (!normalizedType) {
+                const rawType = req.user?.type || req.user?.userType || req.user?.role;
+                const staffRoles = [
+                    'program_controller', 'admission', 'exam', 'finance', 'library', 'transport', 'hr', 'it', 'hostel', 'hostel_warden', 'hostel_supervisor', 'maintenance'
+                ];
+
+                const typeMapping = {
+                    student: 'student',
+                    teacher: 'teacher',
+                    faculty: 'teacher',
+                    staff: 'staff',
+                    admin: 'admin'
+                };
+
+                normalizedType = typeMapping[rawType];
+                if (!normalizedType && staffRoles.includes(rawType)) {
+                    normalizedType = 'staff';
+                }
             }
 
             if (!normalizedType) {
-                return ApiResponse.badRequest(res, `Unsupported user type '${rawType}'.`);
+                return ApiResponse.badRequest(res, `Unsupported user type.`);
             }
 
+            const token = req.headers.authorization?.split(' ')[1];
             const reservation = await reservationService.createReservation({
                 userType: normalizedType,
                 userId,
                 copyId,
                 libraryId,
                 notes
-            });
-            
+            }, token);
+
             return ApiResponse.created(res, reservation, 'Book reserved successfully');
         } catch (error) {
             next(error);
@@ -72,11 +79,11 @@ class ReservationController {
         try {
             const userId = req.user?.sub || req.user?.id;
             const { page, limit, status, ...filters } = req.query;
-            
+
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
             };
-            
+
             if (status) filters.status = status;
             if (Object.keys(filters).length > 0) options.filters = filters;
 
@@ -95,8 +102,20 @@ class ReservationController {
             };
             if (Object.keys(filters).length > 0) options.filters = filters;
 
-            const result = await reservationService.getAllReservations(options);
+            const token = req.headers.authorization?.split(' ')[1];
+            const result = await reservationService.getAllReservations(options, token);
             return ApiResponse.success(res, result, 'All reservations retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getReservationById(req, res, next) {
+        try {
+            const { id } = req.params;
+            const token = req.headers.authorization?.split(' ')[1];
+            const result = await reservationService.getReservationById(id, token);
+            return ApiResponse.success(res, result, 'Reservation retrieved successfully');
         } catch (error) {
             next(error);
         }

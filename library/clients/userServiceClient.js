@@ -46,7 +46,7 @@ class UserServiceClient {
         }
     }
 
-    async validateUser(userType, userId) {
+    async validateUser(userType, userId, token) {
         try {
             const typeMap = {
                 'student': 'students',
@@ -60,7 +60,12 @@ class UserServiceClient {
                 throw new Error(`Invalid user type: ${userType}`);
             }
 
-            const response = await this.client.get(`/${endpoint}/${userId}`);
+            const config = {};
+            if (token) {
+                config.headers = { Authorization: `Bearer ${token}` };
+            }
+
+            const response = await this.client.get(`/${endpoint}/${userId}`, config);
             if (!response.data || !response.data.data) {
                 throw new Error(`${userType} with ID ${userId} not found`);
             }

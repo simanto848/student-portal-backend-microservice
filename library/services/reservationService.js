@@ -2,12 +2,13 @@ import BookReservation from '../models/BookReservation.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
+import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
 
 class ReservationService {
-    async createReservation({ userType, userId, copyId, libraryId, notes = '' }) {
+    async createReservation({ userType, userId, copyId, libraryId, notes = '' }, token) {
         try {
-            await userServiceClient.validateUser(userType, userId);
+            await userServiceClient.validateUser(userType, userId, token);
             const copy = await BookCopy.findOne({ _id: copyId, deletedAt: null }).lean();
             if (!copy) throw new ApiError(404, 'Book copy not found');
             if (copy.status !== 'available') {
@@ -107,14 +108,14 @@ class ReservationService {
             if (new Date() > new Date(reservation.expiryDate)) {
                 reservation.status = 'expired';
                 await reservation.save();
-                
+
                 const copyId = reservation.copyId._id || reservation.copyId;
                 const copy = await BookCopy.findById(copyId);
                 if (copy) {
                     copy.status = 'available';
                     await copy.save();
                 }
-                
+
                 throw new ApiError(400, 'This reservation has expired');
             }
 
@@ -192,7 +193,32 @@ class ReservationService {
         }
     }
 
-    async getAllReservations(options = {}) {
+
+
+    async getReservationById(id, token) {
+        try {
+            const reservation = await BookReservation.findOne({ _id: id, deletedAt: null })
+                .populate({
+                    path: 'copyId',
+                    select: 'copyNumber location bookId',
+                    populate: {
+                        path: 'bookId',
+                        select: 'title author isbn'
+                    }
+                })
+                .populate('libraryId', 'name code')
+                .lean();
+
+            if (!reservation) throw new ApiError(404, 'Reservation not found');
+
+            const [reservationWithUser] = await this.populateUserDetails([reservation], token);
+            return reservationWithUser;
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error fetching reservation: ' + error.message);
+        }
+    }
+
+    async getAllReservations(options = {}, token) {
         try {
             const { pagination, filters = {} } = options;
             const query = { deletedAt: null, ...filters };
@@ -201,11 +227,11 @@ class ReservationService {
             const limit = parseInt(pagination?.limit) || 10;
             const skip = (page - 1) * limit;
 
-            const [reservations, total] = await Promise.all([
+            const [rawReservations, total] = await Promise.all([
                 BookReservation.find(query)
                     .populate({
                         path: 'copyId',
-                        select: 'copyNumber bookId',
+                        select: 'copyNumber location bookId',
                         populate: {
                             path: 'bookId',
                             select: 'title author isbn'
@@ -219,6 +245,8 @@ class ReservationService {
                 BookReservation.countDocuments(query),
             ]);
 
+            const reservations = await this.populateUserDetails(rawReservations, token);
+
             return {
                 reservations,
                 pagination: {
@@ -231,6 +259,45 @@ class ReservationService {
         } catch (error) {
             throw new ApiError(500, 'Error fetching all reservations: ' + error.message);
         }
+    }
+
+    async populateUserDetails(reservations, token) {
+        return await Promise.all(reservations.map(async (reservation) => {
+            try {
+                const user = await userServiceClient.validateUser(reservation.userType, reservation.userId, token);
+                let departmentName = null;
+
+                if (user.departmentId) {
+                    try {
+                        const dept = await academicServiceClient.getDepartmentById(user.departmentId);
+                        departmentName = dept.data?.name || dept.name;
+                    } catch (err) {
+                        // Ignore department fetch error
+                    }
+                }
+
+                return {
+                    ...reservation,
+                    user: {
+                        id: user.id || user._id,
+                        fullName: user.fullName,
+                        email: user.email,
+                        departmentId: user.departmentId,
+                        departmentName,
+                        registrationNumber: user.registrationNumber
+                    }
+                };
+            } catch (error) {
+                return {
+                    ...reservation,
+                    user: {
+                        id: reservation.userId,
+                        fullName: 'Unknown User',
+                        error: 'Failed to fetch user details'
+                    }
+                };
+            }
+        }));
     }
 
     async updateReservationStatus(id, data) {
@@ -256,7 +323,7 @@ class ReservationService {
             });
 
             let expiredCount = 0;
-            
+
             for (const reservation of expiredReservations) {
                 reservation.status = 'expired';
                 await reservation.save();
