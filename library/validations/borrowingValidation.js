@@ -9,6 +9,7 @@ export const borrowBookValidation = z.object({
         copyId: z.string().min(1, 'Copy ID is required').trim(),
         libraryId: z.string().min(1, 'Library ID is required').trim(),
         notes: z.string().optional().default(''),
+        dueDate: z.coerce.date().optional(),
     })
 });
 
@@ -25,6 +26,8 @@ export const updateBorrowingValidation = z.object({
             errorMap: () => ({ message: 'User type must be student, teacher, staff, or admin' })
         }).optional(),
         borrowerId: z.string().trim().optional(),
+        copyId: z.string().trim().optional(),
+        libraryId: z.string().trim().optional(),
         status: z.enum(['borrowed', 'returned', 'overdue', 'lost'], {
             errorMap: () => ({ message: 'Status must be borrowed, returned, overdue, or lost' })
         }).optional(),
