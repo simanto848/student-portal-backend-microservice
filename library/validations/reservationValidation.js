@@ -28,10 +28,15 @@ export const fulfillReservationValidation = z.object({
 // admin/library staff action
 export const updateReservationValidation = z.object({
     body: z.object({
+        copyId: z.string().trim().optional(),
+        libraryId: z.string().trim().optional(),
+        userId: z.string().trim().optional(),
+        userType: z.enum(['student', 'teacher', 'staff']).optional(),
         status: z.enum(['pending', 'fulfilled', 'expired', 'cancelled'], {
             errorMap: () => ({ message: 'Status must be pending, fulfilled, expired, or cancelled' })
         }).optional(),
         notes: z.string().optional(),
+        reservationDate: z.coerce.date().optional(),
         expiryDate: z.coerce.date().optional(),
     })
 });

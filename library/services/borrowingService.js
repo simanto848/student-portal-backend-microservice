@@ -1,6 +1,7 @@
 import BookTakenHistory from '../models/BookTakenHistory.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
+import Reservation from '../models/BookReservation.js';
 import userServiceClient from '../clients/userServiceClient.js';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
@@ -13,7 +14,21 @@ class BorrowingService {
 
             if (!copy) throw new ApiError(404, 'Book copy not found');
             if (copy.status !== 'available') {
-                throw new ApiError(400, 'This book copy is not available for borrowing');
+                // Check if it is reserved for this user
+                if (copy.status === 'reserved') {
+                    const reservation = await Reservation.findOne({
+                        copyId: copy._id,
+                        userId: borrowerId,
+                        status: { $in: ['pending', 'fulfilled'] },
+                        deletedAt: null
+                    });
+
+                    if (!reservation) {
+                        throw new ApiError(400, 'This book copy is reserved for another user');
+                    }
+                } else {
+                    throw new ApiError(400, 'This book copy is not available for borrowing');
+                }
             }
 
             const library = await Library.findOne({ _id: libraryId, deletedAt: null }).lean();
