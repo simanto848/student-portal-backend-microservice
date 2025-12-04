@@ -18,7 +18,7 @@ router.get('/', validate(getDepartmentsSchema), departmentController.getAll);
 router.get('/:id', validate(getDepartmentByIdSchema), departmentController.getById);
 
 router.use(authenticate);
-router.use(authorize(['super_admin', 'admin']));
+router.use(authorize('super_admin', 'admin'));
 
 router.post('/', validate(createDepartmentSchema), departmentController.create);
 router.patch('/:id', validate(updateDepartmentSchema), departmentController.update);

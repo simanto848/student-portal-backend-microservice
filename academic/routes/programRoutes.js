@@ -16,7 +16,7 @@ router.get('/', validate(getProgramsSchema), programController.getAll);
 router.get('/:id', validate(getProgramByIdSchema), programController.getById);
 
 router.use(authenticate);
-router.use(authorize(['super_admin', 'admin']));
+router.use(authorize('super_admin', 'admin'));
 
 router.post('/', validate(createProgramSchema), programController.create);
 router.patch('/:id', validate(updateProgramSchema), programController.update);

@@ -18,7 +18,7 @@ router.get('/', validate(getFacultiesSchema), facultyController.getAll);
 router.get('/:id', validate(getFacultyByIdSchema), facultyController.getById);
 
 router.use(authenticate);
-router.use(authorize(['super_admin', 'admin']));
+router.use(authorize('super_admin', 'admin'));
 
 router.post('/', validate(createFacultySchema), facultyController.create);
 router.patch('/:id', validate(updateFacultySchema), facultyController.update);
