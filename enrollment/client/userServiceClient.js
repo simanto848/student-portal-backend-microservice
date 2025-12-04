@@ -70,6 +70,30 @@ class UserServiceClient {
             throw new Error('Failed to fetch batch students');
         }
     }
+
+    async getStudentById(studentId) {
+        try {
+            const response = await this.client.get(`/students/${studentId}`);
+            return response.data;
+        } catch (error) {
+            if (error.response?.status === 404) {
+                throw new Error('Student not found');
+            }
+            throw new Error('Failed to fetch student details');
+        }
+    }
+
+    async getTeacherById(teacherId) {
+        try {
+            const response = await this.client.get(`/teachers/${teacherId}`);
+            return response.data;
+        } catch (error) {
+            if (error.response?.status === 404) {
+                throw new Error('Teacher not found');
+            }
+            throw new Error('Failed to fetch teacher details');
+        }
+    }
 }
 
 export default new UserServiceClient();

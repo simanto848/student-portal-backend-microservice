@@ -56,15 +56,20 @@ class EnrollmentService {
             // Enrich with instructor assignments from BatchCourseInstructor
             const enrichedCourses = await Promise.all(
                 sessionCourses.map(async (sc) => {
+                    // Extract courseId - handle both populated objects and direct IDs
+                    const courseId = typeof sc.courseId === 'object'
+                        ? sc.courseId.id || sc.courseId._id
+                        : sc.courseId;
+
                     const assignment = await BatchCourseInstructor.findOne({
                         batchId,
-                        courseId: sc.courseId,
+                        courseId: courseId,
                         semester,
                         status: 'active',
                     });
 
                     return {
-                        courseId: sc.courseId,
+                        courseId: courseId,
                         sessionCourseId: sc.id || sc._id,
                         semester,
                         instructorId: assignment?.instructorId,
@@ -247,16 +252,78 @@ class EnrollmentService {
     }
 
     async listEnrollments(filters = {}) {
-        const query = {};
+        try {
+            const query = {};
 
-        if (filters.studentId) query.studentId = filters.studentId;
-        if (filters.batchId) query.batchId = filters.batchId;
-        if (filters.courseId) query.courseId = filters.courseId;
-        if (filters.semester) query.semester = parseInt(filters.semester);
-        if (filters.status) query.status = filters.status;
+            if (filters.studentId) query.studentId = filters.studentId;
+            if (filters.batchId) query.batchId = filters.batchId;
+            if (filters.courseId) query.courseId = filters.courseId;
+            if (filters.semester) query.semester = parseInt(filters.semester);
+            if (filters.status) query.status = filters.status;
 
-        const enrollments = await CourseEnrollment.find(query).sort({ createdAt: -1 });
-        return enrollments;
+            const enrollments = await CourseEnrollment.find(query).sort({ createdAt: -1 });
+
+            // Enrich enrollments with data from other services
+            const enrichedEnrollments = await Promise.all(
+                enrollments.map(async (enrollment) => {
+                    const enriched = enrollment.toObject();
+
+                    try {
+                        // Fetch student data
+                        const studentResponse = await userServiceClient.getStudentById(enrollment.studentId);
+                        enriched.student = studentResponse.data || studentResponse;
+                    } catch (error) {
+                        console.error(`Failed to fetch student ${enrollment.studentId}:`, error.message);
+                        enriched.student = null;
+                    }
+
+                    try {
+                        // Fetch batch data
+                        const batchResponse = await academicServiceClient.getBatchDetails(enrollment.batchId);
+                        enriched.batch = batchResponse.data || batchResponse;
+                    } catch (error) {
+                        console.error(`Failed to fetch batch ${enrollment.batchId}:`, error.message);
+                        enriched.batch = null;
+                    }
+
+                    try {
+                        // Fetch course data
+                        const courseResponse = await academicServiceClient.getCourseDetails(enrollment.courseId);
+                        enriched.course = courseResponse.data || courseResponse;
+                    } catch (error) {
+                        console.error(`Failed to fetch course ${enrollment.courseId}:`, error.message);
+                        enriched.course = null;
+                    }
+
+                    try {
+                        // Fetch session data
+                        const sessionResponse = await academicServiceClient.verifySession(enrollment.sessionId);
+                        enriched.session = sessionResponse.data || sessionResponse;
+                    } catch (error) {
+                        console.error(`Failed to fetch session ${enrollment.sessionId}:`, error.message);
+                        enriched.session = null;
+                    }
+
+                    // Fetch instructor data if available
+                    if (enrollment.instructorId) {
+                        try {
+                            const instructorResponse = await userServiceClient.getTeacherById(enrollment.instructorId);
+                            enriched.instructor = instructorResponse.data || instructorResponse;
+                        } catch (error) {
+                            console.error(`Failed to fetch instructor ${enrollment.instructorId}:`, error.message);
+                            enriched.instructor = null;
+                        }
+                    }
+
+                    return enriched;
+                })
+            );
+
+            return { enrollments: enrichedEnrollments, total: enrichedEnrollments.length };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, error.message || 'Failed to fetch enrollments');
+        }
     }
 
     async updateEnrollment(id, data) {
