@@ -18,6 +18,7 @@ router.post('/', authorize('super_admin', 'admin'), validate(createEnrollmentSch
 router.post('/bulk', authorize('super_admin', 'admin'), validate(bulkEnrollSchema), enrollmentController.bulkEnrollBatch);
 router.post('/complete-semester', authorize('super_admin', 'admin'), enrollmentController.completeBatchSemester);
 router.post('/batch/:batchId/progress-semester', authorize('super_admin', 'admin'), enrollmentController.progressBatchSemester);
+router.get('/batch/:batchId/semester/:semester/courses', authorize('super_admin', 'admin'), enrollmentController.getBatchSemesterCourses);
 router.get('/', authorize('super_admin', 'admin', 'teacher', 'student'), validate(listEnrollmentsSchema), enrollmentController.listEnrollments);
 router.get('/student/:studentId/semester/:semester', authorize('super_admin', 'admin', 'teacher', 'student'), enrollmentController.getStudentSemesterEnrollments);
 router.get('/:id', authorize('super_admin', 'admin', 'teacher', 'student'), validate(getEnrollmentSchema), enrollmentController.getEnrollment);

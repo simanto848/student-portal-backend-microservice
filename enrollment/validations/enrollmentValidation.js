@@ -4,10 +4,8 @@ export const createEnrollmentSchema = z.object({
     body: z.object({
         studentId: z.string().uuid('Invalid student ID format'),
         batchId: z.string().uuid('Invalid batch ID format'),
-        courseId: z.string().uuid('Invalid course ID format'),
         sessionId: z.string().uuid('Invalid session ID format'),
         semester: z.number().int().min(1, 'Semester must be at least 1'),
-        instructorId: z.string().uuid('Invalid instructor ID format'),
     }),
 });
 

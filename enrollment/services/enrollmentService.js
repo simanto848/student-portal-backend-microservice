@@ -5,41 +5,155 @@ import userServiceClient from '../client/userServiceClient.js';
 import academicServiceClient from '../client/academicServiceClient.js';
 
 class EnrollmentService {
+    async getBatchSemesterCourses(batchId, semester) {
+        try {
+            console.log('[EnrollmentService] getBatchSemesterCourses called:', { batchId, semester });
+
+            // Get batch details to find session and department
+            const batchResponse = await academicServiceClient.getBatchDetails(batchId);
+            const batch = batchResponse.data || batchResponse;
+
+            if (!batch) {
+                throw new ApiError(404, 'Batch not found');
+            }
+
+            console.log('[EnrollmentService] Batch details:', batch);
+
+            // Extract IDs - handle both populated objects and direct IDs
+            const sessionId = typeof batch.sessionId === 'object' ? batch.sessionId.id || batch.sessionId._id : batch.sessionId;
+            const departmentId = typeof batch.departmentId === 'object' ? batch.departmentId.id || batch.departmentId._id : batch.departmentId;
+
+            console.log('[EnrollmentService] Extracted IDs:', { sessionId, departmentId, semester });
+
+            // Get courses for this session, semester, and department
+            const sessionCoursesResponse = await academicServiceClient.getSessionCourses(
+                sessionId,
+                semester,
+                departmentId
+            );
+
+            console.log('[EnrollmentService] Session courses response:', sessionCoursesResponse);
+
+            // Extract the courses array - handle nested structure
+            let sessionCourses = [];
+            if (sessionCoursesResponse?.data?.data) {
+                // Structure: { success: true, data: { data: [...], total: 10 } }
+                sessionCourses = sessionCoursesResponse.data.data;
+            } else if (sessionCoursesResponse?.data && Array.isArray(sessionCoursesResponse.data)) {
+                // Structure: { success: true, data: [...] }
+                sessionCourses = sessionCoursesResponse.data;
+            } else if (Array.isArray(sessionCoursesResponse)) {
+                // Direct array
+                sessionCourses = sessionCoursesResponse;
+            }
+
+            console.log('[EnrollmentService] Session courses found:', sessionCourses?.length || 0);
+
+            if (!sessionCourses || sessionCourses.length === 0) {
+                return [];
+            }
+
+            // Enrich with instructor assignments from BatchCourseInstructor
+            const enrichedCourses = await Promise.all(
+                sessionCourses.map(async (sc) => {
+                    const assignment = await BatchCourseInstructor.findOne({
+                        batchId,
+                        courseId: sc.courseId,
+                        semester,
+                        status: 'active',
+                    });
+
+                    return {
+                        courseId: sc.courseId,
+                        sessionCourseId: sc.id || sc._id,
+                        semester,
+                        instructorId: assignment?.instructorId,
+                        instructorAssigned: !!assignment,
+                        assignmentId: assignment?.id || assignment?._id,
+                    };
+                })
+            );
+
+            return enrichedCourses;
+        } catch (error) {
+            console.error('[EnrollmentService] Error in getBatchSemesterCourses:', error);
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, error.message || 'Failed to fetch batch semester courses');
+        }
+    }
+
     async enrollStudent(data) {
         try {
+            const { studentId, batchId, sessionId, semester } = data;
+
+            // Verify student, batch, and session
             await Promise.all([
-                userServiceClient.verifyStudent(data.studentId),
-                academicServiceClient.verifyBatch(data.batchId),
-                academicServiceClient.verifyCourse(data.courseId),
-                academicServiceClient.verifySession(data.sessionId),
-                userServiceClient.verifyTeacher(data.instructorId),
+                userServiceClient.verifyStudent(studentId),
+                academicServiceClient.verifyBatch(batchId),
+                academicServiceClient.verifySession(sessionId),
             ]);
 
-            const assignment = await BatchCourseInstructor.findOne({
-                batchId: data.batchId,
-                courseId: data.courseId,
-                semester: data.semester,
-                instructorId: data.instructorId,
-                status: 'active',
-            });
+            // Get all courses for this batch-semester
+            const courses = await this.getBatchSemesterCourses(batchId, semester);
 
-            if (!assignment) {
-                throw new ApiError(400, 'Instructor is not assigned to teach this course for this batch');
+            if (!courses || courses.length === 0) {
+                throw new ApiError(404, 'No courses found for this batch and semester');
             }
 
-            const existingEnrollment = await CourseEnrollment.findOne({
-                studentId: data.studentId,
-                courseId: data.courseId,
-                semester: data.semester,
-                deletedAt: null,
-            });
+            const enrollments = [];
+            const errors = [];
+            const skipped = [];
 
-            if (existingEnrollment) {
-                throw new ApiError(409, 'Student is already enrolled in this course for this semester');
+            // Enroll student in each course
+            for (const course of courses) {
+                try {
+                    // Check if already enrolled
+                    const existingEnrollment = await CourseEnrollment.findOne({
+                        studentId,
+                        courseId: course.courseId,
+                        semester,
+                        deletedAt: null,
+                    });
+
+                    if (existingEnrollment) {
+                        skipped.push({
+                            courseId: course.courseId,
+                            reason: 'Already enrolled',
+                        });
+                        continue;
+                    }
+
+                    // Create enrollment
+                    const enrollment = await CourseEnrollment.create({
+                        studentId,
+                        batchId,
+                        courseId: course.courseId,
+                        sessionId,
+                        semester,
+                        instructorId: course.instructorId,
+                        status: 'active',
+                    });
+
+                    enrollments.push(enrollment);
+                } catch (error) {
+                    errors.push({
+                        courseId: course.courseId,
+                        error: error.message,
+                    });
+                }
             }
 
-            const enrollment = await CourseEnrollment.create(data);
-            return enrollment;
+            return {
+                success: true,
+                message: `Student enrolled in ${enrollments.length} courses`,
+                totalCourses: courses.length,
+                enrolled: enrollments.length,
+                skipped: skipped.length,
+                failed: errors.length,
+                enrollments,
+                skippedCourses: skipped.length > 0 ? skipped : undefined,
+                errors: errors.length > 0 ? errors : undefined,
+            };
         } catch (error) {
             if (error instanceof ApiError) throw error;
             throw new ApiError(500, error.message || 'Failed to enroll student');

@@ -73,10 +73,19 @@ class AcademicServiceClient {
             if (semester) url += `&semester=${semester}`;
             if (departmentId) url += `&departmentId=${departmentId}`;
 
+            console.log('[AcademicServiceClient] Fetching session courses:', { sessionId, semester, departmentId, url });
             const response = await this.client.get(url);
+            console.log('[AcademicServiceClient] Session courses response:', response.data);
             return response.data;
         } catch (error) {
-            throw new Error('Failed to fetch session courses');
+            console.error('[AcademicServiceClient] Failed to fetch session courses:', {
+                url: error.config?.url,
+                status: error.response?.status,
+                message: error.response?.data?.message || error.message,
+                data: error.response?.data
+            });
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch session courses';
+            throw new Error(errorMessage);
         }
     }
 

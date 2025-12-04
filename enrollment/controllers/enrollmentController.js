@@ -94,6 +94,16 @@ class EnrollmentController {
             next(error);
         }
     }
+
+    async getBatchSemesterCourses(req, res, next) {
+        try {
+            const { batchId, semester } = req.params;
+            const courses = await enrollmentService.getBatchSemesterCourses(batchId, parseInt(semester));
+            return ApiResponse.success(res, courses);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new EnrollmentController();
