@@ -5,7 +5,7 @@ class WorkspaceController {
   async create(req, res, next) {
     try {
       const { courseId, batchId } = req.body;
-      const workspace = await WorkspaceService.getWorkspace(courseId, batchId, req.user.id, req.user.role);
+      const workspace = await WorkspaceService.getWorkspace(courseId, batchId, req.user.id, req.user.role, req.headers.authorization);
       return ApiResponse.created(res, workspace, 'Workspace accessed/created');
     } catch (e) {
       next(e);
@@ -32,7 +32,7 @@ class WorkspaceController {
 
   async update(req, res, next) {
     try {
-      const ws = await WorkspaceService.updateWorkspace(req.params.id, req.body, req.user.id);
+      const ws = await WorkspaceService.updateWorkspace(req.params.id, req.body, req.user.id, req.user.role);
       return ApiResponse.success(res, ws, 'Workspace updated');
     } catch (e) {
       next(e);
@@ -41,7 +41,7 @@ class WorkspaceController {
 
   async delete(req, res, next) {
     try {
-      await WorkspaceService.deleteWorkspace(req.params.id, req.user.id);
+      await WorkspaceService.deleteWorkspace(req.params.id, req.user.id, req.user.role);
       return ApiResponse.success(res, null, 'Workspace deleted');
     } catch (e) {
       next(e);
@@ -49,7 +49,7 @@ class WorkspaceController {
   }
 
   async syncRoster(req, res, next) {
-      return ApiResponse.success(res, null, 'Roster sync is automatic now');
+    return ApiResponse.success(res, null, 'Roster sync is automatic now');
   }
 }
 
