@@ -1,4 +1,5 @@
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 class AcademicServiceClient {
     constructor() {
@@ -7,6 +8,24 @@ class AcademicServiceClient {
             baseURL: this.baseURL,
             timeout: 10000,
         });
+
+        this.client.interceptors.request.use((config) => {
+            const token = this.generateServiceToken();
+            config.headers.Authorization = `Bearer ${token}`;
+            return config;
+        });
+    }
+
+    generateServiceToken() {
+        return jwt.sign(
+            {
+                role: 'super_admin', // Use a high-privilege role for service-to-service calls
+                sub: 'enrollment-service',
+                type: 'service'
+            },
+            process.env.JWT_SECRET || 'fallback_secret', // Ensure this matches Academic Service's secret
+            { expiresIn: '1h' }
+        );
     }
 
     async verifyBatch(batchId) {
@@ -17,6 +36,7 @@ class AcademicServiceClient {
             if (error.response?.status === 404) {
                 throw new Error('Batch not found');
             }
+            console.error('Verify batch error:', error.message);
             throw new Error('Failed to verify batch');
         }
     }
@@ -29,6 +49,7 @@ class AcademicServiceClient {
             if (error.response?.status === 404) {
                 throw new Error('Course not found');
             }
+            console.error('Verify course error:', error.message);
             throw new Error('Failed to verify course');
         }
     }
@@ -41,6 +62,7 @@ class AcademicServiceClient {
             if (error.response?.status === 404) {
                 throw new Error('Session not found');
             }
+            console.error('Verify session error:', error.message);
             throw new Error('Failed to verify session');
         }
     }

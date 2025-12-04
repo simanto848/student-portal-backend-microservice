@@ -1,4 +1,5 @@
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 class UserServiceClient {
     constructor() {
@@ -7,6 +8,24 @@ class UserServiceClient {
             baseURL: this.baseURL,
             timeout: 10000,
         });
+
+        this.client.interceptors.request.use((config) => {
+            const token = this.generateServiceToken();
+            config.headers.Authorization = `Bearer ${token}`;
+            return config;
+        });
+    }
+
+    generateServiceToken() {
+        return jwt.sign(
+            {
+                role: 'super_admin', // Use a high-privilege role for service-to-service calls
+                sub: 'enrollment-service',
+                type: 'service'
+            },
+            process.env.JWT_SECRET || 'fallback_secret', // Ensure this matches User Service's secret
+            { expiresIn: '1h' }
+        );
     }
 
     async verifyStudent(studentId) {
@@ -29,6 +48,7 @@ class UserServiceClient {
             if (error.response?.status === 404) {
                 throw new Error('Teacher not found');
             }
+            console.error('Verify teacher error:', error.message);
             throw new Error('Failed to verify teacher');
         }
     }
