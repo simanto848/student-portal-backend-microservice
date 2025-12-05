@@ -4,6 +4,7 @@ import { ApiError } from 'shared';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
+import { rabbitmq } from 'shared';
 
 class StudentService {
     async getAll(options = {}) {
@@ -112,13 +113,24 @@ class StudentService {
             const student = await Student.create(studentPayload);
 
             await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1);
-            if (data.studentProfile && typeof data.studentProfile === 'object') {
-                try {
-                    const createdProfile = await StudentProfile.create({ ...data.studentProfile, studentId: student._id });
-                    await Student.findByIdAndUpdate(student._id, { $set: { profile: createdProfile._id } }, { new: true, runValidators: false });
-                } catch (profileError) {
-                    console.error('Student profile creation failed:', profileError.message);
-                }
+            try {
+                const createdProfile = await StudentProfile.create({ ...data.studentProfile, studentId: student._id });
+                await Student.findByIdAndUpdate(student._id, { $set: { profile: createdProfile._id } }, { new: true, runValidators: false });
+            } catch (profileError) {
+                console.error('Student profile creation failed:', profileError.message);
+            }
+
+
+            // Publish event to RabbitMQ
+            try {
+                await rabbitmq.publishToQueue('student_created', {
+                    studentId: student._id,
+                    email: student.email,
+                    fullName: student.fullName,
+                    registrationNumber: student.registrationNumber
+                });
+            } catch (mqError) {
+                console.error('Failed to publish student_created event:', mqError);
             }
 
             return await Student.findById(student._id).select('-password').populate('profile').lean();

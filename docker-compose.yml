@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672" # Management UI
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - backend-network
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-network
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./gateway:/app/gateway
+      - ./shared:/app/shared
+      - /app/gateway/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings app.js
+    environment:
+      - PORT=8000
+      - ACADEMIC_SERVICE_URL=http://academic:8001
+      - USER_SERVICE_URL=http://user:8007
+      - LIBRARY_SERVICE_URL=http://library:8008
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8003
+      - NOTIFICATION_SERVICE_URL=http://notification:8010
+      - COMMUNICATION_SERVICE_URL=http://communication:8007
+      - CLASSROOM_SERVICE_URL=http://classroom:8011
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - rabbitmq
+      - academic
+      - user
+      - library
+      - enrollment
+      - notification
+      - communication
+      - classroom
+    networks:
+      - backend-network
+
+  user:
+    build:
+      context: .
+      dockerfile: user/Dockerfile
+    ports:
+      - "8007:8007"
+    volumes:
+      - ./user:/app/user
+      - ./shared:/app/shared
+      - /app/user/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8007
+      - MONGO_URI=mongodb://mongodb:27017/user_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - backend-network
+
+  academic:
+    build:
+      context: .
+      dockerfile: academic/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./academic:/app/academic
+      - ./shared:/app/shared
+      - /app/academic/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8001
+      - MONGO_URI=mongodb://mongodb:27017/academic_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - backend-network
+
+  enrollment:
+    build:
+      context: .
+      dockerfile: enrollment/Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./enrollment:/app/enrollment
+      - ./shared:/app/shared
+      - /app/enrollment/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8003
+      - MONGO_URI=mongodb://mongodb:27017/enrollment_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - backend-network
+
+  library:
+    build:
+      context: .
+      dockerfile: library/Dockerfile
+    ports:
+      - "8008:8008"
+    volumes:
+      - ./library:/app/library
+      - ./shared:/app/shared
+      - /app/library/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8008
+      - MONGO_URI=mongodb://mongodb:27017/library_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - backend-network
+
+  classroom:
+    build:
+      context: .
+      dockerfile: classroom/Dockerfile
+    ports:
+      - "8011:8011"
+    volumes:
+      - ./classroom:/app/classroom
+      - ./shared:/app/shared
+      - /app/classroom/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8011
+      - MONGO_URI=mongodb://mongodb:27017/classroom_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - backend-network
+
+  communication:
+    build:
+      context: .
+      dockerfile: communication/Dockerfile
+    ports:
+      - "8012:8007" # Map host 8012 to container 8007 to avoid conflict with user service
+    volumes:
+      - ./communication:/app/communication
+      - ./shared:/app/shared
+      - /app/communication/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8007
+      - MONGO_URI=mongodb://mongodb:27017/communication_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - backend-network
+
+  notification:
+    build:
+      context: .
+      dockerfile: notification/Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./notification:/app/notification
+      - ./shared:/app/shared
+      - /app/notification/node_modules
+      - /app/shared/node_modules
+    command: node --watch --no-warnings server.js
+    environment:
+      - PORT=8010
+      - MONGO_URI=mongodb://mongodb:27017/notification_db
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - redis
+    networks:
+      - backend-network
+
+networks:
+  backend-network:
+    driver: bridge

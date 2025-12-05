@@ -4,6 +4,7 @@ import validate, { validatePartial } from './middlewares/validate.js';
 import EventBus, { EVENTS, publishEvent, subscribeEvent, shutdownEventBus } from './lib/eventBus.js';
 import rateLimiter from './middlewares/rateLimiter.js';
 import errorHandler, { notFoundHandler } from './middlewares/errorHandler.js';
+import rabbitmq from './utils/rabbitmq.js';
 
 export {
     // Utils
@@ -27,5 +28,8 @@ export {
     EVENTS,
     publishEvent,
     subscribeEvent,
-    shutdownEventBus
+    shutdownEventBus,
+
+    // Utils
+    rabbitmq
 };

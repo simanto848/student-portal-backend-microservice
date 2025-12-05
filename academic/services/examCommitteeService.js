@@ -1,5 +1,5 @@
 import ExamCommittee from '../models/ExamCommittee.js';
-import Teacher from '../../user/models/Teacher.js';
+
 
 class ExamCommitteeService {
     async addMember(departmentId, teacherId, batchId = null) {
