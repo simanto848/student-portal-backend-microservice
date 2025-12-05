@@ -32,6 +32,47 @@ class BatchCourseInstructorService {
         }
     }
 
+    async bulkAssign(assignments) {
+        const results = [];
+        const errors = [];
+
+        for (const assignment of assignments) {
+            try {
+                // Check if assignment already exists (active)
+                const existing = await BatchCourseInstructor.findOne({
+                    batchId: assignment.batchId,
+                    courseId: assignment.courseId,
+                    semester: assignment.semester,
+                    deletedAt: null,
+                    status: 'active'
+                });
+
+                if (existing) {
+                    // Update existing if instructor changed
+                    if (existing.instructorId !== assignment.instructorId) {
+                        await userServiceClient.verifyTeacher(assignment.instructorId);
+                        existing.instructorId = assignment.instructorId;
+                        await existing.save();
+                        results.push({ ...existing.toObject(), status: 'updated' });
+                    } else {
+                        results.push({ ...existing.toObject(), status: 'unchanged' });
+                    }
+                } else {
+                    // Create new
+                    const newAssignment = await this.assignInstructor(assignment);
+                    results.push({ ...newAssignment.toObject(), status: 'created' });
+                }
+            } catch (error) {
+                errors.push({
+                    courseId: assignment.courseId,
+                    error: error.message
+                });
+            }
+        }
+
+        return { results, errors };
+    }
+
     async getAssignmentById(id) {
         const assignment = await BatchCourseInstructor.findById(id);
         if (!assignment) {

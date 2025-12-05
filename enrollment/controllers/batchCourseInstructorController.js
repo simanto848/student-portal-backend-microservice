@@ -11,6 +11,19 @@ class BatchCourseInstructorController {
         }
     }
 
+    async bulkAssign(req, res, next) {
+        try {
+            const { assignments } = req.body;
+            if (!Array.isArray(assignments) || assignments.length === 0) {
+                return ApiResponse.badRequest(res, 'Assignments array is required and must not be empty');
+            }
+            const result = await batchCourseInstructorService.bulkAssign(assignments);
+            return ApiResponse.success(res, result, 'Bulk assignment processed');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getAssignment(req, res, next) {
         try {
             const assignment = await batchCourseInstructorService.getAssignmentById(req.params.id);

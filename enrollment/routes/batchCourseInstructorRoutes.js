@@ -14,6 +14,7 @@ const router = express.Router();
 router.use(authenticate)
 
 router.post('/', authorize('super_admin', 'admin'), validate(createBatchCourseInstructorSchema), batchCourseInstructorController.assignInstructor);
+router.post('/bulk', authorize('super_admin', 'admin'), batchCourseInstructorController.bulkAssign);
 router.get('/', authorize('super_admin', 'admin', 'teacher'), validate(listBatchCourseInstructorsSchema), batchCourseInstructorController.listAssignments);
 router.get('/instructor/:instructorId/courses', authorize('super_admin', 'admin', 'teacher'), batchCourseInstructorController.getInstructorCourses);
 router.get('/course/instructors', authorize('super_admin', 'admin', 'teacher'), batchCourseInstructorController.getCourseInstructors);
