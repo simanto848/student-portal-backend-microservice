@@ -12,14 +12,14 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/:studentId', authorize('admin', 'staff', 'teacher', 'student'), studentProfileController.getByStudentId);
-router.post('/:studentId', authorize('admin', 'staff'), validate(studentProfileCreateValidation), studentProfileController.create);
-router.put('/:studentId', authorize('admin', 'staff', 'student'), validate(studentProfileCreateValidation), studentProfileController.upsert);
-router.patch('/:studentId', authorize('admin', 'staff', 'student'), validate(studentProfileUpdateValidation), studentProfileController.update);
-router.delete('/:studentId', authorize('admin', 'staff'), studentProfileController.delete);
-router.post('/:studentId/restore', authorize('admin', 'staff'), studentProfileController.restore);
-router.post('/:studentId/education', authorize('admin', 'staff', 'student'), validate(addEducationRecordValidation), studentProfileController.addEducationRecord);
-router.patch('/:studentId/education/:index', authorize('admin', 'staff', 'student'), validate(addEducationRecordValidation), studentProfileController.updateEducationRecord);
-router.delete('/:studentId/education/:index', authorize('admin', 'staff', 'student'), studentProfileController.removeEducationRecord);
+router.get('/:studentId', authorize('super_admin', 'admin', 'staff', 'teacher', 'student'), studentProfileController.getByStudentId);
+router.post('/:studentId', authorize('super_admin', 'admin', 'staff'), validate(studentProfileCreateValidation), studentProfileController.create);
+router.put('/:studentId', authorize('super_admin', 'admin', 'staff'), validate(studentProfileCreateValidation), studentProfileController.upsert);
+router.patch('/:studentId', authorize('super_admin', 'admin', 'staff'), validate(studentProfileUpdateValidation), studentProfileController.update);
+router.delete('/:studentId', authorize('super_admin', 'admin', 'staff'), studentProfileController.delete);
+router.post('/:studentId/restore', authorize('super_admin', 'admin', 'staff'), studentProfileController.restore);
+router.post('/:studentId/education', authorize('super_admin', 'admin', 'staff'), validate(addEducationRecordValidation), studentProfileController.addEducationRecord);
+router.patch('/:studentId/education/:index', authorize('super_admin', 'admin', 'staff'), validate(addEducationRecordValidation), studentProfileController.updateEducationRecord);
+router.delete('/:studentId/education/:index', authorize('super_admin', 'admin', 'staff'), studentProfileController.removeEducationRecord);
 
 export default router;
