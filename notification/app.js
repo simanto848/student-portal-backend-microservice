@@ -25,7 +25,7 @@ app.use(morgan('dev'));
 
 app.use('/', apiRoutes);
 
-app.get('/health', authenticate, (req, res) => {
+app.get('/health', (req, res) => {
   return ApiResponse.success(res, { service: 'notification', time: new Date().toISOString() }, 'Notification Service Healthy');
 });
 
