@@ -62,7 +62,7 @@ class BatchCourseInstructorController {
 
     async getInstructorCourses(req, res, next) {
         try {
-            const instructorId = req.params.instructorId || req.user.sub; // JWT payload uses 'sub'
+            const instructorId = req.params.instructorId || req.user.id || req.user.sub; // JWT payload uses 'id' usually
             const assignments = await batchCourseInstructorService.getInstructorCourses(instructorId, req.query);
             return ApiResponse.success(res, assignments);
         } catch (error) {

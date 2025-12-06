@@ -3,7 +3,7 @@ import { ApiResponse } from 'shared';
 
 export const checkInstructorAssignment = async (req, res, next) => {
     try {
-        const instructorId = req.user.sub;
+        const instructorId = req.user.id || req.user.sub;
         const { courseId, batchId } = req.body || req.params || req.query;
 
         if (!courseId || !batchId) {
@@ -31,7 +31,7 @@ export const checkInstructorAssignment = async (req, res, next) => {
 export const checkInstructorAssignmentFlexible = (sourceFields) => {
     return async (req, res, next) => {
         try {
-            const instructorId = req.user.sub;
+            const instructorId = req.user.id || req.user.sub;
             let courseId, batchId;
 
             for (const field of sourceFields.courseId || ['courseId']) {

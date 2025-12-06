@@ -4,7 +4,7 @@ import { ApiResponse } from 'shared';
 class AttendanceController {
     async markAttendance(req, res, next) {
         try {
-            const attendance = await attendanceService.markAttendance(req.body, req.user.sub);
+            const attendance = await attendanceService.markAttendance(req.body, req.user.id || req.user.sub);
             return ApiResponse.created(res, attendance, 'Attendance marked successfully');
         } catch (error) {
             next(error);
@@ -13,7 +13,7 @@ class AttendanceController {
 
     async bulkMarkAttendance(req, res, next) {
         try {
-            const result = await attendanceService.bulkMarkAttendance(req.body, req.user.sub);
+            const result = await attendanceService.bulkMarkAttendance(req.body, req.user.id || req.user.sub);
             return ApiResponse.created(res, result, 'Bulk attendance marked successfully');
         } catch (error) {
             next(error);
@@ -23,7 +23,7 @@ class AttendanceController {
     async getAttendance(req, res, next) {
         try {
             const attendance = await attendanceService.getAttendanceById(req.params.id);
-            if (req.user.type === 'student' && attendance.studentId !== req.user.sub) {
+            if (req.user.type === 'student' && attendance.studentId !== (req.user.id || req.user.sub)) {
                 return ApiResponse.forbidden(res, 'You can only view your own attendance');
             }
 
@@ -37,7 +37,7 @@ class AttendanceController {
         try {
             const filters = { ...req.query };
             if (req.user.type === 'student') {
-                filters.studentId = req.user.sub;
+                filters.studentId = req.user.id || req.user.sub;
             }
 
             const attendance = await attendanceService.listAttendance(filters);
@@ -49,7 +49,7 @@ class AttendanceController {
 
     async updateAttendance(req, res, next) {
         try {
-            const attendance = await attendanceService.updateAttendance(req.params.id, req.body, req.user.sub);
+            const attendance = await attendanceService.updateAttendance(req.params.id, req.body, req.user.id || req.user.sub);
             return ApiResponse.success(res, attendance, 'Attendance updated successfully');
         } catch (error) {
             next(error);
@@ -58,7 +58,7 @@ class AttendanceController {
 
     async deleteAttendance(req, res, next) {
         try {
-            await attendanceService.deleteAttendance(req.params.id, req.user.sub);
+            await attendanceService.deleteAttendance(req.params.id, req.user.id || req.user.sub);
             return ApiResponse.success(res, null, 'Attendance deleted successfully');
         } catch (error) {
             next(error);
@@ -68,7 +68,7 @@ class AttendanceController {
     async getStudentAttendanceStats(req, res, next) {
         try {
             const { studentId, courseId } = req.params;
-            if (req.user.type === 'student' && req.user.sub !== studentId) {
+            if (req.user.type === 'student' && (req.user.id || req.user.sub) !== studentId) {
                 return ApiResponse.forbidden(res, 'You can only view your own attendance statistics');
             }
 
