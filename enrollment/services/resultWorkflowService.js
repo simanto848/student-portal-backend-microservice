@@ -14,6 +14,37 @@ class ResultWorkflowService {
         return workflow;
     }
 
+    async listWorkflows(user) {
+        if (user.role === 'teacher') {
+            const assignments = await BatchCourseInstructor.find({
+                instructorId: user.id || user.sub,
+                status: 'active'
+            });
+
+            if (!assignments.length) return [];
+
+            const queries = assignments.map(a => ({
+                batchId: a.batchId,
+                courseId: a.courseId,
+                semester: a.semester
+            }));
+
+            if (queries.length === 0) return [];
+
+            // Populate grade details for the UI
+            return ResultWorkflow.find({
+                $or: queries
+            })
+                .sort({ updatedAt: -1 })
+                .lean();
+        }
+
+        // Admin/Super Admin - return all
+        return ResultWorkflow.find()
+            .sort({ updatedAt: -1 })
+            .lean();
+    }
+
     async submitToCommittee(batchId, courseId, semester, teacherId) {
         const workflow = await this.getWorkflow(batchId, courseId, semester);
         const assignment = await BatchCourseInstructor.findOne({
@@ -103,14 +134,14 @@ class ResultWorkflowService {
         if (department.departmentHeadId !== headId) {
             throw new ApiError(403, 'Only the Department Head can publish results');
         }
-        
+
         workflow.status = 'PUBLISHED';
         workflow.history.push({
             status: 'PUBLISHED',
             changedBy: headId,
             comment: 'Result Published'
         });
-        
+
         await CourseGrade.updateMany(
             { batchId: workflow.batchId, courseId: workflow.courseId, semester: workflow.semester },
             { isPublished: true, publishedAt: new Date() }

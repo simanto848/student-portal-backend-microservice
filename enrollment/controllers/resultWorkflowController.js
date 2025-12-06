@@ -24,6 +24,13 @@ class ResultWorkflowController {
     async getWorkflow(req, res, next) {
         try {
             const { batchId, courseId, semester } = req.query;
+
+            // If params are missing, list accessible workflows
+            if (!batchId || !courseId || !semester) {
+                const workflows = await resultWorkflowService.listWorkflows(req.user);
+                return ApiResponse.success(res, workflows);
+            }
+
             const workflow = await resultWorkflowService.getWorkflow(batchId, courseId, parseInt(semester));
             return ApiResponse.success(res, workflow);
         } catch (error) {
