@@ -21,11 +21,15 @@ class RabbitMQ {
 
                 this.connection.on('error', (err) => {
                     console.error('RabbitMQ connection error', err);
+                    this.channel = null;
+                    this.connection = null;
                     this.retryConnection(url);
                 });
 
                 this.connection.on('close', () => {
                     console.warn('RabbitMQ connection closed');
+                    this.channel = null;
+                    this.connection = null;
                     this.retryConnection(url);
                 });
 

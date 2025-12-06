@@ -4,6 +4,7 @@ import morgan from "morgan";
 import { config } from "dotenv";
 import colors from "colors";
 import cors from "cors";
+import { errorHandler, notFoundHandler, ApiResponse } from 'shared';
 
 config();
 
@@ -18,17 +19,9 @@ const PORT = process.env.PORT || 8000;
 
 app.get("/health", (req, res) => {
     try {
-        res.status(200).json({
-            message: "Welcome to Gateway Service",
-            status: true,
-            statusCode: 200
-        })
+        return ApiResponse.success(res, null, "Welcome to Gateway Service");
     } catch (error) {
-        res.status(500).json({
-            message: "Internal Server Error",
-            status: false,
-            statusCode: 500
-        })
+        return ApiResponse.serverError(res, error.message);
     }
 })
 
@@ -39,6 +32,12 @@ app.use('/api/enrollment', expressProxy(process.env.ENROLLMENT_SERVICE_URL));
 app.use('/api/notification', expressProxy(process.env.NOTIFICATION_SERVICE_URL));
 app.use('/api/communication', expressProxy(process.env.COMMUNICATION_SERVICE_URL));
 app.use('/api/classroom', expressProxy(process.env.CLASSROOM_SERVICE_URL));
+
+// Handle 404
+app.use(notFoundHandler);
+
+// Global Error Handler
+app.use(errorHandler);
 
 app.listen(PORT, () => {
     console.log(`Gateway server started on http://localhost:${PORT}`.green.underline.bold);

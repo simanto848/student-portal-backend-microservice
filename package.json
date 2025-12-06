@@ -16,7 +16,7 @@
     "scripts": {
         "install:all": "npm install",
         "start:user": "npm start -w user",
-        "start:academic": "npm start -w accademic",
+        "start:academic": "npm start -w academic",
         "start:gateway": "npm start -w gateway",
         "start:enrollment": "npm start -w enrollment",
         "start:communication": "npm start -w communication",

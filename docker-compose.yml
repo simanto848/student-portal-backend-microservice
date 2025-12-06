@@ -42,7 +42,7 @@ services:
     command: node --watch --no-warnings app.js
     environment:
       - PORT=8000
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=super-secret-jwt-key-2024
       - ACADEMIC_SERVICE_URL=http://academic:8001
       - USER_SERVICE_URL=http://user:8007
       - LIBRARY_SERVICE_URL=http://library:8008
