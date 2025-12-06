@@ -7,17 +7,35 @@ import { getIO } from "../socket.js";
 
 class ChatService {
     // --- Chat Group Management ---
-    async getOrCreateBatchChatGroup(batchId, counselorId) {
+    async getOrCreateBatchChatGroup(batchId, counselorId, user) {
         let chatGroup = await BatchChatGroup.findOne({ batchId });
+
         if (!chatGroup) {
+            // Access Control: Only admin or the assigned counselor can create the group
+            if (user.role === 'student') {
+                throw new Error("Chat group has not been started by the counselor yet.");
+            }
+            if (user.role === 'teacher' && user.id !== counselorId) {
+                throw new Error("Only the assigned counselor can start this chat.");
+            }
+
             chatGroup = await BatchChatGroup.create({ batchId, counselorId });
         }
         return chatGroup;
     }
 
-    async getOrCreateCourseChatGroup(batchId, courseId, sessionId, instructorId) {
+    async getOrCreateCourseChatGroup(batchId, courseId, sessionId, instructorId, user) {
         let chatGroup = await CourseChatGroup.findOne({ batchId, courseId, sessionId, instructorId });
+
         if (!chatGroup) {
+            // Access Control: Only admin or the assigned instructor can create the group
+            if (user.role === 'student') {
+                throw new Error("Chat group has not been started by the instructor yet.");
+            }
+            if (user.role === 'teacher' && user.id !== instructorId) {
+                throw new Error("Only the assigned instructor can start this chat.");
+            }
+
             chatGroup = await CourseChatGroup.create({ batchId, courseId, sessionId, instructorId });
         }
         return chatGroup;
@@ -34,10 +52,32 @@ class ChatService {
 
     // --- Messaging ---
     async sendMessage(data) {
-        const { chatGroupId, chatGroupType, senderId, senderModel, content, attachments } = data;
+        let { chatGroupId, chatGroupType, senderId, senderModel, content, attachments } = data;
+
+        console.log(`ChatService.sendMessage: Request for group ${chatGroupId}, type: ${chatGroupType}`);
+
+        // SMART RESOLVE: If type is generic or missing, try to find the group in specific collections
+        if (!chatGroupType || chatGroupType === 'group') {
+            const courseGroup = await CourseChatGroup.findById(chatGroupId);
+            if (courseGroup) {
+                chatGroupType = 'CourseChatGroup';
+                console.log(`ChatService.sendMessage: Resolved type to CourseChatGroup`);
+            } else {
+                const batchGroup = await BatchChatGroup.findById(chatGroupId);
+                if (batchGroup) {
+                    chatGroupType = 'BatchChatGroup';
+                    console.log(`ChatService.sendMessage: Resolved type to BatchChatGroup`);
+                }
+            }
+        }
+
+        console.log(`ChatService.sendMessage: Final lookup with type: ${chatGroupType}`);
 
         const chatGroup = await this.getChatGroup(chatGroupId, chatGroupType);
-        if (!chatGroup) throw new Error("Chat group not found");
+        if (!chatGroup) {
+            console.error(`ChatService.sendMessage: Group not found! ID: ${chatGroupId}, Type: ${chatGroupType}`);
+            throw new Error(`Chat group not found. ID: ${chatGroupId}, Type: ${chatGroupType}`);
+        }
         if (!chatGroup.isActive) throw new Error("Chat group is not active");
 
         // TODO: Verify sender membership (can be optimized by caching or trusting token claims if they contain enrollment info)
@@ -45,7 +85,7 @@ class ChatService {
 
         const message = await Message.create({
             chatGroupId,
-            chatGroupType,
+            chatGroupType, // Now guaranteed to be specific if found
             senderId,
             senderModel,
             content,
@@ -61,11 +101,69 @@ class ChatService {
         return message;
     }
 
-    async getMessages(chatGroupId, limit = 50, skip = 0) {
-        return await Message.find({ chatGroupId, isDeleted: false })
+    async getMessages(chatGroupId, limit = 50, skip = 0, search = "", filter = "") {
+        console.log(`ChatService.getMessages: ID=${chatGroupId}, filter=${filter}, search=${search}`);
+
+        const query = { chatGroupId, isDeleted: false };
+        if (search) {
+            query.content = { $regex: search, $options: "i" };
+        }
+
+        if (filter === 'pinned') {
+            query.isPinned = true;
+            console.log("ChatService.getMessages: Filtering by PINNED");
+        } else if (filter === 'media') {
+            query.attachments = { $exists: true, $not: { $size: 0 } };
+            console.log("ChatService.getMessages: Filtering by MEDIA");
+        }
+
+        const messages = await Message.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
+
+        console.log(`ChatService.getMessages: Found ${messages.length} messages`);
+        return messages;
+    }
+
+    // --- Detail Fetching ---
+    async getChatGroupDetails(chatGroupId) {
+        // Try to find in CourseChatGroup first
+        let group = await CourseChatGroup.findById(chatGroupId);
+        let type = 'CourseChatGroup';
+
+        if (!group) {
+            group = await BatchChatGroup.findById(chatGroupId);
+            type = 'BatchChatGroup';
+        }
+
+        if (!group) {
+            throw new Error("Chat group not found");
+        }
+
+        const result = {
+            ...group.toJSON(),
+            type
+        };
+
+        // Enrich with Academic Data
+        try {
+            if (type === 'CourseChatGroup') {
+                const course = await AcademicServiceClient.getCourseDetails(group.courseId);
+                const batch = await AcademicServiceClient.getBatchDetails(group.batchId);
+                result.courseName = course?.name;
+                result.courseCode = course?.code;
+                result.batchName = batch?.name;
+            } else if (type === 'BatchChatGroup') {
+                const batch = await AcademicServiceClient.getBatchDetails(group.batchId);
+                result.batchName = batch?.name;
+            }
+        } catch (error) {
+            console.error("Error fetching academic details for chat group:", error);
+            // Don't fail the whole request, just return what we have
+        }
+
+        return result;
     }
 
     async editMessage(messageId, userId, newContent) {

@@ -4,7 +4,7 @@ class ChatController {
     async createBatchChatGroup(req, res) {
         try {
             const { batchId, counselorId } = req.body;
-            const chatGroup = await ChatService.getOrCreateBatchChatGroup(batchId, counselorId);
+            const chatGroup = await ChatService.getOrCreateBatchChatGroup(batchId, counselorId, req.user);
             res.status(200).json({ success: true, data: chatGroup });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });
@@ -14,15 +14,26 @@ class ChatController {
     async createCourseChatGroup(req, res) {
         try {
             const { batchId, courseId, sessionId, instructorId } = req.body;
-            const chatGroup = await ChatService.getOrCreateCourseChatGroup(batchId, courseId, sessionId, instructorId);
+            const chatGroup = await ChatService.getOrCreateCourseChatGroup(batchId, courseId, sessionId, instructorId, req.user);
             res.status(200).json({ success: true, data: chatGroup });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });
         }
     }
 
+    async getChatGroupDetails(req, res) {
+        try {
+            const { chatGroupId } = req.params;
+            const details = await ChatService.getChatGroupDetails(chatGroupId);
+            res.status(200).json({ success: true, data: details });
+        } catch (error) {
+            res.status(404).json({ success: false, message: error.message });
+        }
+    }
+
     async sendMessage(req, res) {
         try {
+            console.log("ChatController.sendMessage body:", req.body); // DEBUG LOG
             const { chatGroupId, chatGroupType, content, attachments } = req.body;
             const senderId = req.user.id;
             const senderModel = req.user.role === 'student' ? 'Student' : 'Teacher';
@@ -37,6 +48,7 @@ class ChatController {
             });
             res.status(201).json({ success: true, data: message });
         } catch (error) {
+            console.error("ChatController.sendMessage error:", error); // DEBUG LOG
             res.status(400).json({ success: false, message: error.message });
         }
     }
@@ -44,8 +56,8 @@ class ChatController {
     async getMessages(req, res) {
         try {
             const { chatGroupId } = req.params;
-            const { limit, skip } = req.query;
-            const messages = await ChatService.getMessages(chatGroupId, parseInt(limit), parseInt(skip));
+            const { limit, skip, search, filter } = req.query;
+            const messages = await ChatService.getMessages(chatGroupId, parseInt(limit), parseInt(skip), search, filter);
             res.status(200).json({ success: true, data: messages });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });

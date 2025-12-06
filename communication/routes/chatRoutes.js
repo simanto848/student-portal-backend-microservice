@@ -9,6 +9,7 @@ router.use(authenticate);
 // Chat Group Management
 router.post("/groups/batch", ChatController.createBatchChatGroup);
 router.post("/groups/course", ChatController.createCourseChatGroup);
+router.get("/groups/:chatGroupId", ChatController.getChatGroupDetails);
 
 // Messaging
 router.post("/send", ChatController.sendMessage);
