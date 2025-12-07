@@ -5,8 +5,8 @@ class ExamCommitteeService {
     async addMember(departmentId, teacherId, batchId = null) {
         const existing = await ExamCommittee.findOne({ departmentId, teacherId, batchId });
         if (existing) {
-            if (existing.status === 'INACTIVE') {
-                existing.status = 'ACTIVE';
+            if (existing.status === false) { // Was 'INACTIVE'
+                existing.status = true; // Was 'ACTIVE'
                 return existing.save();
             }
             throw new Error('Teacher is already a member of this committee');
@@ -15,7 +15,8 @@ class ExamCommitteeService {
         return ExamCommittee.create({
             departmentId,
             teacherId,
-            batchId
+            batchId,
+            status: true
         });
     }
 
@@ -23,13 +24,38 @@ class ExamCommitteeService {
         const member = await ExamCommittee.findById(id);
         if (!member) throw new Error('Member not found');
         member.deletedAt = new Date();
+        member.status = false; // Soft delete - mark inactive
+        return member.save();
+    }
+
+    async updateMember(id, data) {
+        const member = await ExamCommittee.findById(id);
+        if (!member) throw new Error('Member not found');
+
+        if (data.status !== undefined) member.status = data.status;
+        if (data.batchId !== undefined) {
+            // Handle 'all' or specific batch logic if needed, but assuming ID or null
+            member.batchId = data.batchId === 'all' || data.batchId === 'null' ? undefined : data.batchId;
+        }
+
         return member.save();
     }
 
     async listMembers(departmentId, batchId = null) {
-        const query = { departmentId, status: 'ACTIVE' };
-        if (batchId) query.batchId = batchId;
-        return ExamCommittee.find(query);
+        const query = {}; // Fetch all regardless of status (Active/Inactive)
+        // Ensure not deleted (handled by pre-hook, but good to be explicit if using lean)
+        // Soft delete hook handles 'deletedAt: null'
+
+        if (departmentId) query.departmentId = departmentId;
+        if (batchId && batchId !== 'all') query.batchId = batchId;
+
+        // Populate references for frontend display
+        // Note: Teacher population might fail if Teacher model is not in this service's context.
+        // Assuming Department and Batch are local.
+        return ExamCommittee.find(query)
+            .populate('departmentId', 'name')
+            .populate('batchId', 'name');
+        // .populate('teacherId', ...) - removed to avoid cross-service issues. Frontend handles ID mapping if needed.
     }
 }
 

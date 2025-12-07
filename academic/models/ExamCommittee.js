@@ -17,9 +17,12 @@ const examCommitteeSchema = new mongoose.Schema({
         ref: 'Teacher'
     },
     status: {
+        type: Boolean,
+        default: true
+    },
+    batchId: {
         type: String,
-        enum: ['ACTIVE', 'INACTIVE'],
-        default: 'ACTIVE'
+        ref: 'Batch'
     },
     deletedAt: { type: Date }
 }, {
@@ -37,7 +40,7 @@ examCommitteeSchema.index({ departmentId: 1, teacherId: 1 }, { unique: true });
 
 examCommitteeSchema.pre(/^find/, function (next) {
     this.where({ deletedAt: null });
-    if(next) next();
+    if (next) next();
 });
 
 const ExamCommittee = mongoose.model('ExamCommittee', examCommitteeSchema);

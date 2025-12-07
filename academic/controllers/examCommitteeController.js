@@ -22,6 +22,16 @@ class ExamCommitteeController {
         }
     }
 
+    async updateMember(req, res, next) {
+        try {
+            const { id } = req.params;
+            const member = await examCommitteeService.updateMember(id, req.body);
+            return ApiResponse.success(res, member, 'Committee member updated');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async listMembers(req, res, next) {
         try {
             const { departmentId, batchId } = req.query;
