@@ -25,7 +25,8 @@ class BatchService {
                     .populate('programId', 'name shortName')
                     .populate('departmentId', 'name shortName')
                     .populate('sessionId', 'name year')
-                    .populate('counselorId', 'fullName email registrationNumber')
+                    .populate('sessionId', 'name year')
+
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(parseInt(limit)),
@@ -46,7 +47,8 @@ class BatchService {
                 .populate('programId', 'name shortName')
                 .populate('departmentId', 'name shortName')
                 .populate('sessionId', 'name year')
-                .populate('counselorId', 'fullName email registrationNumber')
+                .populate('sessionId', 'name year')
+
                 .sort({ createdAt: -1 });
 
             return {
@@ -61,7 +63,8 @@ class BatchService {
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
 
         if (!batch) {
             throw new ApiError(404, 'Batch not found');
@@ -89,7 +92,8 @@ class BatchService {
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
     }
 
     async update(id, payload) {
@@ -120,7 +124,8 @@ class BatchService {
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
     }
 
     async delete(id) {
@@ -139,7 +144,8 @@ class BatchService {
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
     }
 
     async updateSemester(id, semester) {
@@ -170,21 +176,22 @@ class BatchService {
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber')
-            .populate('classRepresentativeId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
     }
 
     async removeClassRepresentative(id) {
         const batch = await Batch.findById(id);
         if (!batch) throw new ApiError(404, 'Batch not found');
-        
+
         batch.classRepresentativeId = null;
         await batch.save();
         return await Batch.findById(id)
             .populate('programId', 'name shortName')
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
-            .populate('counselorId', 'fullName email registrationNumber');
+            .populate('sessionId', 'name year');
+
     }
 }
 
