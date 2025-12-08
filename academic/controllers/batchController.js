@@ -1,4 +1,4 @@
-import { ApiResponse } from 'shared';
+import { ApiResponse, ApiError } from 'shared';
 import batchService from '../services/batchService.js';
 
 class BatchController {
@@ -67,7 +67,19 @@ class BatchController {
     async assignCounselor(req, res, next) {
         try {
             const { counselorId } = req.body;
-            const batch = await batchService.assignCounselor(req.params.id, counselorId);
+            const batchId = req.params.id;
+
+            // Authorization Check
+            if (req.user.role !== 'admin') {
+                const batch = await batchService.getById(batchId);
+                const department = await batchService.getDepartmentById(batch.departmentId?._id || batch.departmentId);
+
+                if (department.departmentHeadId !== req.user.id) {
+                    return next(new ApiError(403, 'Forbidden: Only Admin or Department Head can assign counselors'));
+                }
+            }
+
+            const batch = await batchService.assignCounselor(batchId, counselorId);
             return ApiResponse.success(res, batch, 'Counselor assigned successfully');
         } catch (error) {
             next(error);

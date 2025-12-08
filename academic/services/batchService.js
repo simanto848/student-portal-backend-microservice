@@ -2,6 +2,7 @@ import Batch from '../models/Batch.js';
 import Program from '../models/Program.js';
 import Department from '../models/Department.js';
 import Session from '../models/Session.js';
+import Teacher from '../models/Teacher.js';
 import { ApiError } from 'shared';
 
 class BatchService {
@@ -26,7 +27,6 @@ class BatchService {
                     .populate('departmentId', 'name shortName')
                     .populate('sessionId', 'name year')
                     .populate('sessionId', 'name year')
-
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(parseInt(limit)),
@@ -191,7 +191,12 @@ class BatchService {
             .populate('departmentId', 'name shortName')
             .populate('sessionId', 'name year')
             .populate('sessionId', 'name year');
+    }
 
+    async getDepartmentById(id) {
+        const department = await Department.findById(id);
+        if (!department) throw new ApiError(404, 'Department not found');
+        return department;
     }
 }
 
