@@ -81,6 +81,7 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/user_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
+      - ACADEMIC_SERVICE_URL=http://academic:8001
     depends_on:
       - mongodb
       - rabbitmq
