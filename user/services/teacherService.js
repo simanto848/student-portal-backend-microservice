@@ -45,7 +45,7 @@ class TeacherService {
             }
 
             const teachers = await Teacher.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
-            
+
             const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
                 if (teacher.departmentId) {
                     try {
@@ -72,7 +72,7 @@ class TeacherService {
                 try {
                     const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
                     teacher.department = dept.data || dept;
-                } catch (e) {}
+                } catch (e) { }
             }
             return teacher;
         } catch (error) {
@@ -144,7 +144,24 @@ class TeacherService {
                 if (existing.profile) {
                     await Profile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
                 } else {
-                    const pf = await Profile.create({ ...payload.profile, user: undefined });
+                    // Check if profile exists for this user but wasn't linked
+                    let pf = await Profile.findOne({ user: id });
+
+                    if (pf) {
+                        // Update existing unlinked profile
+                        pf = await Profile.findByIdAndUpdate(pf._id, { $set: payload.profile }, { new: true, runValidators: true });
+                    } else {
+                        const nameParts = existing.fullName ? existing.fullName.split(' ') : ['Unknown'];
+                        const firstName = payload.profile.firstName || nameParts[0];
+                        const lastName = payload.profile.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
+
+                        pf = await Profile.create({
+                            firstName,
+                            lastName,
+                            ...payload.profile,
+                            user: id
+                        });
+                    }
                     payload.profile = pf._id;
                 }
             }

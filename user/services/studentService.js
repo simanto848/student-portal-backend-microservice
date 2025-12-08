@@ -145,6 +145,13 @@ class StudentService {
             delete payload.registrationNumber;
             delete payload.email;
 
+            // Remove undefined or null fields
+            Object.keys(payload).forEach(key => {
+                if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
+                    delete payload[key];
+                }
+            });
+
             const existing = await Student.findById(id);
             if (!existing) throw new ApiError(404, 'Student not found');
 
@@ -157,8 +164,14 @@ class StudentService {
                 if (existing.profile) {
                     await StudentProfile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
                 } else {
-                    const profile = await StudentProfile.create({ ...payload.profile, studentId: undefined });
-                    payload.profile = profile._id;
+                    let pf = await StudentProfile.findOne({ studentId: id });
+
+                    if (pf) {
+                        pf = await StudentProfile.findByIdAndUpdate(pf._id, { $set: payload.profile }, { new: true, runValidators: true });
+                    } else {
+                        pf = await StudentProfile.create({ ...payload.profile, studentId: id });
+                    }
+                    payload.profile = pf._id;
                 }
             }
 

@@ -1,4 +1,5 @@
 import Staff from '../models/Staff.js';
+import Profile from '../models/Profile.js';
 import { ApiError } from 'shared';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
@@ -174,6 +175,13 @@ class StaffService {
             delete updateData.email;
             delete updateData.registrationNumber;
 
+            // Remove undefined or null fields
+            Object.keys(updateData).forEach(key => {
+                if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
+                    delete updateData[key];
+                }
+            });
+
             if (updateData.departmentId) {
                 try {
                     await academicServiceClient.getDepartmentById(updateData.departmentId);
@@ -182,15 +190,40 @@ class StaffService {
                 }
             }
 
+            const existing = await Staff.findById(staffId);
+            if (!existing) throw new ApiError(404, 'Staff not found');
+
+            if (updateData.profile && typeof updateData.profile === 'object') {
+                if (existing.profile) {
+                    await Profile.findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
+                } else {
+                    // Check if profile exists for this user but wasn't linked
+                    let pf = await Profile.findOne({ user: staffId });
+
+                    if (pf) {
+                        // Update existing unlinked profile
+                        pf = await Profile.findByIdAndUpdate(pf._id, { $set: updateData.profile }, { new: true, runValidators: true });
+                    } else {
+                        const nameParts = existing.fullName ? existing.fullName.split(' ') : ['Unknown'];
+                        const firstName = updateData.profile.firstName || nameParts[0];
+                        const lastName = updateData.profile.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
+
+                        pf = await Profile.create({
+                            firstName,
+                            lastName,
+                            ...updateData.profile,
+                            user: staffId
+                        });
+                    }
+                    updateData.profile = pf._id;
+                }
+            }
+
             const staff = await Staff.findByIdAndUpdate(
                 staffId,
                 { $set: updateData },
                 { new: true, runValidators: true }
             ).select('-password').populate('profile');
-
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
 
             return staff;
         } catch (error) {

@@ -117,15 +117,56 @@ class AdminService {
             delete updateData.email;
             delete updateData.registrationNumber;
 
+            // Remove undefined or null fields
+            Object.keys(updateData).forEach(key => {
+                if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
+                    delete updateData[key];
+                }
+            });
+
+            const existing = await Admin.findById(adminId);
+            if (!existing) {
+                throw new ApiError(404, 'Admin not found');
+            }
+
+            if (updateData.profile && typeof updateData.profile === 'object') {
+                if (existing.profile) {
+                    await mongoose.model('Profile').findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
+                } else {
+                    // Check if profile exists for this user but wasn't linked
+                    // Note: Admin seemingly uses 'Profile' model based on other services, but I need to be sure.
+                    // Viewing adminService imports: import Admin from '../models/Admin.js';
+                    // It doesn't import Profile. It populates 'profile'. Let's check Admin model or just use mongoose.model('Profile') safely if verified.
+                    // Actually, staffService imports Profile. adminService does not import Profile.
+                    // I should import Profile at the top if I need to use it explicitly, or use mongoose.model if it's registered.
+                    // Let's rely on standard practice or checking Admin model.
+                    // Assuming 'Profile' model is registered.
+                    const Profile = mongoose.model('Profile');
+                    let pf = await Profile.findOne({ user: adminId });
+
+                    if (pf) {
+                        pf = await Profile.findByIdAndUpdate(pf._id, { $set: updateData.profile }, { new: true, runValidators: true });
+                    } else {
+                        const nameParts = existing.fullName ? existing.fullName.split(' ') : ['Unknown'];
+                        const firstName = updateData.profile.firstName || nameParts[0];
+                        const lastName = updateData.profile.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
+
+                        pf = await Profile.create({
+                            firstName,
+                            lastName,
+                            ...updateData.profile,
+                            user: adminId
+                        });
+                    }
+                    updateData.profile = pf._id;
+                }
+            }
+
             const admin = await Admin.findByIdAndUpdate(
                 adminId,
                 { $set: updateData },
                 { new: true, runValidators: true }
             ).select('-password').populate('profile');
-
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
 
             return admin;
         } catch (error) {

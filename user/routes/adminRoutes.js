@@ -12,6 +12,8 @@ import {
   adminProfileUpdateValidation,
 } from "../validations/adminProfileValidation.js";
 import { authenticate } from "shared";
+import upload from "../middlewares/uploadMiddleware.js";
+import { transformBody } from "../middlewares/transformBody.js";
 
 const router = express.Router();
 
@@ -21,9 +23,9 @@ router.get("/", adminController.getAll);
 router.get("/statistics", adminController.getStatistics);
 router.get("/deleted", adminController.getDeletedAdmins);
 router.get("/:id", adminController.getById);
-router.post("/", validate(createAdminSchema), adminController.create);
-router.patch("/:id", validate(updateAdminSchema), adminController.update);
-router.patch("/:id/role", validate(updateAdminRoleSchema), adminController.updateRole);
+router.post("/", upload.single('profilePicture'), transformBody, validate(createAdminSchema), adminController.create);
+router.patch("/:id", upload.single('profilePicture'), transformBody, validate(updateAdminSchema), adminController.update);
+router.patch("/:id/role", upload.single('profilePicture'), transformBody, validate(updateAdminRoleSchema), adminController.updateRole);
 
 router.get("/:adminId/profile", adminProfileController.getByAdminId);
 router.post("/:adminId/profile", validate(adminProfileCreateValidation), adminProfileController.create);

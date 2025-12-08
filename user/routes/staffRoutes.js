@@ -7,6 +7,8 @@ import {
   updateStaffRoleSchema,
 } from "../validations/staffValidation.js";
 import { authenticate } from "shared";
+import upload from "../middlewares/uploadMiddleware.js";
+import { transformBody } from "../middlewares/transformBody.js";
 import staffProfileController from "../controllers/staffProfileController.js";
 import {
   staffProfileCreateValidation as createProfileSchema,
@@ -19,8 +21,8 @@ router.get("/", staffController.getAll);
 router.get("/statistics", staffController.getStatistics);
 router.get("/department/:departmentId", staffController.getByDepartment);
 router.get("/:id", staffController.getById);
-router.post("/", validate(createStaffSchema), staffController.create);
-router.patch("/:id", validate(updateStaffSchema), staffController.update);
+router.post("/", upload.single('profilePicture'), transformBody, validate(createStaffSchema), staffController.create);
+router.patch("/:id", upload.single('profilePicture'), transformBody, validate(updateStaffSchema), staffController.update);
 router.patch(
   "/:id/role",
   validate(updateStaffRoleSchema),

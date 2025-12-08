@@ -10,17 +10,20 @@ import {
   teacherProfileCreateValidation as createProfileSchema,
   teacherProfileUpdateValidation as updateProfileSchema,
 } from "../validations/teacherProfileValidation.js";
+import upload from "../middlewares/uploadMiddleware.js";
 import { authenticate } from "shared";
 
 const router = express.Router();
 
 router.use(authenticate);
 
+import { transformBody } from "../middlewares/transformBody.js";
+
 router.get("/", teacherController.getAll);
 router.get("/deleted", teacherController.getDeletedTeachers);
 router.get("/:id", teacherController.getById);
-router.post("/", validate(createTeacherSchema), teacherController.create);
-router.patch("/:id", validate(updateTeacherSchema), teacherController.update);
+router.post("/", upload.single('profilePicture'), transformBody, validate(createTeacherSchema), teacherController.create);
+router.patch("/:id", upload.single('profilePicture'), transformBody, validate(updateTeacherSchema), teacherController.update);
 router.delete("/:id", teacherController.delete);
 router.delete("/:id/permanently", teacherController.deletePermanently);
 router.post("/:id/restore", teacherController.restore);

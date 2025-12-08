@@ -50,7 +50,7 @@ const profileSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
-        avatar: {
+        profilePicture: {
             type: String,
         },
         addresses: [addressSchema],
