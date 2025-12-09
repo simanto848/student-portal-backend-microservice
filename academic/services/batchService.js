@@ -4,6 +4,7 @@ import Department from '../models/Department.js';
 import Session from '../models/Session.js';
 import Teacher from '../models/Teacher.js';
 import { ApiError } from 'shared';
+import userServiceClient from '../client/userServiceClient.js';
 
 class BatchService {
     async getAll(options = {}) {
@@ -169,7 +170,19 @@ class BatchService {
         const batch = await Batch.findById(id);
         if (!batch) throw new ApiError(404, 'Batch not found');
 
-        // TODO: inject StudentService to verify.
+        // Verify student belongs to this batch
+        try {
+            const studentResponse = await userServiceClient.getStudentById(studentId);
+            const student = studentResponse.data || studentResponse;
+
+            if (student.batchId !== id) {
+                throw new ApiError(400, 'Student does not belong to this batch');
+            }
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(400, 'Invalid student ID or student service unavailable');
+        }
+
         batch.classRepresentativeId = studentId;
         await batch.save();
         return await Batch.findById(id)

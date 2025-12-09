@@ -42,5 +42,9 @@ export const listEnrollmentsSchema = z.object({
         courseId: z.string().uuid('Invalid course ID format').optional(),
         semester: z.string().regex(/^\d+$/, 'Semester must be a number').optional(),
         status: z.enum(['active', 'completed']).optional(),
+        limit: z.string().regex(/^\d+$/, 'Limit must be a number').optional(),
+        page: z.string().regex(/^\d+$/, 'Page must be a number').optional(),
+        sortBy: z.string().optional(),
+        sortOrder: z.enum(['asc', 'desc']).optional(),
     }),
 });

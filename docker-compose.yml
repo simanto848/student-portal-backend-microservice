@@ -106,6 +106,7 @@ services:
       - JWT_SECRET=mysupersecrectkey
       - MONGO_URI=mongodb://mongodb:27017/academic_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - USER_SERVICE_URL=http://user:8007
     depends_on:
       - mongodb
       - rabbitmq
@@ -129,6 +130,8 @@ services:
       - JWT_SECRET=mysupersecrectkey
       - MONGO_URI=mongodb://mongodb:27017/enrollment_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - USER_SERVICE_URL=http://user:8007
+      - ACADEMIC_SERVICE_URL=http://academic:8001
     depends_on:
       - mongodb
       - rabbitmq
@@ -198,6 +201,8 @@ services:
       - JWT_SECRET=mysupersecrectkey
       - MONGO_URI=mongodb://mongodb:27017/communication_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - ACADEMIC_SERVICE_URL=http://academic:8001
+      - USER_SERVICE_URL=http://user:8007
     depends_on:
       - mongodb
       - rabbitmq
