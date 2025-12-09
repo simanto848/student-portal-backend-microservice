@@ -26,7 +26,8 @@ class StudentController {
 
     async create(req, res, next) {
         try {
-            const st = await studentService.create(req.validatedData || req.body);
+            const token = req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : null);
+            const st = await studentService.create(req.validatedData || req.body, token);
             return ApiResponse.created(res, st, 'Student created successfully');
         } catch (error) {
             next(error);
@@ -45,7 +46,8 @@ class StudentController {
                 }
             }
 
-            const st = await studentService.update(studentId, req.validatedData || req.body);
+            const token = req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : null);
+            const st = await studentService.update(studentId, req.validatedData || req.body, token);
             return ApiResponse.success(res, st, 'Student updated successfully');
         } catch (error) {
             next(error);
@@ -58,7 +60,8 @@ class StudentController {
             if (role === 'admission_staff') {
                 throw new ApiError(403, 'Admission Staff cannot delete students. Please contact Admin.');
             }
-            const r = await studentService.delete(req.params.id);
+            const token = req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : null);
+            const r = await studentService.delete(req.params.id, token);
             return ApiResponse.success(res, r, 'Student deleted successfully');
         } catch (error) {
             next(error);
@@ -71,7 +74,8 @@ class StudentController {
             if (role === 'admission_staff') {
                 throw new ApiError(403, 'Admission Staff cannot restore students. Please contact Admin.');
             }
-            const st = await studentService.restore(req.params.id);
+            const token = req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : null);
+            const st = await studentService.restore(req.params.id, token);
             return ApiResponse.success(res, st, 'Student restored successfully');
         } catch (error) {
             next(error);
@@ -93,7 +97,8 @@ class StudentController {
             if (role === 'admission_staff') {
                 throw new ApiError(403, 'Admission Staff cannot permanently delete students. Please contact Admin.');
             }
-            const r = await studentService.deletePermanently(req.params.id);
+            const token = req.headers.authorization || (req.cookies?.accessToken ? `Bearer ${req.cookies.accessToken}` : null);
+            const r = await studentService.deletePermanently(req.params.id, token);
             return ApiResponse.success(res, r, 'Student deleted permanently successfully');
         } catch (error) {
             next(error);

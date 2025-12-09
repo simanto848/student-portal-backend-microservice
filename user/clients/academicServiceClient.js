@@ -13,9 +13,10 @@ class AcademicServiceClient {
     }
 
     // Department APIs
-    async getDepartmentById(departmentId) {
+    async getDepartmentById(departmentId, token) {
         try {
-            const response = await this.client.get(`/departments/${departmentId}`);
+            const config = token ? { headers: { Authorization: token } } : {};
+            const response = await this.client.get(`/departments/${departmentId}`, config);
             return response.data;
         } catch (error) {
             throw this.handleError(error);
@@ -51,9 +52,10 @@ class AcademicServiceClient {
     }
 
     // Program APIs
-    async getProgramById(programId) {
+    async getProgramById(programId, token) {
         try {
-            const response = await this.client.get(`/programs/${programId}`);
+            const config = token ? { headers: { Authorization: token } } : {};
+            const response = await this.client.get(`/programs/${programId}`, config);
             return response.data;
         } catch (error) {
             throw this.handleError(error);
@@ -70,9 +72,10 @@ class AcademicServiceClient {
     }
 
     // Session APIs
-    async getSessionById(sessionId) {
+    async getSessionById(sessionId, token) {
         try {
-            const response = await this.client.get(`/sessions/${sessionId}`);
+            const config = token ? { headers: { Authorization: token } } : {};
+            const response = await this.client.get(`/sessions/${sessionId}`, config);
             return response.data;
         } catch (error) {
             throw this.handleError(error);
@@ -80,22 +83,24 @@ class AcademicServiceClient {
     }
 
     // Batch APIs
-    async getBatchById(batchId) {
+    async getBatchById(batchId, token) {
         try {
-            const response = await this.client.get(`/batches/${batchId}`);
+            const config = token ? { headers: { Authorization: token } } : {};
+            const response = await this.client.get(`/batches/${batchId}`, config);
             return response.data;
         } catch (error) {
             throw this.handleError(error);
         }
     }
 
-    async updateBatchCurrentStudents(batchId, delta) {
+    async updateBatchCurrentStudents(batchId, delta, token) {
         try {
             // Fetch current batch
-            const batchResp = await this.getBatchById(batchId);
+            const batchResp = await this.getBatchById(batchId, token);
             const batch = batchResp.data || batchResp;
             const newCount = Math.max(0, (batch.currentStudents || 0) + delta);
-            const response = await this.client.patch(`/batches/${batchId}`, { currentStudents: newCount });
+            const config = token ? { headers: { Authorization: token } } : {};
+            const response = await this.client.patch(`/batches/${batchId}`, { currentStudents: newCount }, config);
             return response.data;
         } catch (error) {
             throw this.handleError(error);

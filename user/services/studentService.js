@@ -75,13 +75,13 @@ class StudentService {
     }
   }
 
-  async create(data) {
+  async create(data, token) {
     try {
       const [dept, program, batchResp, sessionResp] = await Promise.all([
-        academicServiceClient.getDepartmentById(data.departmentId),
-        academicServiceClient.getProgramById(data.programId),
-        academicServiceClient.getBatchById(data.batchId),
-        academicServiceClient.getSessionById(data.sessionId),
+        academicServiceClient.getDepartmentById(data.departmentId, token),
+        academicServiceClient.getProgramById(data.programId, token),
+        academicServiceClient.getBatchById(data.batchId, token),
+        academicServiceClient.getSessionById(data.sessionId, token),
       ]);
 
       const batch = batchResp.data || batchResp;
@@ -111,7 +111,7 @@ class StudentService {
         throw new ApiError(
           500,
           "Failed to send welcome email. Student creation aborted: " +
-            emailError.message
+          emailError.message
         );
       }
 
@@ -142,7 +142,7 @@ class StudentService {
 
       const student = await Student.create(studentPayload);
 
-      await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1);
+      await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1, token);
       try {
         const createdProfile = await StudentProfile.create({
           ...data.studentProfile,
@@ -180,7 +180,7 @@ class StudentService {
     }
   }
 
-  async update(id, payload) {
+  async update(id, payload, token) {
     try {
       delete payload.password;
       delete payload.registrationNumber;
@@ -203,11 +203,13 @@ class StudentService {
       if (payload.batchId && payload.batchId !== existing.batchId) {
         await academicServiceClient.updateBatchCurrentStudents(
           existing.batchId,
-          -1
+          -1,
+          token
         );
         await academicServiceClient.updateBatchCurrentStudents(
           payload.batchId,
-          +1
+          +1,
+          token
         );
       }
 
@@ -260,12 +262,12 @@ class StudentService {
     }
   }
 
-  async delete(id) {
+  async delete(id, token) {
     try {
       const st = await Student.findById(id);
       if (!st) throw new ApiError(404, "Student not found");
       await st.softDelete();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1);
+      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1, token);
       return { message: "Student deleted successfully" };
     } catch (error) {
       throw error instanceof ApiError
@@ -274,12 +276,12 @@ class StudentService {
     }
   }
 
-  async restore(id) {
+  async restore(id, token) {
     try {
       const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
       if (!st) throw new ApiError(404, "Deleted student not found");
       await st.restore();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, +1);
+      await academicServiceClient.updateBatchCurrentStudents(st.batchId, +1, token);
       const restored = await Student.findById(id)
         .select("-password")
         .populate("profile")
@@ -303,26 +305,26 @@ class StudentService {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-            500,
-            "Error fetching deleted students: " + error.message
-          );
+          500,
+          "Error fetching deleted students: " + error.message
+        );
     }
   }
 
-  async deletePermanently(id) {
+  async deletePermanently(id, token) {
     try {
       const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
       if (!st) throw new ApiError(404, "Deleted student not found");
       await st.deletePermanently();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1);
+      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1, token);
       return { message: "Student deleted permanently successfully" };
     } catch (error) {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-            500,
-            "Error deleting student permanently: " + error.message
-          );
+          500,
+          "Error deleting student permanently: " + error.message
+        );
     }
   }
 }
