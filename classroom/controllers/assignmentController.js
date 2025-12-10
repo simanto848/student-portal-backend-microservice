@@ -1,12 +1,36 @@
-import AssignmentService from '../services/assignmentService.js';
-import { ApiResponse } from 'shared';
+import AssignmentService from "../services/assignmentService.js";
+import { ApiResponse } from "shared";
 
 class AssignmentController {
   async create(req, res, next) {
     try {
-      const { workspaceId, topicId, title, description, attachments, dueAt, allowLate, maxScore, rubricId } = req.body;
-      const assignment = await AssignmentService.createAssignment(workspaceId, { topicId, title, description, attachments, dueAt, allowLate, maxScore, rubricId }, req.user.id);
-      return ApiResponse.created(res, assignment, 'Assignment draft created');
+      const {
+        workspaceId,
+        topicId,
+        title,
+        description,
+        attachments,
+        dueAt,
+        allowLate,
+        maxScore,
+        rubricId,
+      } = req.body;
+      const assignment = await AssignmentService.createAssignment(
+        workspaceId,
+        {
+          topicId,
+          title,
+          description,
+          attachments,
+          dueAt,
+          allowLate,
+          maxScore,
+          rubricId,
+        },
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.created(res, assignment, "Assignment draft created");
     } catch (e) {
       next(e);
     }
@@ -15,8 +39,13 @@ class AssignmentController {
   async list(req, res, next) {
     try {
       const { workspaceId } = req.params;
-      const items = await AssignmentService.listAssignments(workspaceId, req.user.id, req.user.role);
-      return ApiResponse.success(res, items, 'Assignments fetched');
+      const items = await AssignmentService.listAssignments(
+        workspaceId,
+        req.user.id,
+        req.user.role,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, items, "Assignments fetched");
     } catch (e) {
       next(e);
     }
@@ -24,7 +53,12 @@ class AssignmentController {
 
   async get(req, res, next) {
     try {
-      const assignment = await AssignmentService.getAssignment(req.params.id, req.user.id, req.user.role);
+      const assignment = await AssignmentService.getAssignment(
+        req.params.id,
+        req.user.id,
+        req.user.role,
+        req.headers.authorization
+      );
       return ApiResponse.success(res, assignment);
     } catch (e) {
       next(e);
@@ -33,8 +67,13 @@ class AssignmentController {
 
   async update(req, res, next) {
     try {
-      const assignment = await AssignmentService.updateAssignment(req.params.id, req.body, req.user.id);
-      return ApiResponse.success(res, assignment, 'Assignment updated');
+      const assignment = await AssignmentService.updateAssignment(
+        req.params.id,
+        req.body,
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, assignment, "Assignment updated");
     } catch (e) {
       next(e);
     }
@@ -42,8 +81,13 @@ class AssignmentController {
 
   async publish(req, res, next) {
     try {
-      const assignment = await AssignmentService.updateAssignment(req.params.id, { status: 'published' }, req.user.id);
-      return ApiResponse.success(res, assignment, 'Assignment published');
+      const assignment = await AssignmentService.updateAssignment(
+        req.params.id,
+        { status: "published" },
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, assignment, "Assignment published");
     } catch (e) {
       next(e);
     }
@@ -51,8 +95,13 @@ class AssignmentController {
 
   async close(req, res, next) {
     try {
-      const assignment = await AssignmentService.updateAssignment(req.params.id, { status: 'closed' }, req.user.id);
-      return ApiResponse.success(res, assignment, 'Assignment closed');
+      const assignment = await AssignmentService.updateAssignment(
+        req.params.id,
+        { status: "closed" },
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, assignment, "Assignment closed");
     } catch (e) {
       next(e);
     }
@@ -60,8 +109,12 @@ class AssignmentController {
 
   async delete(req, res, next) {
     try {
-      await AssignmentService.deleteAssignment(req.params.id, req.user.id);
-      return ApiResponse.success(res, null, 'Assignment deleted');
+      await AssignmentService.deleteAssignment(
+        req.params.id,
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, null, "Assignment deleted");
     } catch (e) {
       next(e);
     }
