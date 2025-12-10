@@ -42,7 +42,7 @@ services:
     command: node --watch --no-warnings app.js
     environment:
       - PORT=8000
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - ACADEMIC_SERVICE_URL=http://academic:8001
       - USER_SERVICE_URL=http://user:8007
       - LIBRARY_SERVICE_URL=http://library:8008
@@ -77,7 +77,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8007
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/user_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
@@ -103,12 +103,12 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8001
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/academic_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8007
-      - GEMINI_API=AIzaSyBdDUi1NkUDEi0kszcBc8GZdrydIELffuI
+      - GEMINI_API=${GEMINI_API}
     depends_on:
       - mongodb
       - rabbitmq
@@ -129,7 +129,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8003
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/enrollment_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8007
@@ -154,7 +154,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8008
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/library_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
     depends_on:
@@ -177,7 +177,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8011
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/classroom_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
     depends_on:
@@ -200,7 +200,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8007
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/communication_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - ACADEMIC_SERVICE_URL=http://academic:8001
@@ -225,7 +225,7 @@ services:
     command: node --watch --no-warnings server.js
     environment:
       - PORT=8010
-      - JWT_SECRET=mysupersecrectkey
+      - JWT_SECRET=${JWT_SECRET}
       - MONGO_URI=mongodb://mongodb:27017/notification_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
