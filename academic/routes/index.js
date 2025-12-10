@@ -10,6 +10,7 @@ import classroomRoutes from "./classroomRoutes.js";
 import courseScheduleRoutes from "./courseScheduleRoutes.js";
 import courseSyllabusRoutes from "./courseSyllabusRoutes.js";
 import examCommitteeRoutes from "./examCommitteeRoutes.js";
+import scheduleRoutes from "./scheduleRoutes.js";
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use('/classrooms', classroomRoutes);
 router.use('/schedules', courseScheduleRoutes);
 router.use('/syllabus', courseSyllabusRoutes);
 router.use('/exam-committees', examCommitteeRoutes);
+router.use('/ai-schedules', scheduleRoutes);
 
 export default router;
