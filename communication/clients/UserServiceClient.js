@@ -31,6 +31,20 @@ class UserServiceClient {
       return null;
     }
   }
+
+  async getStudentDetails(studentId, accessToken) {
+    try {
+      const response = await this.client.get(`/students/${studentId}`, {
+        headers: accessToken
+          ? { Authorization: `Bearer ${accessToken}` }
+          : undefined,
+      });
+      return response.data?.data ?? response.data;
+    } catch (error) {
+      console.error("Error fetching student details:", error.message);
+      return null;
+    }
+  }
 }
 
 export default new UserServiceClient();

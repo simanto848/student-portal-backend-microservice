@@ -97,7 +97,8 @@ class ChatController {
         parseInt(limit),
         parseInt(skip),
         search,
-        filter
+        filter,
+        getAccessToken(req)
       );
       res.status(200).json({ success: true, data: messages });
     } catch (error) {

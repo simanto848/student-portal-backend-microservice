@@ -20,12 +20,23 @@ class ChatService {
           accessToken
         );
 
+      console.log(
+        `ChatService: Found ${enrollments.length} enrollments for student ${userId}`
+      );
+
       const uniqueBatchIds = Array.from(
         new Set((enrollments || []).map((e) => e.batchId).filter(Boolean))
       );
 
       const uniqueCourseEnrollments = (enrollments || []).filter(
         (e) => e.batchId && e.courseId && e.sessionId
+      );
+
+      console.log(
+        `ChatService: uniqueBatchIds: ${JSON.stringify(uniqueBatchIds)}`
+      );
+      console.log(
+        `ChatService: uniqueCourseEnrollments: ${uniqueCourseEnrollments.length}`
       );
 
       const groupOr = uniqueCourseEnrollments.map((e) => {
@@ -35,11 +46,21 @@ class ChatService {
           sessionId: e.sessionId,
           isActive: true,
         };
+        // If instructorId is present in enrollment, use it to find the specific group
+        // If not, we might find multiple groups for the same course (if multiple instructors teach it)
+        // But typically a student is enrolled in a specific section/instructor
         if (e.instructorId) {
           query.instructorId = e.instructorId;
         }
         return query;
       });
+
+      console.log(`ChatService: groupOr query: ${JSON.stringify(groupOr)}`);
+
+      // If groupOr is empty, we shouldn't run the query with empty $or
+      const courseGroupsPromise = groupOr.length
+        ? CourseChatGroup.find({ $or: groupOr })
+        : Promise.resolve([]);
 
       const [batchGroups, courseGroups] = await Promise.all([
         uniqueBatchIds.length
@@ -48,14 +69,48 @@ class ChatService {
               isActive: true,
             })
           : Promise.resolve([]),
-        groupOr.length
-          ? CourseChatGroup.find({ $or: groupOr })
-          : Promise.resolve([]),
+        courseGroupsPromise,
       ]);
+
+      // If no course groups found, try to find them without instructorId (fallback)
+      // This handles cases where enrollment might be missing instructorId but group exists
+      let additionalCourseGroups = [];
+      if (
+        courseGroups.length < uniqueCourseEnrollments.length &&
+        groupOr.length > 0
+      ) {
+        const fallbackOr = uniqueCourseEnrollments.map((e) => ({
+          batchId: e.batchId,
+          courseId: e.courseId,
+          sessionId: e.sessionId,
+          isActive: true,
+        }));
+
+        const allPotentialGroups = await CourseChatGroup.find({
+          $or: fallbackOr,
+        });
+
+        // Filter out ones we already found
+        const foundIds = new Set(courseGroups.map((g) => g.id));
+        additionalCourseGroups = allPotentialGroups.filter(
+          (g) => !foundIds.has(g.id)
+        );
+
+        // If we found multiple groups for a course (e.g. different instructors),
+        // and we didn't have instructorId in enrollment, we might show all?
+        // Or we should rely on the enrollment data being correct.
+        // For now, let's add them.
+      }
+
+      const allCourseGroups = [...courseGroups, ...additionalCourseGroups];
+
+      console.log(
+        `ChatService: Found ${batchGroups.length} batchGroups and ${allCourseGroups.length} courseGroups`
+      );
 
       const combined = [
         ...batchGroups.map((g) => ({ group: g, type: "BatchChatGroup" })),
-        ...courseGroups.map((g) => ({ group: g, type: "CourseChatGroup" })),
+        ...allCourseGroups.map((g) => ({ group: g, type: "CourseChatGroup" })),
       ];
 
       const enriched = await Promise.all(
@@ -223,7 +278,6 @@ class ChatService {
       }
     }
 
-
     const chatGroup = await this.getChatGroup(chatGroupId, chatGroupType);
     if (!chatGroup) {
       console.error(
@@ -276,7 +330,8 @@ class ChatService {
     limit = 50,
     skip = 0,
     search = "",
-    filter = ""
+    filter = "",
+    accessToken
   ) {
     const query = { chatGroupId, isDeleted: false };
     if (search) {
@@ -294,7 +349,60 @@ class ChatService {
       .skip(skip)
       .limit(limit);
 
-    return messages;
+    // Enrich messages with sender details
+    const userCache = new Map();
+
+    const enrichedMessages = await Promise.all(
+      messages.map(async (msg) => {
+        const msgObj = msg.toObject();
+        const cacheKey = `${msg.senderModel}:${msg.senderId}`;
+
+        let senderDetails = userCache.get(cacheKey);
+
+        if (!senderDetails) {
+          try {
+            if (msg.senderModel === "Student") {
+              senderDetails = await UserServiceClient.getStudentDetails(
+                msg.senderId,
+                accessToken
+              );
+            } else if (msg.senderModel === "Teacher") {
+              senderDetails = await UserServiceClient.getTeacherDetails(
+                msg.senderId,
+                accessToken
+              );
+            }
+            if (senderDetails) {
+              userCache.set(cacheKey, senderDetails);
+            }
+          } catch (err) {
+            console.error(
+              `Failed to fetch sender details for ${cacheKey}`,
+              err
+            );
+          }
+        }
+
+        if (senderDetails) {
+          msgObj.sender = {
+            id: senderDetails._id || senderDetails.id,
+            fullName:
+              senderDetails.fullName ||
+              `${senderDetails.firstName} ${senderDetails.lastName}`,
+            avatar: senderDetails.profilePicture || senderDetails.avatar,
+          };
+        } else {
+          msgObj.sender = {
+            id: msg.senderId,
+            fullName: "Unknown User",
+          };
+        }
+
+        return msgObj;
+      })
+    );
+
+    return enrichedMessages;
   }
 
   // --- Detail Fetching ---

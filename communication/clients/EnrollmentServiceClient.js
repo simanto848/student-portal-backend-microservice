@@ -60,15 +60,8 @@ class EnrollmentServiceClient {
       if (data && Array.isArray(data.data)) return data.data;
       return [];
     } catch (error) {
-      console.error("Error listing student enrollments (Full):");
-      if (error.response) {
-        console.error("Status:", error.response.status);
-        console.error("Data:", JSON.stringify(error.response.data, null, 2));
-      } else {
-        console.error("Message:", error.message);
-        console.error("Stack:", error.stack);
-      }
-      return [];
+      console.error("Error listing student enrollments (Full):", error.message);
+      throw error;
     }
   }
 

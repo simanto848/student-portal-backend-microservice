@@ -24,7 +24,7 @@ router.get("/groups/:chatGroupId", ChatController.getChatGroupDetails);
 // Messaging
 router.post(
   "/send",
-  authorize("super_admin", "admin", "teacher"),
+  authorize("super_admin", "admin", "teacher", "student"),
   ChatController.sendMessage
 );
 router.get("/:chatGroupId/messages", ChatController.getMessages);
@@ -32,22 +32,22 @@ router.get("/:chatGroupId/messages", ChatController.getMessages);
 // Message Actions
 router.put(
   "/messages/:messageId",
-  authorize("super_admin", "admin", "teacher"),
+  authorize("super_admin", "admin", "teacher", "student"),
   ChatController.editMessage
 );
 router.delete(
   "/messages/:messageId",
-  authorize("super_admin", "admin", "teacher"),
+  authorize("super_admin", "admin", "teacher", "student"),
   ChatController.deleteMessage
 );
 router.patch(
   "/messages/:messageId/pin",
-  authorize("super_admin", "admin", "teacher"),
+  authorize("super_admin", "admin", "teacher", "student"),
   ChatController.pinMessage
 );
 router.patch(
   "/messages/:messageId/react",
-  authorize("super_admin", "admin", "teacher"),
+  authorize("super_admin", "admin", "teacher", "student"),
   ChatController.reactToMessage
 );
 
