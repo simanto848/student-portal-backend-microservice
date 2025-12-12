@@ -3,36 +3,43 @@ import CourseChatGroup from "../models/CourseChatGroup.js";
 import Message from "../models/Message.js";
 import AcademicServiceClient from "../clients/AcademicServiceClient.js";
 import EnrollmentServiceClient from "../clients/EnrollmentServiceClient.js";
+import UserServiceClient from "../clients/UserServiceClient.js";
 import { getIO } from "../socket.js";
 
 class ChatService {
-  // --- Chat Group Management ---
   async listMyChatGroups(user, accessToken) {
-    if (!user?.id) throw new Error("Invalid user");
+    const userId = user?.id ?? user?.sub;
+    const userRole = user?.role ?? user?.type ?? "student";
+    if (!userId) throw new Error("Invalid user");
 
-    // Only expose channels relevant to the authenticated user.
-    if (user.role === "student") {
+    if (userRole === "student") {
       const enrollments =
         await EnrollmentServiceClient.listEnrollmentsForStudent(
-          user.id,
-          { status: "active", limit: 200 },
+          userId,
+          { status: "active", limit: "200" },
           accessToken
         );
 
       const uniqueBatchIds = Array.from(
         new Set((enrollments || []).map((e) => e.batchId).filter(Boolean))
       );
+
       const uniqueCourseEnrollments = (enrollments || []).filter(
-        (e) => e.batchId && e.courseId && e.sessionId && e.instructorId
+        (e) => e.batchId && e.courseId && e.sessionId
       );
 
-      const groupOr = uniqueCourseEnrollments.map((e) => ({
-        batchId: e.batchId,
-        courseId: e.courseId,
-        sessionId: e.sessionId,
-        instructorId: e.instructorId,
-        isActive: true,
-      }));
+      const groupOr = uniqueCourseEnrollments.map((e) => {
+        const query = {
+          batchId: e.batchId,
+          courseId: e.courseId,
+          sessionId: e.sessionId,
+          isActive: true,
+        };
+        if (e.instructorId) {
+          query.instructorId = e.instructorId;
+        }
+        return query;
+      });
 
       const [batchGroups, courseGroups] = await Promise.all([
         uniqueBatchIds.length
@@ -68,7 +75,7 @@ class ChatService {
 
           try {
             if (type === "CourseChatGroup") {
-              const [course, batch] = await Promise.all([
+              const [course, batch, teacher] = await Promise.all([
                 AcademicServiceClient.getCourseDetails(
                   group.courseId,
                   accessToken
@@ -77,10 +84,17 @@ class ChatService {
                   group.batchId,
                   accessToken
                 ),
+                group.instructorId
+                  ? UserServiceClient.getTeacherDetails(
+                      group.instructorId,
+                      accessToken
+                    )
+                  : Promise.resolve(null),
               ]);
               result.courseName = course?.name;
               result.courseCode = course?.code;
               result.batchName = batch?.name;
+              result.instructorName = teacher?.fullName;
             } else {
               const batch = await AcademicServiceClient.getBatchDetails(
                 group.batchId,
@@ -89,14 +103,13 @@ class ChatService {
               result.batchName = batch?.name;
             }
           } catch (e) {
-            // keep non-fatal
+            console.error("Error enriching chat group details:", e.message);
           }
 
           return result;
         })
       );
 
-      // Sort by activity (group updatedAt, then lastMessage createdAt)
       enriched.sort((a, b) => {
         const aTime = new Date(
           a.lastMessage?.createdAt || a.updatedAt || a.createdAt || 0
@@ -110,12 +123,9 @@ class ChatService {
       return enriched;
     }
 
-    // Teachers/admins can see groups they created or participate in (minimal: return recent active groups)
     const [batchGroups, courseGroups] = await Promise.all([
-      BatchChatGroup.find({ isActive: true, counselorId: user.id }).limit(200),
-      CourseChatGroup.find({ isActive: true, instructorId: user.id }).limit(
-        200
-      ),
+      BatchChatGroup.find({ isActive: true, counselorId: userId }).limit(200),
+      CourseChatGroup.find({ isActive: true, instructorId: userId }).limit(200),
     ]);
 
     return [
@@ -125,16 +135,17 @@ class ChatService {
   }
 
   async getOrCreateBatchChatGroup(batchId, counselorId, user) {
+    const userId = user?.id ?? user?.sub;
+    const userRole = user?.role ?? user?.type;
     let chatGroup = await BatchChatGroup.findOne({ batchId });
 
     if (!chatGroup) {
-      // Access Control: Only admin or the assigned counselor can create the group
-      if (user.role === "student") {
+      if (userRole === "student") {
         throw new Error(
           "Chat group has not been started by the counselor yet."
         );
       }
-      if (user.role === "teacher" && user.id !== counselorId) {
+      if (userRole === "teacher" && userId !== counselorId) {
         throw new Error("Only the assigned counselor can start this chat.");
       }
 
@@ -150,6 +161,8 @@ class ChatService {
     instructorId,
     user
   ) {
+    const userId = user?.id ?? user?.sub;
+    const userRole = user?.role ?? user?.type;
     let chatGroup = await CourseChatGroup.findOne({
       batchId,
       courseId,
@@ -158,13 +171,12 @@ class ChatService {
     });
 
     if (!chatGroup) {
-      // Access Control: Only admin or the assigned instructor can create the group
-      if (user.role === "student") {
+      if (userRole === "student") {
         throw new Error(
           "Chat group has not been started by the instructor yet."
         );
       }
-      if (user.role === "teacher" && user.id !== instructorId) {
+      if (userRole === "teacher" && userId !== instructorId) {
         throw new Error("Only the assigned instructor can start this chat.");
       }
 
@@ -187,7 +199,6 @@ class ChatService {
     return null;
   }
 
-  // --- Messaging ---
   async sendMessage(data, accessToken, user) {
     let {
       chatGroupId,
@@ -197,33 +208,21 @@ class ChatService {
       content,
       attachments,
     } = data;
+    const userId = user?.id ?? user?.sub;
+    const userRole = user?.role ?? user?.type ?? "student";
 
-    console.log(
-      `ChatService.sendMessage: Request for group ${chatGroupId}, type: ${chatGroupType}`
-    );
-
-    // SMART RESOLVE: If type is generic or missing, try to find the group in specific collections
     if (!chatGroupType || chatGroupType === "group") {
       const courseGroup = await CourseChatGroup.findById(chatGroupId);
       if (courseGroup) {
         chatGroupType = "CourseChatGroup";
-        console.log(
-          `ChatService.sendMessage: Resolved type to CourseChatGroup`
-        );
       } else {
         const batchGroup = await BatchChatGroup.findById(chatGroupId);
         if (batchGroup) {
           chatGroupType = "BatchChatGroup";
-          console.log(
-            `ChatService.sendMessage: Resolved type to BatchChatGroup`
-          );
         }
       }
     }
 
-    console.log(
-      `ChatService.sendMessage: Final lookup with type: ${chatGroupType}`
-    );
 
     const chatGroup = await this.getChatGroup(chatGroupId, chatGroupType);
     if (!chatGroup) {
@@ -236,11 +235,10 @@ class ChatService {
     }
     if (!chatGroup.isActive) throw new Error("Chat group is not active");
 
-    // Basic membership verification (best-effort)
     try {
-      if (user?.role === "student") {
+      if (userRole === "student") {
         const ok = await EnrollmentServiceClient.isStudentEnrolled(
-          user.id,
+          userId,
           chatGroup.batchId,
           chatGroup.courseId,
           accessToken
@@ -250,18 +248,14 @@ class ChatService {
         }
       }
     } catch (e) {
-      // If downstream verification fails unexpectedly, do not leak access.
-      if (user?.role === "student") {
+      if (userRole === "student") {
         throw e;
       }
     }
 
-    // TODO: Verify sender membership (can be optimized by caching or trusting token claims if they contain enrollment info)
-    // For now, we assume the controller/middleware has done basic checks, but strictly we should check enrollment/assignment here.
-
     const message = await Message.create({
       chatGroupId,
-      chatGroupType, // Now guaranteed to be specific if found
+      chatGroupType,
       senderId,
       senderModel,
       content,
@@ -284,10 +278,6 @@ class ChatService {
     search = "",
     filter = ""
   ) {
-    console.log(
-      `ChatService.getMessages: ID=${chatGroupId}, filter=${filter}, search=${search}`
-    );
-
     const query = { chatGroupId, isDeleted: false };
     if (search) {
       query.content = { $regex: search, $options: "i" };
@@ -295,10 +285,8 @@ class ChatService {
 
     if (filter === "pinned") {
       query.isPinned = true;
-      console.log("ChatService.getMessages: Filtering by PINNED");
     } else if (filter === "media") {
       query.attachments = { $exists: true, $not: { $size: 0 } };
-      console.log("ChatService.getMessages: Filtering by MEDIA");
     }
 
     const messages = await Message.find(query)
@@ -306,7 +294,6 @@ class ChatService {
       .skip(skip)
       .limit(limit);
 
-    console.log(`ChatService.getMessages: Found ${messages.length} messages`);
     return messages;
   }
 
@@ -330,28 +317,26 @@ class ChatService {
       type,
     };
 
-    // Enrich with Academic Data
     try {
       if (type === "CourseChatGroup") {
-        const course = await AcademicServiceClient.getCourseDetails(
-          group.courseId
-        );
-        const batch = await AcademicServiceClient.getBatchDetails(
-          group.batchId
-        );
+        const [course, batch, teacher] = await Promise.all([
+          AcademicServiceClient.getCourseDetails(group.courseId),
+          AcademicServiceClient.getBatchDetails(group.batchId),
+          group.instructorId
+            ? UserServiceClient.getTeacherDetails(group.instructorId)
+            : Promise.resolve(null),
+        ]);
         result.courseName = course?.name;
         result.courseCode = course?.code;
         result.batchName = batch?.name;
+        result.instructorName = teacher?.fullName;
       } else if (type === "BatchChatGroup") {
         const batch = await AcademicServiceClient.getBatchDetails(
           group.batchId
         );
         result.batchName = batch?.name;
       }
-    } catch (error) {
-      console.error("Error fetching academic details for chat group:", error);
-      // Don't fail the whole request, just return what we have
-    }
+    } catch (error) {}
 
     return result;
   }
@@ -376,9 +361,7 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_updated", message);
-    } catch (error) {
-      console.error("Socket emit error:", error);
-    }
+    } catch (error) {}
 
     return message;
   }
@@ -410,7 +393,6 @@ class ChatService {
     return message;
   }
 
-  // --- Pinning ---
   async pinMessage(messageId, userId, userRole) {
     const message = await Message.findById(messageId);
     if (!message) throw new Error("Message not found");
@@ -445,14 +427,11 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_pinned", message);
-    } catch (error) {
-      console.error("Socket emit error:", error);
-    }
+    } catch (error) {}
 
     return message;
   }
 
-  // --- Reactions ---
   async reactToMessage(messageId, userId, reaction) {
     const message = await Message.findById(messageId);
     if (!message) throw new Error("Message not found");
@@ -475,9 +454,7 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_reaction", message);
-    } catch (error) {
-      console.error("Socket emit error:", error);
-    }
+    } catch (error) {}
 
     return message;
   }

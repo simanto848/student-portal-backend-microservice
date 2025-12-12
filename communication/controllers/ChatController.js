@@ -1,15 +1,15 @@
 import ChatService from "../services/ChatService.js";
 
-class ChatController {
-  getAccessToken(req) {
-    const headerToken = req.headers.authorization?.split(" ")[1];
-    const cookieToken = req.cookies?.accessToken;
-    return headerToken || cookieToken;
-  }
+const getAccessToken = (req) => {
+  const headerToken = req.headers.authorization?.split(" ")[1];
+  const cookieToken = req.cookies?.accessToken;
+  return headerToken || cookieToken;
+};
 
+class ChatController {
   async listMyChatGroups(req, res) {
     try {
-      const token = this.getAccessToken(req);
+      const token = getAccessToken(req);
       const groups = await ChatService.listMyChatGroups(req.user, token);
       res.status(200).json({ success: true, data: groups });
     } catch (error) {
@@ -50,7 +50,10 @@ class ChatController {
   async getChatGroupDetails(req, res) {
     try {
       const { chatGroupId } = req.params;
-      const details = await ChatService.getChatGroupDetails(chatGroupId);
+      const details = await ChatService.getChatGroupDetails(
+        chatGroupId,
+        getAccessToken(req)
+      );
       res.status(200).json({ success: true, data: details });
     } catch (error) {
       res.status(404).json({ success: false, message: error.message });
@@ -61,8 +64,10 @@ class ChatController {
     try {
       console.log("ChatController.sendMessage body:", req.body); // DEBUG LOG
       const { chatGroupId, chatGroupType, content, attachments } = req.body;
-      const senderId = req.user.id;
-      const senderModel = req.user.role === "student" ? "Student" : "Teacher";
+      const senderId = req.user.id ?? req.user.sub;
+      const senderRole = req.user.role ?? req.user.type;
+      const senderModel =
+        senderRole && senderRole !== "student" ? "Teacher" : "Student";
 
       const message = await ChatService.sendMessage(
         {
@@ -73,7 +78,7 @@ class ChatController {
           content,
           attachments,
         },
-        this.getAccessToken(req),
+        getAccessToken(req),
         req.user
       );
       res.status(201).json({ success: true, data: message });

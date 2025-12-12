@@ -6,7 +6,6 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// List groups available to the current user (student/teacher/admin)
 router.get("/groups/mine", ChatController.listMyChatGroups);
 
 // Chat Group Management

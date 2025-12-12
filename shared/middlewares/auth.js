@@ -13,11 +13,15 @@ export const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Backwards compatibility: some services expect `sub` in JWT payload.
     if (decoded && decoded.sub == null && decoded.id != null) {
       decoded.sub = decoded.id;
     }
     req.user = decoded;
+
+    if (!req.user.role) {
+      req.user.role = "student";
+    }
+
     next();
   } catch (error) {
     return ApiResponse.unauthorized(res, "Invalid or expired token");
@@ -45,13 +49,10 @@ export const optionalAuth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Backwards compatibility: some services expect `sub` in JWT payload.
     if (decoded && decoded.sub == null && decoded.id != null) {
       decoded.sub = decoded.id;
     }
     req.user = decoded;
-  } catch (error) {
-    // Ignore invalid tokens for optional auth
-  }
+  } catch (error) {}
   next();
 };

@@ -207,6 +207,7 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/communication_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - ACADEMIC_SERVICE_URL=http://academic:8001
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8003
       - USER_SERVICE_URL=http://user:8007
     depends_on:
       - mongodb

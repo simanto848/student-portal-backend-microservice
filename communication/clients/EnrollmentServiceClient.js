@@ -1,9 +1,19 @@
 import axios from "axios";
+import fs from "fs";
 
 class EnrollmentServiceClient {
   constructor() {
-    this.baseURL =
-      process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+    const isDocker = fs.existsSync("/.dockerenv");
+    const defaultUrl = isDocker
+      ? "http://enrollment:8003"
+      : "http://localhost:8003";
+
+    this.baseURL = process.env.ENROLLMENT_SERVICE_URL || defaultUrl;
+
+    console.log(
+      `EnrollmentServiceClient: Initialized. Docker=${isDocker}, BaseURL=${this.baseURL}`
+    );
+
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 10000,
@@ -18,7 +28,15 @@ class EnrollmentServiceClient {
           ? { Authorization: `Bearer ${accessToken}` }
           : undefined,
       });
-      return response.data && response.data.length > 0;
+      const data = response.data?.data ?? response.data;
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.enrollments)
+        ? data.enrollments
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+      return list.length > 0;
     } catch (error) {
       console.error("Error checking student enrollment:", error.message);
       return false;
@@ -42,7 +60,14 @@ class EnrollmentServiceClient {
       if (data && Array.isArray(data.data)) return data.data;
       return [];
     } catch (error) {
-      console.error("Error listing student enrollments:", error.message);
+      console.error("Error listing student enrollments (Full):");
+      if (error.response) {
+        console.error("Status:", error.response.status);
+        console.error("Data:", JSON.stringify(error.response.data, null, 2));
+      } else {
+        console.error("Message:", error.message);
+        console.error("Stack:", error.stack);
+      }
       return [];
     }
   }
@@ -55,7 +80,15 @@ class EnrollmentServiceClient {
           ? { Authorization: `Bearer ${accessToken}` }
           : undefined,
       });
-      return response.data && response.data.length > 0;
+      const data = response.data?.data ?? response.data;
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.assignments)
+        ? data.assignments
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
+      return list.length > 0;
     } catch (error) {
       console.error("Error checking instructor assignment:", error.message);
       return false;
