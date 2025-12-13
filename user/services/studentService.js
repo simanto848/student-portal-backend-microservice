@@ -9,7 +9,7 @@ import { rabbitmq } from "shared";
 class StudentService {
   async getAll(options = {}) {
     try {
-      const { pagination, search, filters = {} } = options;
+      const { pagination, search, filters = {}, token } = options;
       const query = { deletedAt: null };
 
       if (search) {
@@ -20,7 +20,53 @@ class StudentService {
         ];
       }
 
-      Object.assign(query, filters);
+      // Special filters that are not Student fields
+      const normalizedFilters = { ...filters };
+      const shiftRaw = normalizedFilters.shift;
+      delete normalizedFilters.shift;
+
+      if (shiftRaw) {
+        const shift = String(shiftRaw).toLowerCase();
+        if (shift !== "day" && shift !== "evening") {
+          throw new ApiError(400, "Invalid shift. Allowed: day, evening");
+        }
+
+        // Narrow batchIds by shift (and optionally department/program/session when available)
+        const batchQuery = { shift };
+        if (normalizedFilters.departmentId)
+          batchQuery.departmentId = normalizedFilters.departmentId;
+        if (normalizedFilters.programId)
+          batchQuery.programId = normalizedFilters.programId;
+        if (normalizedFilters.sessionId)
+          batchQuery.sessionId = normalizedFilters.sessionId;
+
+        const batchesResp = await academicServiceClient.getAllBatches(
+          batchQuery,
+          token
+        );
+        const batches =
+          batchesResp?.data?.batches ||
+          batchesResp?.data ||
+          batchesResp?.batches ||
+          batchesResp ||
+          [];
+        const batchIds = (Array.isArray(batches) ? batches : [])
+          .map((b) => b?.id || b?._id)
+          .filter(Boolean);
+
+        // If UI already provided a batchId, ensure it matches the shift
+        if (normalizedFilters.batchId) {
+          const requested = String(normalizedFilters.batchId);
+          if (!batchIds.includes(requested)) {
+            // force empty result
+            query.batchId = "__no_such_batch_for_shift__";
+          }
+        } else {
+          query.batchId = { $in: batchIds.length ? batchIds : ["__none__"] };
+        }
+      }
+
+      Object.assign(query, normalizedFilters);
 
       if (pagination && (pagination.page || pagination.limit)) {
         const page = parseInt(pagination.page) || 1;
@@ -93,11 +139,14 @@ class StudentService {
         ""
       ).toUpperCase();
       const batchName = (batch.name || "").toUpperCase();
+      const shift = String(batch.shift || "").toLowerCase();
+      const shiftPrefix = shift === "evening" ? "E" : "D";
+      const batchCode = `${shiftPrefix}-${batchName}`;
       const yearShort = String(
         batch.year || session.year || new Date().getFullYear()
       ).slice(-2);
       const unique = PasswordGenerator.generateUniqueNumber();
-      const registrationNumber = `${deptShort}-${batchName}-${yearShort}-${unique}`;
+      const registrationNumber = `${deptShort}-${batchCode}-${yearShort}-${unique}`;
 
       const temporaryPassword = PasswordGenerator.generate(12);
 
@@ -111,7 +160,7 @@ class StudentService {
         throw new ApiError(
           500,
           "Failed to send welcome email. Student creation aborted: " +
-          emailError.message
+            emailError.message
         );
       }
 
@@ -142,7 +191,11 @@ class StudentService {
 
       const student = await Student.create(studentPayload);
 
-      await academicServiceClient.updateBatchCurrentStudents(data.batchId, +1, token);
+      await academicServiceClient.updateBatchCurrentStudents(
+        data.batchId,
+        +1,
+        token
+      );
       try {
         const createdProfile = await StudentProfile.create({
           ...data.studentProfile,
@@ -267,7 +320,11 @@ class StudentService {
       const st = await Student.findById(id);
       if (!st) throw new ApiError(404, "Student not found");
       await st.softDelete();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1, token);
+      await academicServiceClient.updateBatchCurrentStudents(
+        st.batchId,
+        -1,
+        token
+      );
       return { message: "Student deleted successfully" };
     } catch (error) {
       throw error instanceof ApiError
@@ -281,7 +338,11 @@ class StudentService {
       const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
       if (!st) throw new ApiError(404, "Deleted student not found");
       await st.restore();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, +1, token);
+      await academicServiceClient.updateBatchCurrentStudents(
+        st.batchId,
+        +1,
+        token
+      );
       const restored = await Student.findById(id)
         .select("-password")
         .populate("profile")
@@ -305,9 +366,9 @@ class StudentService {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-          500,
-          "Error fetching deleted students: " + error.message
-        );
+            500,
+            "Error fetching deleted students: " + error.message
+          );
     }
   }
 
@@ -316,15 +377,19 @@ class StudentService {
       const st = await Student.findOne({ _id: id, deletedAt: { $ne: null } });
       if (!st) throw new ApiError(404, "Deleted student not found");
       await st.deletePermanently();
-      await academicServiceClient.updateBatchCurrentStudents(st.batchId, -1, token);
+      await academicServiceClient.updateBatchCurrentStudents(
+        st.batchId,
+        -1,
+        token
+      );
       return { message: "Student deleted permanently successfully" };
     } catch (error) {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-          500,
-          "Error deleting student permanently: " + error.message
-        );
+            500,
+            "Error deleting student permanently: " + error.message
+          );
     }
   }
 }
