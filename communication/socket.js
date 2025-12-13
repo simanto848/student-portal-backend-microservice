@@ -3,37 +3,45 @@ import { Server } from "socket.io";
 let io;
 
 export const initSocket = (server) => {
-    io = new Server(server, {
-        cors: {
-            origin: "*",
-            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
-        }
+  io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    },
+  });
+
+  io.on("connection", (socket) => {
+    console.log(`User connected: ${socket.id}`);
+
+    socket.on("join_chat", (chatGroupId) => {
+      socket.join(chatGroupId);
+      console.log(`User ${socket.id} joined chat: ${chatGroupId}`);
     });
 
-    io.on("connection", (socket) => {
-        console.log(`User connected: ${socket.id}`);
-
-        socket.on("join_chat", (chatGroupId) => {
-            socket.join(chatGroupId);
-            console.log(`User ${socket.id} joined chat: ${chatGroupId}`);
-        });
-
-        socket.on("leave_chat", (chatGroupId) => {
-            socket.leave(chatGroupId);
-            console.log(`User ${socket.id} left chat: ${chatGroupId}`);
-        });
-
-        socket.on("disconnect", () => {
-            console.log(`User disconnected: ${socket.id}`);
-        });
+    socket.on("leave_chat", (chatGroupId) => {
+      socket.leave(chatGroupId);
+      console.log(`User ${socket.id} left chat: ${chatGroupId}`);
     });
 
-    return io;
+    socket.on("typing", ({ chatGroupId, user }) => {
+      socket.to(chatGroupId).emit("typing", user);
+    });
+
+    socket.on("stop_typing", ({ chatGroupId, user }) => {
+      socket.to(chatGroupId).emit("stop_typing", user);
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`User disconnected: ${socket.id}`);
+    });
+  });
+
+  return io;
 };
 
 export const getIO = () => {
-    if (!io) {
-        throw new Error("Socket.io not initialized!");
-    }
-    return io;
+  if (!io) {
+    throw new Error("Socket.io not initialized!");
+  }
+  return io;
 };

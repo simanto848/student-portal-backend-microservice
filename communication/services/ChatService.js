@@ -316,13 +316,47 @@ class ChatService {
       attachments,
     });
 
+    // Enrich message for socket
+    // Use toJSON() to ensure virtuals/transforms (like id instead of _id) are applied
+    const msgObj = message.toJSON();
+
     try {
-      getIO().to(chatGroupId).emit("new_message", message);
+      let senderDetails;
+      if (senderModel === "Student") {
+        senderDetails = await UserServiceClient.getStudentDetails(
+          senderId,
+          accessToken
+        );
+      } else if (senderModel === "Teacher") {
+        senderDetails = await UserServiceClient.getTeacherDetails(
+          senderId,
+          accessToken
+        );
+      }
+
+      if (senderDetails) {
+        msgObj.sender = {
+          id: senderDetails._id || senderDetails.id,
+          fullName:
+            senderDetails.fullName ||
+            `${senderDetails.firstName} ${senderDetails.lastName}`,
+          avatar: senderDetails.profilePicture || senderDetails.avatar,
+        };
+      } else {
+        msgObj.sender = { id: senderId, fullName: "Unknown User" };
+      }
+    } catch (e) {
+      console.error("Error enriching socket message:", e);
+      msgObj.sender = { id: senderId, fullName: "Unknown User" };
+    }
+
+    try {
+      getIO().to(chatGroupId).emit("new_message", msgObj);
     } catch (error) {
       console.error("Socket emit error:", error);
     }
 
-    return message;
+    return msgObj;
   }
 
   async getMessages(
@@ -354,7 +388,7 @@ class ChatService {
 
     const enrichedMessages = await Promise.all(
       messages.map(async (msg) => {
-        const msgObj = msg.toObject();
+        const msgObj = msg.toJSON();
         const cacheKey = `${msg.senderModel}:${msg.senderId}`;
 
         let senderDetails = userCache.get(cacheKey);
@@ -467,11 +501,13 @@ class ChatService {
     message.updatedAt = Date.now();
     await message.save();
 
+    const msgObj = message.toJSON();
+
     try {
-      getIO().to(message.chatGroupId).emit("message_updated", message);
+      getIO().to(message.chatGroupId).emit("message_updated", msgObj);
     } catch (error) {}
 
-    return message;
+    return msgObj;
   }
 
   async deleteMessage(messageId, userId) {
@@ -493,7 +529,7 @@ class ChatService {
     try {
       getIO()
         .to(message.chatGroupId)
-        .emit("message_deleted", { messageId: message._id });
+        .emit("message_deleted", { messageId: message.id });
     } catch (error) {
       console.error("Socket emit error:", error);
     }
@@ -533,11 +569,13 @@ class ChatService {
     message.pinnedBy = message.isPinned ? userId : null;
     await message.save();
 
+    const msgObj = message.toJSON();
+
     try {
-      getIO().to(message.chatGroupId).emit("message_pinned", message);
+      getIO().to(message.chatGroupId).emit("message_pinned", msgObj);
     } catch (error) {}
 
-    return message;
+    return msgObj;
   }
 
   async reactToMessage(messageId, userId, reaction) {
