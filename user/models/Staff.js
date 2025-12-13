@@ -42,12 +42,7 @@ const staffSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: [
-        "program_controller",
-        "admission",
-        "library",
-        "it",
-      ],
+      enum: ["program_controller", "admission", "library", "it"],
       required: true,
     },
     passwordChangedAt: {
@@ -57,6 +52,10 @@ const staffSchema = new mongoose.Schema(
     twoFactorEnabled: {
       type: Boolean,
       default: false,
+    },
+    emailUpdatesEnabled: {
+      type: Boolean,
+      default: true,
     },
     lastLoginIp: {
       type: String,

@@ -174,6 +174,25 @@ class AuthController {
     }
   }
 
+  async updatePreferences(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const role = req.user.role;
+      const result = await authService.updatePreferences(
+        userId,
+        role,
+        req.body
+      );
+      return ApiResponse.success(
+        res,
+        result,
+        "Preferences updated successfully"
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async generateOTP(req, res, next) {
     try {
       const { purpose } = req.body;

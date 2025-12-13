@@ -178,7 +178,8 @@ class AuthService {
     delete sanitizedUser.password;
     delete sanitizedUser.refreshToken;
 
-    if (sanitizedUser.profile && typeof sanitizedUser.profile === "string") {}
+    if (sanitizedUser.profile && typeof sanitizedUser.profile === "string") {
+    }
 
     return {
       accessToken,
@@ -479,16 +480,43 @@ class AuthService {
     }
   }
 
+  getModelForRole(role) {
+    const models = {
+      admin: Admin,
+      staff: Staff,
+      teacher: Teacher,
+      student: Student,
+    };
+
+    if (models[role]) return models[role];
+
+    // Normalize granular roles
+    if (["super_admin", "moderator"].includes(role)) return Admin;
+    if (
+      [
+        "program_controller",
+        "admission",
+        "library",
+        "it",
+        "finance",
+        "transport",
+        "hr",
+        "hostel",
+        "hostel_warden",
+        "hostel_supervisor",
+        "maintenance",
+        "exam",
+      ].includes(role)
+    ) {
+      return Staff;
+    }
+
+    return null;
+  }
+
   async changePassword(userId, currentPassword, newPassword, role) {
     try {
-      const models = {
-        admin: Admin,
-        staff: Staff,
-        teacher: Teacher,
-        student: Student,
-      };
-
-      const Model = models[role];
+      const Model = this.getModelForRole(role);
       if (!Model) throw new ApiError(400, "Invalid role");
 
       const user = await Model.findById(userId).select("+password");
@@ -510,13 +538,9 @@ class AuthService {
 
   async enable2FA(userId, role) {
     try {
-      const models = {
-        admin: Admin,
-        staff: Staff,
-        teacher: Teacher,
-        student: Student,
-      };
-      const Model = models[role];
+      const Model = this.getModelForRole(role);
+      if (!Model) throw new ApiError(400, "Invalid role");
+
       const user = await Model.findById(userId);
       if (!user) throw new ApiError(404, "User not found");
 
@@ -543,13 +567,9 @@ class AuthService {
 
   async confirmEnable2FA(userId, otp, role) {
     try {
-      const models = {
-        admin: Admin,
-        staff: Staff,
-        teacher: Teacher,
-        student: Student,
-      };
-      const Model = models[role];
+      const Model = this.getModelForRole(role);
+      if (!Model) throw new ApiError(400, "Invalid role");
+
       const user = await Model.findById(userId);
       if (!user) throw new ApiError(404, "User not found");
 
@@ -573,13 +593,9 @@ class AuthService {
 
   async disable2FA(userId, password, role) {
     try {
-      const models = {
-        admin: Admin,
-        staff: Staff,
-        teacher: Teacher,
-        student: Student,
-      };
-      const Model = models[role];
+      const Model = this.getModelForRole(role);
+      if (!Model) throw new ApiError(400, "Invalid role");
+
       const user = await Model.findById(userId).select("+password");
       if (!user) throw new ApiError(404, "User not found");
 
@@ -603,13 +619,9 @@ class AuthService {
 
   async generateGenericOTP(userId, purpose, role) {
     try {
-      const models = {
-        admin: Admin,
-        staff: Staff,
-        teacher: Teacher,
-        student: Student,
-      };
-      const Model = models[role];
+      const Model = this.getModelForRole(role);
+      if (!Model) throw new ApiError(400, "Invalid role");
+
       const user = await Model.findById(userId);
       if (!user) throw new ApiError(404, "User not found");
 
@@ -639,6 +651,30 @@ class AuthService {
       if (!isValid) throw new ApiError(400, "Invalid or expired OTP");
 
       return { isValid: true, message: "OTP verified successfully" };
+    } catch (error) {
+      throw error instanceof ApiError
+        ? error
+        : new ApiError(500, error.message);
+    }
+  }
+
+  async updatePreferences(userId, role, preferences) {
+    try {
+      const Model = this.getModelForRole(role);
+      if (!Model) throw new ApiError(400, "Invalid role");
+
+      const user = await Model.findById(userId);
+      if (!user) throw new ApiError(404, "User not found");
+
+      if (typeof preferences?.emailUpdatesEnabled === "boolean") {
+        user.emailUpdatesEnabled = preferences.emailUpdatesEnabled;
+      }
+
+      await user.save();
+
+      return {
+        emailUpdatesEnabled: user.emailUpdatesEnabled,
+      };
     } catch (error) {
       throw error instanceof ApiError
         ? error
