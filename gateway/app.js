@@ -19,6 +19,10 @@ app.use(
 const PORT = process.env.PORT || 8000;
 
 const HEALTH_TIMEOUT_MS = Number(process.env.HEALTH_TIMEOUT_MS || 2500);
+const HEALTH_LOG_LIMIT = Number(process.env.HEALTH_LOG_LIMIT || 50);
+const HEALTH_PROBE_INTERVAL_MS = Number(
+  process.env.HEALTH_PROBE_INTERVAL_MS || 5000
+);
 
 const serviceDefinitions = [
   { key: "gateway", name: "API Gateway", url: `http://localhost:${PORT}` },
@@ -109,6 +113,36 @@ const checkServiceHealth = async (service, authorizationHeader) => {
   }
 };
 
+const healthLogs = new Map();
+
+const appendHealthLog = (serviceKey, entry) => {
+  const existing = healthLogs.get(serviceKey) || [];
+  existing.push(entry);
+  if (existing.length > HEALTH_LOG_LIMIT) {
+    existing.splice(0, existing.length - HEALTH_LOG_LIMIT);
+  }
+  healthLogs.set(serviceKey, existing);
+};
+
+const getServiceDefinition = (serviceKey) =>
+  serviceDefinitions.find((s) => s.key === serviceKey);
+
+const runBackgroundProbe = async () => {
+  const checkedAt = new Date().toISOString();
+  const checks = await Promise.all(
+    serviceDefinitions.map((service) => checkServiceHealth(service))
+  );
+
+  for (const check of checks) {
+    appendHealthLog(check.key, {
+      at: checkedAt,
+      status: check.status,
+      httpStatus: check.httpStatus,
+      responseTimeMs: check.responseTimeMs,
+    });
+  }
+};
+
 app.get("/health", (req, res) => {
   try {
     res.status(200).json({
@@ -136,6 +170,17 @@ app.get("/api/system-health", async (req, res) => {
       )
     );
 
+    const checkedAt = new Date().toISOString();
+
+    for (const check of checks) {
+      appendHealthLog(check.key, {
+        at: checkedAt,
+        status: check.status,
+        httpStatus: check.httpStatus,
+        responseTimeMs: check.responseTimeMs,
+      });
+    }
+
     const hasDown = checks.some((s) => s.status === "down");
     const hasDegraded = checks.some((s) => s.status === "degraded");
 
@@ -148,7 +193,7 @@ app.get("/api/system-health", async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        checkedAt: new Date().toISOString(),
+        checkedAt,
         overallStatus,
         services: checks,
       },
@@ -158,6 +203,80 @@ app.get("/api/system-health", async (req, res) => {
       success: false,
       message: "Internal Server Error",
     });
+  }
+});
+
+app.get("/api/system-health/:key/inspect", async (req, res) => {
+  try {
+    const { key } = req.params;
+    const service = getServiceDefinition(key);
+    if (!service) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Service not found" });
+    }
+
+    const authorizationHeader = req.headers.authorization;
+    const current = await checkServiceHealth(service, authorizationHeader);
+    const checkedAt = new Date().toISOString();
+
+    appendHealthLog(current.key, {
+      at: checkedAt,
+      status: current.status,
+      httpStatus: current.httpStatus,
+      responseTimeMs: current.responseTimeMs,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        checkedAt,
+        service: {
+          key: service.key,
+          name: service.name,
+          url: service.url,
+        },
+        current,
+      },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
+  }
+});
+
+app.get("/api/system-health/:key/logs", (req, res) => {
+  try {
+    const { key } = req.params;
+    const service = getServiceDefinition(key);
+    if (!service) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Service not found" });
+    }
+
+    const limit = Math.max(
+      1,
+      Math.min(Number(req.query.limit || 20), HEALTH_LOG_LIMIT)
+    );
+    const entries = (healthLogs.get(key) || []).slice(-limit).reverse();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        service: {
+          key: service.key,
+          name: service.name,
+          url: service.url,
+        },
+        entries,
+      },
+    });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal Server Error" });
   }
 });
 
@@ -187,6 +306,18 @@ app.listen(PORT, () => {
   console.log(
     `Gateway server started on http://localhost:${PORT}`.green.underline.bold
   );
+
+  // Keep health logs updating in near-realtime without UI refresh
+  if (
+    Number.isFinite(HEALTH_PROBE_INTERVAL_MS) &&
+    HEALTH_PROBE_INTERVAL_MS > 0
+  ) {
+    setInterval(() => {
+      runBackgroundProbe().catch(() => {});
+    }, HEALTH_PROBE_INTERVAL_MS);
+
+    runBackgroundProbe().catch(() => {});
+  }
 });
 
 export default app;
