@@ -38,6 +38,15 @@ const questionSchema = new mongoose.Schema({
         required: [true, 'Question text is required'],
         trim: true
     },
+    content: {
+        type: Object,  // TipTap JSON content
+        default: null
+    },
+    contentType: {
+        type: String,
+        enum: ['plain', 'tiptap'],
+        default: 'plain'
+    },
     options: {
         type: [optionSchema],
         default: []

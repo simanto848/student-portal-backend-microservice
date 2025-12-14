@@ -8,10 +8,8 @@ const extractApiArray = (payload) => {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
 
-  // Common pattern: { success: true, data: [...] }
   if (payload.success && Array.isArray(payload.data)) return payload.data;
 
-  // Common pattern: { success: true, data: { data: [...] } }
   if (
     payload.success &&
     payload.data &&
@@ -21,7 +19,15 @@ const extractApiArray = (payload) => {
     return payload.data.data;
   }
 
-  // Some services may return { data: [...] } or { data: { data: [...] } }
+  if (
+    payload.success &&
+    payload.data &&
+    typeof payload.data === "object" &&
+    Array.isArray(payload.data.enrollments)
+  ) {
+    return payload.data.enrollments;
+  }
+
   if (Array.isArray(payload.data)) return payload.data;
   if (
     payload.data &&
@@ -40,7 +46,6 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
       const enrollmentServiceUrl =
         process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
       const base = enrollmentServiceUrl.replace(/\/$/, "");
-      // const url = `${base}/batch-course-instructors?instructorId=${userId}&courseId=${courseId}&batchId=${batchId}&status=active`;
       const url = `${base}/batch-course-instructors?instructorId=${userId}&courseId=${courseId}&batchId=${batchId}&status=active`;
 
       const res = await fetchWithFallback(
@@ -50,54 +55,61 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
         "enrollment"
       );
       if (!res.ok) {
-        console.error(
-          `[Classroom] checkTeacherAssignment failed: ${res.status}`
-        );
         return false;
       }
 
       const data = await res.json();
-      console.log(
-        `[Classroom] checkTeacherAssignment response:`,
-        JSON.stringify(data)
-      );
-
       const items = extractApiArray(data);
 
       if (items.length > 0) return true;
       return false;
     } catch (e) {
-      console.error(
-        "[Classroom] Failed to check teacher assignment via API",
-        e.message
-      );
       return false;
     }
   };
 
-  // 1. Authorization Check (Common for Access and Creation)
   if (role === "teacher") {
     const isAssigned = await checkTeacherAssignment();
     if (!isAssigned) {
       throw new Error("You are not assigned to this course batch.");
     }
   } else if (role === "student") {
-    // TODO: Implement API check for students
-    const isEnrolled = await CourseEnrollment.findOne({
-      batchId,
-      courseId,
-      studentId: userId,
-      status: "active",
-      deletedAt: null,
-    });
-    if (!isEnrolled)
-      throw new Error("You are not enrolled in this course batch.");
+    let hasAccess = false;
+    try {
+      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+      const base = enrollmentServiceUrl.replace(/\/$/, "");
+      const url = `${base}/enrollments`;
+
+      const res = await fetchWithFallback(
+        url,
+        { headers: { Authorization: token } },
+        "enrollment",
+        "enrollment"
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const enrollments = extractApiArray(data);
+        hasAccess = enrollments.some(e => e.batchId === batchId);
+      }
+    } catch (e) {
+      console.error("[Classroom] Failed to check student enrollment via API", e.message);
+      const localEnrollment = await CourseEnrollment.findOne({
+        batchId,
+        studentId: userId,
+        status: "active",
+        deletedAt: null,
+      });
+      hasAccess = !!localEnrollment;
+    }
+
+    if (!hasAccess) {
+      throw new Error("You are not enrolled in this batch.");
+    }
   }
 
   let workspace = await Workspace.findOne({ courseId, batchId });
   if (workspace) return workspace;
 
-  // 3. New Workspace Creation Logic
   const allowedRoles = [
     "teacher",
     "super_admin",
@@ -190,7 +202,9 @@ const getWorkspaceById = async (workspaceId, userId, role, token) => {
     role,
     token
   );
-  return workspace;
+
+  const enrichedWorkspaces = await enrichWorkspaces([workspace], token);
+  return enrichedWorkspaces[0] || workspace;
 };
 
 const listWorkspaces = async (userId, role, token) => {
@@ -217,10 +231,6 @@ const listWorkspaces = async (userId, role, token) => {
         assignments = extractApiArray(data);
       }
     } catch (e) {
-      console.error(
-        "[Classroom] Failed to fetch assignments (API Error)",
-        e.message
-      );
       throw e;
     }
 
@@ -242,20 +252,40 @@ const listWorkspaces = async (userId, role, token) => {
 
     return await enrichWorkspaces(workspaces, token);
   } else if (role === "student") {
-    const enrollments = await CourseEnrollment.find({
-      studentId: userId,
-      status: "active",
-      deletedAt: null,
-    });
+    let enrollments = [];
+    try {
+      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+      const base = enrollmentServiceUrl.replace(/\/$/, "");
+      const url = `${base}/enrollments`;
 
-    const pairs = enrollments.map((e) => ({
-      courseId: e.courseId,
-      batchId: e.batchId,
-    }));
-    if (pairs.length === 0) return [];
+      const res = await fetchWithFallback(
+        url,
+        { headers: { Authorization: token } },
+        "enrollment",
+        "enrollment"
+      );
+      if (res.ok) {
+        const data = await res.json();
+        enrollments = extractApiArray(data);
+      }
+    } catch (e) {
+      const localEnrollments = await CourseEnrollment.find({
+        studentId: userId,
+        status: "active",
+        deletedAt: null,
+      });
+      enrollments = localEnrollments.map(e => ({
+        courseId: e.courseId,
+        batchId: e.batchId,
+      }));
+    }
+
+    const batchIds = [...new Set(enrollments.map(e => e.batchId).filter(Boolean))];
+
+    if (batchIds.length === 0) return [];
 
     const workspaces = await Workspace.find({
-      $or: pairs,
+      batchId: { $in: batchIds },
       deletedAt: null,
     }).sort({ createdAt: -1 });
 
@@ -264,10 +294,8 @@ const listWorkspaces = async (userId, role, token) => {
   return [];
 };
 
-// Helper function to enrich workspaces with Course and Batch details
 const enrichWorkspaces = async (workspaces, token) => {
-  const academicUrl =
-    process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+  const academicUrl = process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
   const base = academicUrl.replace(/\/$/, "");
 
   const enriched = await Promise.all(
@@ -319,16 +347,10 @@ const enrichWorkspaces = async (workspaces, token) => {
         workspaceObj.programId = batch.programId;
       }
 
-      // Fetch Total Batch Students from User Service (with fallback host)
       try {
-        console.log(
-          `[Classroom] USER_SERVICE_URL env is: '${process.env.USER_SERVICE_URL}'`
-        );
-        const userServiceUrl =
-          process.env.USER_SERVICE_URL || "http://localhost:8007";
+        const userServiceUrl = process.env.USER_SERVICE_URL || "http://localhost:8007";
         const baseUser = userServiceUrl.replace(/\/$/, "");
         const defaultUserBase = "http://user:8007";
-        // Use simple query param because user service does not parse nested filters[]
         const userUrl = `${baseUser}/students?batchId=${ws.batchId}&limit=1`;
 
         let res = await fetchWithFallback(
@@ -338,12 +360,8 @@ const enrichWorkspaces = async (workspaces, token) => {
           "user"
         );
 
-        // If the configured host is wrong (e.g., points to classroom), retry once with the known user service default
         if (!res.ok && baseUser !== defaultUserBase) {
           const fallbackUrl = `${defaultUserBase}/students?batchId=${ws.batchId}&limit=1`;
-          console.warn(
-            `[Classroom] Retrying total students fetch via default user service host: ${fallbackUrl}`
-          );
           res = await fetchWithFallback(
             fallbackUrl,
             { headers: { Authorization: token } },
@@ -354,27 +372,55 @@ const enrichWorkspaces = async (workspaces, token) => {
 
         if (res.ok) {
           const data = await res.json();
-          // Check structure based on StudentController/Service
           if (data.success && data.data && data.data.pagination) {
             workspaceObj.totalBatchStudents = data.data.pagination.total;
           } else if (data.data && data.data.total) {
-            // Fallback if structure differs
             workspaceObj.totalBatchStudents = data.data.total;
           } else {
             workspaceObj.totalBatchStudents = 0;
           }
         }
       } catch (e) {
-        console.error(
-          `[Classroom] Failed to fetch total students for batch ${ws.batchId}`,
-          e.message
-        );
-        workspaceObj.totalBatchStudents = 0; // Default or null
+        workspaceObj.totalBatchStudents = 0;
       }
 
-      // Student count (enrolled in workspace)
+      if (ws.teacherIds && ws.teacherIds.length > 0) {
+        const userServiceUrl = process.env.USER_SERVICE_URL || "http://localhost:8007";
+        const baseUser = userServiceUrl.replace(/\/$/, "");
+
+        workspaceObj.teachers = await Promise.all(
+          ws.teacherIds.map(async (teacherId) => {
+            try {
+              const teacherUrl = `${baseUser}/teachers/${teacherId}`;
+              const res = await fetchWithFallback(
+                teacherUrl,
+                { headers: { Authorization: token } },
+                "user",
+                "user"
+              );
+              if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.data) {
+                  return {
+                    id: teacherId,
+                    fullName: data.data.fullName || data.data.name || "Unknown Teacher",
+                    email: data.data.email || "",
+                    registrationNumber: data.data.registrationNumber || "",
+                  };
+                }
+              }
+            } catch (e) {
+              console.error(`[Classroom] Failed to fetch teacher ${teacherId}`, e.message);
+            }
+            return { id: teacherId, fullName: "Unknown Teacher" };
+          })
+        );
+      } else {
+        workspaceObj.teachers = [];
+      }
+
       workspaceObj.studentCount = ws.studentIds ? ws.studentIds.length : 0;
-      workspaceObj.id = ws._id; // Ensure ID is present
+      workspaceObj.id = ws._id;
 
       return workspaceObj;
     })
@@ -390,15 +436,12 @@ const fetchWithFallback = async (url, options, serviceName, fallbackHost) => {
     return res;
   } catch (e) {
     if (url.includes("localhost") && fallbackHost) {
-      console.warn(
-        `[Classroom] Failed to fetch from localhost. Retrying with ${fallbackHost}...`
-      );
       const newUrl = url.replace("localhost", fallbackHost);
       try {
         const resRelay = await fetch(newUrl, options);
         return resRelay;
       } catch (e2) {
-        throw e; // Throw original error or new one? Throw original is better usually, or e2.
+        throw e;
       }
     }
     throw e;
@@ -407,8 +450,6 @@ const fetchWithFallback = async (url, options, serviceName, fallbackHost) => {
 
 const listPendingWorkspaces = async (userId, role, token) => {
   if (role !== "teacher") return [];
-
-  console.log(`[Classroom] listPendingWorkspaces called for user: ${userId}`);
 
   let assignments = [];
   try {
@@ -424,27 +465,18 @@ const listPendingWorkspaces = async (userId, role, token) => {
       "enrollment"
     );
 
-    console.log(`[Classroom] Assignments API Status: ${res.status}`);
-
     if (!res.ok) {
       const text = await res.text();
-      console.error(`[Classroom] Assignments API Error Body: ${text}`);
       throw new Error(`Enrollment Service returned ${res.status}`);
     }
 
     const rawData = await res.json();
-    // console.log(`[Classroom] Assignments API Data: ${JSON.stringify(rawData).substring(0, 200)}...`);
-
     assignments = extractApiArray(rawData);
-
-    console.log(`[Classroom] Parsed ${assignments.length} assignments`);
   } catch (e) {
-    console.error("[Classroom] Failed to fetch assignments via API", e.message);
     return [];
   }
 
   if (assignments.length === 0) {
-    console.log("[Classroom] No assignments found via API. Returning empty.");
     return [];
   }
 
@@ -455,15 +487,6 @@ const listPendingWorkspaces = async (userId, role, token) => {
   const existingWorkspaces = await Workspace.find({
     $or: pairs,
   });
-  console.log(
-    `[Classroom] Found ${existingWorkspaces.length} existing workspaces (active + archived + deleted)`
-  );
-
-  // Filter out only ACTIVE or ARCHIVED workspaces (ignore deleted? No, logic says "Create Classroom" if NOT exists)
-  // If a workspace exists (active/archived), we shouldn't show it in "Pending".
-  // Check Workspace schema: `deletedAt` means soft deleted.
-  // If soft deleted, can we recreate? Probably yes.
-  // So we should filter out workspaces that are NOT deleted.
 
   const activeOrArchivedWorkspaces = existingWorkspaces.filter(
     (w) => !w.deletedAt
@@ -475,17 +498,12 @@ const listPendingWorkspaces = async (userId, role, token) => {
       )
   );
 
-  console.log(
-    `[Classroom] ${pendingAssignments.length} assignments are truly pending`
-  );
-
   const enriched = await Promise.all(
     pendingAssignments.map(async (a) => {
       let course = await Course.findById(a.courseId);
       let batch = await Batch.findById(a.batchId);
 
-      const academicUrl =
-        process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+      const academicUrl = process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
       const base = academicUrl.replace(/\/$/, "");
 
       if (!course) {
@@ -525,9 +543,6 @@ const listPendingWorkspaces = async (userId, role, token) => {
       }
 
       if (!course || !batch) {
-        console.error(
-          `[Classroom] Missing course/batch for ${a.courseId}/${a.batchId}`
-        );
         return null;
       }
 

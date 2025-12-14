@@ -9,6 +9,7 @@ import streamRoutes from './streamRoutes.js';
 import quizRoutes from './quizRoutes.js';
 import questionRoutes from './questionRoutes.js';
 import quizAttemptRoutes from './quizAttemptRoutes.js';
+import questionImageRoutes from './questionImageRoutes.js';
 
 const router = Router();
 
@@ -21,6 +22,7 @@ router.use('/rubrics', rubricRoutes);
 router.use('/stream', streamRoutes);
 router.use('/quizzes', quizRoutes);
 router.use('/questions', questionRoutes);
+router.use('/questions', questionImageRoutes);  // Image uploads at /questions/images
 router.use('/quiz-attempts', quizAttemptRoutes);
 
 export default router;

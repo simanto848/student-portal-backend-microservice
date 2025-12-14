@@ -3,8 +3,13 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import morgan from "morgan";
+import path from "path";
+import { fileURLToPath } from "url";
 import apiRoutes from "./routes/index.js";
 import { ApiResponse, ApiError } from "shared";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -18,8 +23,13 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(morgan("dev"));
+
+// Serve static files from public/uploads directory
+app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
 // Routes
 app.use("/", apiRoutes);
@@ -73,12 +83,7 @@ app.use((err, req, res, next) => {
   }
 
   console.error("Unhandled error:", err);
-  return ApiResponse.serverError(
-    res,
-    process.env.NODE_ENV === "development"
-      ? err.message
-      : "Internal server error"
-  );
+  return ApiResponse.serverError(res, process.env.NODE_ENV === "development" ? err.message : "Internal server error");
 });
 
 export default app;
