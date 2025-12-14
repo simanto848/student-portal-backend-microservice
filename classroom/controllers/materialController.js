@@ -18,6 +18,25 @@ class MaterialController {
     }
   }
 
+  async upload(req, res, next) {
+    try {
+      const { workspaceId, topicId, title } = req.body;
+
+      const files = Array.isArray(req.files) ? req.files : [];
+      const material = await MaterialService.createFileMaterial(
+        workspaceId,
+        { topicId, title },
+        files,
+        req.user.id,
+        req.headers.authorization
+      );
+
+      return ApiResponse.created(res, material, "Material uploaded");
+    } catch (e) {
+      next(e);
+    }
+  }
+
   async list(req, res, next) {
     try {
       const { workspaceId } = req.params;
@@ -69,6 +88,24 @@ class MaterialController {
         req.headers.authorization
       );
       return ApiResponse.success(res, null, "Material deleted");
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  async downloadAttachment(req, res, next) {
+    try {
+      const { id, attachmentId } = req.params;
+      const { absolutePath, downloadName } =
+        await MaterialService.getMaterialAttachmentForDownload(
+          id,
+          attachmentId,
+          req.user.id,
+          req.user.role,
+          req.headers.authorization
+        );
+
+      return res.download(absolutePath, downloadName);
     } catch (e) {
       next(e);
     }

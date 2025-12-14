@@ -33,6 +33,38 @@ class SubmissionController {
     }
   }
 
+  async getMineByAssignment(req, res, next) {
+    try {
+      const { assignmentId } = req.params;
+      const submission = await SubmissionService.getMySubmission(
+        assignmentId,
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, submission, "Submission fetched");
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  async submitWithFiles(req, res, next) {
+    try {
+      const { assignmentId } = req.params;
+      const { textAnswer } = req.body;
+      const files = Array.isArray(req.files) ? req.files : [];
+
+      const submission = await SubmissionService.submitAssignmentWithFiles(
+        assignmentId,
+        { files, textAnswer },
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, submission, "Submission saved");
+    } catch (e) {
+      next(e);
+    }
+  }
+
   async get(req, res, next) {
     try {
       const submission = await SubmissionService.getSubmission(
@@ -75,6 +107,24 @@ class SubmissionController {
         req.headers.authorization
       );
       return ApiResponse.success(res, feedback, "Feedback added");
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  async downloadFile(req, res, next) {
+    try {
+      const { id, fileId } = req.params;
+      const { absolutePath, downloadName } =
+        await SubmissionService.getSubmissionFileForDownload(
+          id,
+          fileId,
+          req.user.id,
+          req.user.role,
+          req.headers.authorization
+        );
+
+      return res.download(absolutePath, downloadName);
     } catch (e) {
       next(e);
     }
