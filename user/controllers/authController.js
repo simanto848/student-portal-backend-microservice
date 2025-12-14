@@ -242,6 +242,9 @@ class AuthController {
       }
 
       const sanitizedUser = dbUser.toObject();
+      sanitizedUser.id = dbUser.id;
+      // Ensure role is present for frontend routing/authorization
+      sanitizedUser.role = roleType || req.user?.role;
       delete sanitizedUser.password;
       delete sanitizedUser.refreshToken;
 

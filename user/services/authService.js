@@ -175,6 +175,7 @@ class AuthService {
     this.setRefreshTokenCookie(res, refreshToken);
 
     const sanitizedUser = user.toObject();
+    sanitizedUser.id = user.id;
     delete sanitizedUser.password;
     delete sanitizedUser.refreshToken;
 

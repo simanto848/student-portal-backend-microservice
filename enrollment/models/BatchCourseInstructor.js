@@ -69,7 +69,7 @@ batchCourseInstructorSchema.index(
 
 batchCourseInstructorSchema.pre(/^find/, function (next) {
   // Filter soft-deleted records
-  this.find({ deletedAt: { $eq: null } });
+  this.where({ deletedAt: null });
   next();
 });
 

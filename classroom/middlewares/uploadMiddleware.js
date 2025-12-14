@@ -28,13 +28,15 @@ const storage = (subdir) => {
   });
 };
 
-export const createUpload = (subdir) => {
-  const options =
-    arguments.length > 1 && arguments[1] && typeof arguments[1] === "object"
-      ? arguments[1]
+export function createUpload(subdir, options = {}) {
+  const safeOptions =
+    options && typeof options === "object" && !Array.isArray(options)
+      ? options
       : {};
-  const allowedMimeTypes = normalizeAllowedMimeTypes(options.allowedMimeTypes);
-  const maxFiles = Number(options.maxFiles || 0);
+  const allowedMimeTypes = normalizeAllowedMimeTypes(
+    safeOptions.allowedMimeTypes
+  );
+  const maxFiles = Number(safeOptions.maxFiles || 0);
 
   return multer({
     storage: storage(subdir),
@@ -51,4 +53,4 @@ export const createUpload = (subdir) => {
       return cb(err);
     },
   });
-};
+}

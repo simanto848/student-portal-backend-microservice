@@ -1,9 +1,38 @@
 import Workspace from "../models/Workspace.js";
 import {
-  BatchCourseInstructor,
   CourseEnrollment,
 } from "../models/external/Enrollment.js";
 import { Course, Batch } from "../models/external/Academic.js";
+
+const extractApiArray = (payload) => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+
+  // Common pattern: { success: true, data: [...] }
+  if (payload.success && Array.isArray(payload.data)) return payload.data;
+
+  // Common pattern: { success: true, data: { data: [...] } }
+  if (
+    payload.success &&
+    payload.data &&
+    typeof payload.data === "object" &&
+    Array.isArray(payload.data.data)
+  ) {
+    return payload.data.data;
+  }
+
+  // Some services may return { data: [...] } or { data: { data: [...] } }
+  if (Array.isArray(payload.data)) return payload.data;
+  if (
+    payload.data &&
+    typeof payload.data === "object" &&
+    Array.isArray(payload.data.data)
+  ) {
+    return payload.data.data;
+  }
+
+  return [];
+};
 
 const getWorkspace = async (courseId, batchId, userId, role, token) => {
   const checkTeacherAssignment = async () => {
@@ -33,17 +62,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
         JSON.stringify(data)
       );
 
-      // Handle different response formats (wrapped data or direct array)
-      let items = [];
-      if (data.success && Array.isArray(data.data)) {
-        items = data.data;
-      } else if (Array.isArray(data)) {
-        // response is the array
-        items = data;
-      } else if (data.data && Array.isArray(data.data)) {
-        // potential double struct
-        items = data.data;
-      }
+      const items = extractApiArray(data);
 
       if (items.length > 0) return true;
       return false;
@@ -60,16 +79,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   if (role === "teacher") {
     const isAssigned = await checkTeacherAssignment();
     if (!isAssigned) {
-      // Fallback to local DB check
-      const localAssigned = await BatchCourseInstructor.findOne({
-        batchId,
-        courseId,
-        instructorId: userId,
-        status: "active",
-        deletedAt: null,
-      });
-      if (!localAssigned)
-        throw new Error("You are not assigned to this course batch.");
+      throw new Error("You are not assigned to this course batch.");
     }
   } else if (role === "student") {
     // TODO: Implement API check for students
@@ -204,24 +214,18 @@ const listWorkspaces = async (userId, role, token) => {
       );
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          assignments = data.data;
-        }
+        assignments = extractApiArray(data);
       }
     } catch (e) {
       console.error(
-        "[Classroom] Failed to fetch assignments for listWorkspaces",
+        "[Classroom] Failed to fetch assignments (API Error)",
         e.message
       );
+      throw e;
     }
 
     if (assignments.length === 0) {
-      // Optional: Try local DB as backup?
-      assignments = await BatchCourseInstructor.find({
-        instructorId: userId,
-        status: "active",
-        deletedAt: null,
-      });
+      console.log("[Classroom] No assignments found for teacher via API.");
     }
 
     const pairs = assignments.map((a) => ({
@@ -431,14 +435,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
     const rawData = await res.json();
     // console.log(`[Classroom] Assignments API Data: ${JSON.stringify(rawData).substring(0, 200)}...`);
 
-    if (rawData.success && Array.isArray(rawData.data)) {
-      assignments = rawData.data;
-    } else if (Array.isArray(rawData)) {
-      assignments = rawData;
-    } else if (rawData.data && Array.isArray(rawData.data)) {
-      // Handle double nesting if any
-      assignments = rawData.data;
-    }
+    assignments = extractApiArray(rawData);
 
     console.log(`[Classroom] Parsed ${assignments.length} assignments`);
   } catch (e) {

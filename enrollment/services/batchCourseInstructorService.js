@@ -38,7 +38,6 @@ class BatchCourseInstructorService {
 
         for (const assignment of assignments) {
             try {
-                // Check if assignment already exists (active)
                 const existing = await BatchCourseInstructor.findOne({
                     batchId: assignment.batchId,
                     courseId: assignment.courseId,
@@ -48,7 +47,6 @@ class BatchCourseInstructorService {
                 });
 
                 if (existing) {
-                    // Update existing if instructor changed
                     if (existing.instructorId !== assignment.instructorId) {
                         await userServiceClient.verifyTeacher(assignment.instructorId);
                         existing.instructorId = assignment.instructorId;
@@ -58,7 +56,6 @@ class BatchCourseInstructorService {
                         results.push({ ...existing.toObject(), status: 'unchanged' });
                     }
                 } else {
-                    // Create new
                     const newAssignment = await this.assignInstructor(assignment);
                     results.push({ ...newAssignment.toObject(), status: 'created' });
                 }
@@ -133,6 +130,7 @@ class BatchCourseInstructorService {
         else query.status = 'active';
 
         const assignments = await BatchCourseInstructor.find(query).sort({ semester: -1, createdAt: -1 });
+
         return assignments;
     }
 
