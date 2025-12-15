@@ -5,15 +5,39 @@ class RecipientResolverService {
     const type = notification.targetType;
     switch (type) {
       case 'all':
-        return await this.getAllUsers();
+      case 'all':
+        const allUsers = await this.getAllUsers();
+        return allUsers;
       case 'students':
         return await this.getAllStudents();
       case 'teachers':
         return await this.getAllTeachers();
+      case 'staff':
+        return await this.getAllStaff();
       case 'department':
-        return await this.getDepartmentsUsers(notification.targetDepartmentIds);
+      case 'department':
+        const deptUsers = await this.getDepartmentsUsers(notification.targetDepartmentIds);
+        return deptUsers;
+      case 'department_students':
+        return await this.getDepartmentStudents(notification.targetDepartmentIds);
+      case 'department_teachers':
+        return await this.getDepartmentTeachers(notification.targetDepartmentIds);
+      case 'department_staff':
+        return await this.getDepartmentStaff(notification.targetDepartmentIds);
       case 'batch':
-        return await this.getBatchUsers(notification.targetBatchIds);
+      case 'batch_students':
+      case 'batch':
+      case 'batch_students':
+        const batchUsers = await this.getBatchUsers(notification.targetBatchIds);
+        return batchUsers;
+      case 'faculty':
+        return await this.getFacultyUsers(notification.targetFacultyIds);
+      case 'faculty_students':
+        return await this.getFacultyStudents(notification.targetFacultyIds);
+      case 'faculty_teachers':
+        return await this.getFacultyTeachers(notification.targetFacultyIds);
+      case 'faculty_staff':
+        return await this.getFacultyStaff(notification.targetFacultyIds);
       case 'custom':
         return notification.targetUserIds.map(id => ({ id, role: 'student' }));
       default:
@@ -22,8 +46,12 @@ class RecipientResolverService {
   }
 
   async getAllUsers() {
-    const [students, teachers] = await Promise.all([this.getAllStudents(), this.getAllTeachers()]);
-    return [...students, ...teachers];
+    const [students, teachers, staff] = await Promise.all([
+      this.getAllStudents(),
+      this.getAllTeachers(),
+      this.getAllStaff()
+    ]);
+    return [...students, ...teachers, ...staff];
   }
 
   async getAllStudents() {
@@ -34,14 +62,75 @@ class RecipientResolverService {
     return await userServiceClient.getAllTeachers();
   }
 
-  async getDepartmentsUsers(departmentIds = []) {
-    const results = await Promise.all(departmentIds.map(id => userServiceClient.getStudentsByDepartment(id)));
-    return results.flat();
+  async getAllStaff() {
+    return await userServiceClient.getAllStaff();
   }
 
+  // Department-level resolvers
+  async getDepartmentsUsers(departmentIds = []) {
+    const [students, teachers, staff] = await Promise.all([
+      this.getDepartmentStudents(departmentIds),
+      this.getDepartmentTeachers(departmentIds),
+      this.getDepartmentStaff(departmentIds)
+    ]);
+    return [...students, ...teachers, ...staff];
+  }
+
+  async getDepartmentStudents(departmentIds = []) {
+    const results = await Promise.all(departmentIds.map(id => userServiceClient.getStudentsByDepartment(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  async getDepartmentTeachers(departmentIds = []) {
+    const results = await Promise.all(departmentIds.map(id => userServiceClient.getTeachersByDepartment(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  async getDepartmentStaff(departmentIds = []) {
+    const results = await Promise.all(departmentIds.map(id => userServiceClient.getStaffByDepartment(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  // Batch-level resolvers
   async getBatchUsers(batchIds = []) {
     const results = await Promise.all(batchIds.map(id => userServiceClient.getStudentsByBatch(id)));
-    return results.flat();
+    return this._uniqueUsers(results.flat());
+  }
+
+  // Faculty-level resolvers
+  async getFacultyUsers(facultyIds = []) {
+    const [students, teachers, staff] = await Promise.all([
+      this.getFacultyStudents(facultyIds),
+      this.getFacultyTeachers(facultyIds),
+      this.getFacultyStaff(facultyIds)
+    ]);
+    return [...students, ...teachers, ...staff];
+  }
+
+  async getFacultyStudents(facultyIds = []) {
+    const results = await Promise.all(facultyIds.map(id => userServiceClient.getStudentsByFaculty(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  async getFacultyTeachers(facultyIds = []) {
+    const results = await Promise.all(facultyIds.map(id => userServiceClient.getTeachersByFaculty(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  async getFacultyStaff(facultyIds = []) {
+    const results = await Promise.all(facultyIds.map(id => userServiceClient.getStaffByFaculty(id)));
+    return this._uniqueUsers(results.flat());
+  }
+
+  // Helper to remove duplicate users
+  _uniqueUsers(users) {
+    const seen = new Set();
+    return users.filter(u => {
+      const id = u.id || u._id;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
   }
 
   async streamRecipients(notification, pageSize = 500, onBatch) {
@@ -54,3 +143,4 @@ class RecipientResolverService {
 }
 
 export default new RecipientResolverService();
+

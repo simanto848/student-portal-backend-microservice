@@ -157,6 +157,11 @@ class AuthService {
       registrationNumber: user.registrationNumber,
       fullName: user.fullName,
       email: user.email,
+      // Include batch, department, and program IDs for notification targeting
+      ...(user.batchId && { batchId: user.batchId }),
+      ...(user.departmentId && { departmentId: user.departmentId }),
+      ...(user.programId && { programId: user.programId }),
+      ...(user.facultyId && { facultyId: user.facultyId }),
     };
 
     const accessToken = this.signToken(payload);
@@ -315,6 +320,11 @@ class AuthService {
         registrationNumber: user.registrationNumber,
         fullName: user.fullName,
         email: user.email,
+        // Include batch, department, and program IDs for notification targeting
+        ...(user.batchId && { batchId: user.batchId }),
+        ...(user.departmentId && { departmentId: user.departmentId }),
+        ...(user.programId && { programId: user.programId }),
+        ...(user.facultyId && { facultyId: user.facultyId }),
       };
 
       const accessToken = this.signToken(payload);
