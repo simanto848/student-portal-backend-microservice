@@ -4,7 +4,6 @@ import QuizAttempt from '../models/QuizAttempt.js';
 import { ApiError, ApiResponse } from 'shared';
 
 class QuizAttemptController {
-    // Start a quiz attempt
     async start(req, res, next) {
         try {
             const { quizId } = req.params;
@@ -15,18 +14,10 @@ class QuizAttemptController {
                 throw new ApiError(404, 'Quiz not found');
             }
 
-            // Check if quiz is available
             if (!quiz.isAvailable()) {
                 throw new ApiError(400, 'Quiz is not currently available');
             }
 
-            // Check attempt limits
-            const existingAttempts = await QuizAttempt.countDocuments({ quizId, studentId });
-            if (existingAttempts >= quiz.maxAttempts) {
-                throw new ApiError(400, `Maximum attempts (${quiz.maxAttempts}) reached`);
-            }
-
-            // Check for in-progress attempt
             const inProgressAttempt = await QuizAttempt.findOne({
                 quizId,
                 studentId,
@@ -34,13 +25,12 @@ class QuizAttemptController {
             });
 
             if (inProgressAttempt) {
-                // Return existing in-progress attempt
                 const questions = await Question.find({ quizId }).sort({ order: 1 });
                 const sanitizedQuestions = questions.map(q => ({
                     id: q._id,
                     type: q.type,
                     text: q.text,
-                    options: q.options.map(o => ({ id: o.id, text: o.text })), // Remove isCorrect
+                    options: q.options.map(o => ({ id: o.id, text: o.text })),
                     points: q.points,
                     order: q.order
                 }));
@@ -52,10 +42,13 @@ class QuizAttemptController {
                 });
             }
 
-            // Create new attempt
+            const existingAttempts = await QuizAttempt.countDocuments({ quizId, studentId });
+            if (existingAttempts >= quiz.maxAttempts) {
+                throw new ApiError(400, `Maximum attempts (${quiz.maxAttempts}) reached`);
+            }
+
             const expiresAt = new Date(Date.now() + quiz.duration * 60 * 1000);
 
-            // Get and optionally shuffle questions
             let questions = await Question.find({ quizId }).sort({ order: 1 });
             let questionIds = questions.map(q => q._id);
 
@@ -74,7 +67,6 @@ class QuizAttemptController {
                 answers: []
             });
 
-            // Prepare questions for student (without correct answers)
             const orderedQuestions = questionIds.map(id => questions.find(q => q._id === id));
             const sanitizedQuestions = orderedQuestions.map(q => {
                 let options = q.options.map(o => ({ id: o.id, text: o.text }));
@@ -101,7 +93,6 @@ class QuizAttemptController {
         }
     }
 
-    // Save progress (auto-save answers)
     async saveProgress(req, res, next) {
         try {
             const { id } = req.params;
@@ -113,12 +104,9 @@ class QuizAttemptController {
                 throw new ApiError(404, 'Attempt not found or already submitted');
             }
 
-            // Check if expired
             if (attempt.hasExpired()) {
                 throw new ApiError(400, 'Quiz time has expired');
             }
-
-            // Update answers
             attempt.answers = answers;
             await attempt.save();
 
@@ -128,7 +116,6 @@ class QuizAttemptController {
         }
     }
 
-    // Submit quiz attempt
     async submit(req, res, next) {
         try {
             const { id } = req.params;
@@ -148,7 +135,6 @@ class QuizAttemptController {
             const questions = await Question.find({ quizId: attempt.quizId });
             const questionMap = new Map(questions.map(q => [q._id, q]));
 
-            // Process and grade answers
             const processedAnswers = [];
             let autoGradedScore = 0;
             let needsManualGrading = false;
@@ -166,7 +152,6 @@ class QuizAttemptController {
                     feedback: null
                 };
 
-                // Auto-grade MCQ and true/false
                 const isCorrect = question.checkAnswer(
                     question.type === 'mcq_multiple' ? answer.selectedOptions :
                         (answer.selectedOptions?.[0] || answer.writtenAnswer)
@@ -183,7 +168,6 @@ class QuizAttemptController {
                 processedAnswers.push(processedAnswer);
             }
 
-            // Handle unanswered questions
             for (const question of questions) {
                 const hasAnswer = processedAnswers.some(a => a.questionId === question._id);
                 if (!hasAnswer) {
@@ -203,17 +187,13 @@ class QuizAttemptController {
             attempt.isAutoSubmitted = isAutoSubmit || false;
             attempt.status = needsManualGrading ? 'submitted' : 'graded';
 
-            // Calculate score
             attempt.calculateScore();
-
-            // Check passing
             if (quiz.passingScore > 0) {
                 attempt.isPassed = attempt.percentage >= quiz.passingScore;
             }
 
             await attempt.save();
 
-            // Prepare response based on quiz settings
             const result = {
                 attemptId: attempt._id,
                 status: attempt.status,
@@ -234,7 +214,6 @@ class QuizAttemptController {
         }
     }
 
-    // Get attempt status (for checking time)
     async getStatus(req, res, next) {
         try {
             const { id } = req.params;
@@ -256,13 +235,22 @@ class QuizAttemptController {
         }
     }
 
-    // Get attempt results
     async getResults(req, res, next) {
         try {
             const { id } = req.params;
-            const studentId = req.user.sub || req.user.id;
+            const userId = req.user.sub || req.user.id;
+            const userRole = req.user.role;
 
-            const attempt = await QuizAttempt.findOne({ _id: id, studentId });
+            // Teachers can view any attempt, students can only view their own
+            const isTeacher = userRole === 'teacher';
+            let attempt;
+
+            if (isTeacher) {
+                attempt = await QuizAttempt.findById(id);
+            } else {
+                attempt = await QuizAttempt.findOne({ _id: id, studentId: userId });
+            }
+
             if (!attempt) {
                 throw new ApiError(404, 'Attempt not found');
             }
@@ -273,17 +261,41 @@ class QuizAttemptController {
 
             const quiz = await Quiz.findById(attempt.quizId);
 
+            // Check if results should be shown (only applies to students, teachers always see results)
+            if (!isTeacher && !quiz.showResultsAfterSubmit) {
+                // Return limited info - just confirmation that quiz was submitted
+                return ApiResponse.success(res, {
+                    attempt: {
+                        _id: attempt._id,
+                        attemptNumber: attempt.attemptNumber,
+                        status: attempt.status,
+                        submittedAt: attempt.submittedAt,
+                        isAutoSubmitted: attempt.isAutoSubmitted
+                        // Score and percentage are NOT included
+                    },
+                    quiz: {
+                        title: quiz.title,
+                        showResultsAfterSubmit: false,
+                        showCorrectAnswers: false,
+                        allowReviewAfterSubmit: false
+                    },
+                    resultsHidden: true,
+                    message: 'Results for this quiz are not available for viewing.'
+                });
+            }
+
             const result = {
                 attempt,
                 quiz: {
                     title: quiz.title,
+                    showResultsAfterSubmit: quiz.showResultsAfterSubmit,
                     showCorrectAnswers: quiz.showCorrectAnswers,
                     allowReviewAfterSubmit: quiz.allowReviewAfterSubmit
                 }
             };
 
-            // Include questions with answers if allowed
-            if (quiz.allowReviewAfterSubmit) {
+            // Teachers always see questions, students only if allowReviewAfterSubmit is true
+            if (isTeacher || quiz.allowReviewAfterSubmit) {
                 const questions = await Question.find({ quizId: quiz._id }).sort({ order: 1 });
                 result.questions = questions.map(q => ({
                     id: q._id,
@@ -292,7 +304,7 @@ class QuizAttemptController {
                     options: q.options,
                     points: q.points,
                     explanation: q.explanation,
-                    correctAnswer: quiz.showCorrectAnswers ? q.correctAnswer : undefined
+                    correctAnswer: (isTeacher || quiz.showCorrectAnswers) ? q.correctAnswer : undefined
                 }));
             }
 
@@ -302,7 +314,6 @@ class QuizAttemptController {
         }
     }
 
-    // Get my attempts for a quiz
     async getMyAttempts(req, res, next) {
         try {
             const { quizId } = req.params;
@@ -316,7 +327,6 @@ class QuizAttemptController {
         }
     }
 
-    // Grade individual answer (teacher)
     async gradeAnswer(req, res, next) {
         try {
             const { id, questionId } = req.params;
@@ -336,7 +346,6 @@ class QuizAttemptController {
             answer.feedback = feedback;
             answer.isCorrect = pointsAwarded > 0;
 
-            // Recalculate score
             attempt.calculateScore();
             attempt.gradedById = req.user.sub || req.user.id;
             attempt.gradedAt = new Date();
