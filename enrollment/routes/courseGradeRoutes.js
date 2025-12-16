@@ -26,11 +26,11 @@ router.post('/auto-calculate/:enrollmentId', authorize('teacher'), courseGradeCo
 // Workflow Routes
 router.get('/workflow', authorize('teacher', 'admin', 'super_admin'), resultWorkflowController.getWorkflow);
 router.post('/workflow/submit', authorize('teacher'), validate(submitToCommitteeSchema), resultWorkflowController.submitToCommittee);
-router.post('/workflow/:id/approve', authorize('admin', 'super_admin'), validate(approveByCommitteeSchema), resultWorkflowController.approveByCommittee); // Assuming admin/super_admin is committee for now
-router.post('/workflow/:id/return', authorize('admin', 'super_admin'), validate(returnToTeacherSchema), resultWorkflowController.returnToTeacher);
-router.post('/workflow/:id/publish', authorize('admin', 'super_admin'), resultWorkflowController.publishResult); // Assuming admin/super_admin is Head for now
+router.post('/workflow/:id/approve', authorize('admin', 'super_admin', 'teacher'), validate(approveByCommitteeSchema), resultWorkflowController.approveByCommittee); // Teacher allowed for Committee members
+router.post('/workflow/:id/return', authorize('admin', 'super_admin', 'teacher'), validate(returnToTeacherSchema), resultWorkflowController.returnToTeacher);
+router.post('/workflow/:id/publish', authorize('admin', 'super_admin', 'teacher'), resultWorkflowController.publishResult); // Teacher allowed for Dept Head
 router.post('/workflow/:id/request-return', authorize('teacher'), validate(requestReturnSchema), resultWorkflowController.requestReturn);
-router.post('/workflow/:id/approve-return', authorize('admin', 'super_admin'), resultWorkflowController.approveReturnRequest);
+router.post('/workflow/:id/approve-return', authorize('admin', 'super_admin', 'teacher'), resultWorkflowController.approveReturnRequest);
 
 router.get('/stats/course', authorize('teacher'), courseGradeController.getCourseGradeStats);
 router.get('/student/:studentId/semester/:semester', authorize('super_admin', 'admin', 'teacher', 'student'), courseGradeController.getStudentSemesterGrades);
