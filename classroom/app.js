@@ -6,12 +6,20 @@ import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
 import apiRoutes from "./routes/index.js";
-import { ApiResponse, ApiError } from "shared";
+import {
+  ApiResponse,
+  ApiError,
+  errorHandler,
+  requestLoggerMiddleware,
+} from "shared";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Request Logger Middleware - Add at the top
+app.use(requestLoggerMiddleware("CLASSROOM"));
 
 app.use(
   cors({
@@ -23,9 +31,11 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(morgan("dev"));
 
 // Serve static files from public/uploads directory
@@ -35,55 +45,14 @@ app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 app.use("/", apiRoutes);
 
 app.get("/health", (req, res) => {
-  return res
-    .status(200)
-    .json({
-      message: "Classroom Service Healthy",
-      status: true,
-      statusCode: 200,
-    });
+  return res.status(200).json({
+    message: "Classroom Service Healthy",
+    status: true,
+    statusCode: 200,
+  });
 });
 
 // Global Error Handler Middleware
-app.use((err, req, res, next) => {
-  if (err instanceof ApiError) {
-    return ApiResponse.error(res, err.message, err.statusCode, err.errors);
-  }
-
-  // Multer/file upload errors
-  if (err?.name === "MulterError") {
-    const code = String(err?.code || "");
-    if (code === "LIMIT_FILE_SIZE") {
-      return ApiResponse.error(res, "Uploaded file is too large", 413);
-    }
-    if (code === "LIMIT_FILE_COUNT") {
-      return ApiResponse.badRequest(res, "Too many files uploaded");
-    }
-    if (code === "LIMIT_UNEXPECTED_FILE") {
-      return ApiResponse.badRequest(res, "Unexpected file field");
-    }
-    return ApiResponse.badRequest(res, err.message || "File upload failed");
-  }
-
-  if (err.name === "ValidationError") {
-    const errors = Object.values(err.errors).map((e) => ({
-      field: e.path,
-      message: e.message,
-    }));
-    return ApiResponse.validationError(res, "Validation failed", errors);
-  }
-
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyPattern)[0];
-    return ApiResponse.conflict(res, `${field} already exists`);
-  }
-
-  if (err.name === "CastError") {
-    return ApiResponse.badRequest(res, "Invalid ID format");
-  }
-
-  console.error("Unhandled error:", err);
-  return ApiResponse.serverError(res, process.env.NODE_ENV === "development" ? err.message : "Internal server error");
-});
+app.use(errorHandler);
 
 export default app;

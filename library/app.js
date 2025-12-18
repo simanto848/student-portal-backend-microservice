@@ -6,16 +6,21 @@ import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import connectDB from "./config/database.js";
 import routes from "./routes/index.js";
-import { errorHandler, notFoundHandler } from 'shared';
+import { errorHandler, notFoundHandler, requestLoggerMiddleware } from "shared";
 
 config();
 
 const app = express();
 
-app.use(cors({
+// Request Logger Middleware - Add at the top
+app.use(requestLoggerMiddleware("LIBRARY"));
+
+app.use(
+  cors({
     origin: true,
-    credentials: true
-}));
+    credentials: true,
+  })
+);
 
 // Connect to MongoDB
 connectDB();
@@ -29,11 +34,11 @@ app.use(cookieParser());
 
 // Health check route
 app.get("/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Library service is running",
-        timestamp: new Date().toISOString()
-    });
+  res.status(200).json({
+    success: true,
+    message: "Library service is running",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // API Routes

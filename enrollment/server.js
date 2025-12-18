@@ -1,11 +1,14 @@
 import http from "http";
 import colors from "colors";
 import app from "./app.js";
+import { createLogger } from "shared";
+
+const logger = createLogger("ENROLLMENT");
 
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 8003;
 
 server.listen(PORT, () => {
-    console.log(`Server started on port http://localhost:${PORT}`.bgGreen.bold);
+  logger.info(`Server started on port http://localhost:${PORT}`);
 });

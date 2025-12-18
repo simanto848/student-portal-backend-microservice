@@ -1,13 +1,20 @@
-import express from "express";
+import express from "express"; // Restart trigger
 import expressProxy from "express-http-proxy";
 import morgan from "morgan";
 import { config } from "dotenv";
 import colors from "colors";
 import cors from "cors";
+import { createLogger, requestLoggerMiddleware } from "shared";
 
 config();
 
+const logger = createLogger("GATEWAY");
+
 const app = express();
+
+// Request Logger Middleware - Add at the top
+app.use(requestLoggerMiddleware("GATEWAY"));
+
 app.use(morgan("dev"));
 app.use(
   cors({
@@ -187,8 +194,8 @@ app.get("/api/system-health", async (req, res) => {
     const overallStatus = hasDown
       ? "down"
       : hasDegraded
-      ? "degraded"
-      : "operational";
+        ? "degraded"
+        : "operational";
 
     res.status(200).json({
       success: true,
@@ -303,9 +310,7 @@ app.use(
 );
 
 app.listen(PORT, () => {
-  console.log(
-    `Gateway server started on http://localhost:${PORT}`.green.underline.bold
-  );
+  logger.info(`Gateway server started on http://localhost:${PORT}`);
 
   // Keep health logs updating in near-realtime without UI refresh
   if (
@@ -313,10 +318,10 @@ app.listen(PORT, () => {
     HEALTH_PROBE_INTERVAL_MS > 0
   ) {
     setInterval(() => {
-      runBackgroundProbe().catch(() => {});
+      runBackgroundProbe().catch(() => { });
     }, HEALTH_PROBE_INTERVAL_MS);
 
-    runBackgroundProbe().catch(() => {});
+    runBackgroundProbe().catch(() => { });
   }
 });
 

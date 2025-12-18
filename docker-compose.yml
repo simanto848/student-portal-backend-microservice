@@ -1,4 +1,4 @@
-version: "3.8"
+# version: "3.8"
 
 services:
   rabbitmq:
@@ -37,9 +37,10 @@ services:
     volumes:
       - ./gateway:/app/gateway
       - ./shared:/app/shared
+      - ./logs:/app/logs
       - /app/gateway/node_modules
       - /app/shared/node_modules
-    command: node --watch --no-warnings app.js
+    command: node --no-warnings app.js
     environment:
       - PORT=8000
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}

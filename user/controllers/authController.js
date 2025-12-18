@@ -8,53 +8,98 @@ import Student from "../models/Student.js";
 class AuthController {
   async loginAdmin(req, res, next) {
     try {
+      req.logger.info("Admin login attempt", {
+        email: req.validatedData?.email,
+      });
       const result = await authService.loginAdmin(req.validatedData, req, res);
+      req.logger.info("Admin login successful", {
+        adminId: result.user?.id,
+      });
       return ApiResponse.success(res, result, "Admin login successful");
     } catch (error) {
+      req.logger.error("Admin login failed", {
+        error: error.message,
+        email: req.validatedData?.email,
+      });
       next(error);
     }
   }
 
   async loginStaff(req, res, next) {
     try {
+      req.logger.info("Staff login attempt", {
+        email: req.validatedData?.email,
+      });
       const result = await authService.loginStaff(req.validatedData, req, res);
+      req.logger.info("Staff login successful", {
+        staffId: result.user?.id,
+      });
       return ApiResponse.success(res, result, "Staff login successful");
     } catch (error) {
+      req.logger.error("Staff login failed", {
+        error: error.message,
+        email: req.validatedData?.email,
+      });
       next(error);
     }
   }
 
   async loginTeacher(req, res, next) {
     try {
+      req.logger.info("Teacher login attempt", {
+        email: req.validatedData?.email,
+      });
       const result = await authService.loginTeacher(
         req.validatedData,
         req,
         res
       );
+      req.logger.info("Teacher login successful", {
+        teacherId: result.user?.id,
+      });
       return ApiResponse.success(res, result, "Teacher login successful");
     } catch (error) {
+      req.logger.error("Teacher login failed", {
+        error: error.message,
+        email: req.validatedData?.email,
+      });
       next(error);
     }
   }
 
   async loginStudent(req, res, next) {
     try {
+      req.logger.info("Student login attempt", {
+        email: req.validatedData?.email,
+      });
       const result = await authService.loginStudent(
         req.validatedData,
         req,
         res
       );
+      req.logger.info("Student login successful", {
+        studentId: result.user?.id,
+      });
       return ApiResponse.success(res, result, "Student login successful");
     } catch (error) {
+      req.logger.error("Student login failed", {
+        error: error.message,
+        email: req.validatedData?.email,
+      });
       next(error);
     }
   }
 
   async logout(req, res, next) {
     try {
+      req.logger.info("Logout attempt");
       const result = await authService.logout(req, res);
+      req.logger.info("Logout successful");
       return ApiResponse.success(res, result, "Logout successful");
     } catch (error) {
+      req.logger.error("Logout failed", {
+        error: error.message,
+      });
       next(error);
     }
   }

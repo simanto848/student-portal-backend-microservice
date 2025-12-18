@@ -5,18 +5,28 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { config } from "dotenv";
 import connectDB from "./config/db.js";
-import { ApiResponse, ApiError } from 'shared';
+import {
+  ApiResponse,
+  ApiError,
+  requestLoggerMiddleware,
+  errorHandler,
+  notFoundHandler,
+} from "shared";
 import routes from "./routes/index.js";
-import { errorHandler, notFoundHandler } from 'shared';
 
 config();
 
 const app = express();
 
-app.use(cors({
+// Request Logger Middleware - Add at the top
+app.use(requestLoggerMiddleware("ENROLLMENT"));
+
+app.use(
+  cors({
     origin: true,
-    credentials: true
-}));
+    credentials: true,
+  })
+);
 
 // Connect to MongoDB
 connectDB();
@@ -30,11 +40,11 @@ app.use(cookieParser());
 
 // Health check route
 app.get("/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Enrollment service is running",
-        timestamp: new Date().toISOString()
-    });
+  res.status(200).json({
+    success: true,
+    message: "Enrollment service is running",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // API Routes
