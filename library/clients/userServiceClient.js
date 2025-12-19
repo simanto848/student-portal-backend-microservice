@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class UserServiceClient {
     constructor() {
-        this.baseURL = process.env.USER_SERVICE_URL || 'http://localhost:8007';
+        this.baseURL = process.env.USER_SERVICE_URL || 'http://user:8007';
         this.client = axios.create({
             baseURL: this.baseURL,
             timeout: 10000,

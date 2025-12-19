@@ -125,9 +125,6 @@ class ReservationService {
             if (notes) reservation.notes = notes;
             await reservation.save();
 
-            // Copy status will be changed to 'borrowed' when the actual borrowing record is created
-            // For now, keep it as 'reserved' or you can change it to 'borrowed' here if you want
-
             return reservation.toJSON();
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error fulfilling reservation: ' + error.message);
@@ -171,8 +168,30 @@ class ReservationService {
                 const hoursUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60));
                 const isExpired = now > expiryDate;
 
+                // Transform populated fields to match frontend interface
+                let copy = null;
+                if (r.copyId && typeof r.copyId === 'object') {
+                    let book = null;
+                    if (r.copyId.bookId && typeof r.copyId.bookId === 'object') {
+                        book = {
+                            ...r.copyId.bookId,
+                            id: r.copyId.bookId._id.toString()
+                        };
+                    }
+
+                    copy = {
+                        ...r.copyId,
+                        id: r.copyId._id.toString(),
+                        book,
+                        bookId: book ? book.id : r.copyId.bookId
+                    };
+                }
+
                 return {
                     ...r,
+                    id: r._id.toString(),
+                    copy,
+                    copyId: copy ? copy.id : r.copyId, // Ensure string ID
                     hoursUntilExpiry,
                     isExpired,
                     canCancel: r.status === 'pending' && !isExpired
