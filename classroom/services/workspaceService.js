@@ -44,7 +44,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   const checkTeacherAssignment = async () => {
     try {
       const enrollmentServiceUrl =
-        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/batch-course-instructors?instructorId=${userId}&courseId=${courseId}&batchId=${batchId}&status=active`;
 
@@ -76,7 +76,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   } else if (role === "student") {
     let hasAccess = false;
     try {
-      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/enrollments`;
 
@@ -216,7 +216,7 @@ const listWorkspaces = async (userId, role, token) => {
     let assignments = [];
     try {
       const enrollmentServiceUrl =
-        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
 
@@ -254,7 +254,7 @@ const listWorkspaces = async (userId, role, token) => {
   } else if (role === "student") {
     let enrollments = [];
     try {
-      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/enrollments`;
 
@@ -454,7 +454,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
   let assignments = [];
   try {
     const enrollmentServiceUrl =
-      process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8003";
+      process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
     const base = enrollmentServiceUrl.replace(/\/$/, "");
     const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
 

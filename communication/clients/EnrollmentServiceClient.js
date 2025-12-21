@@ -5,8 +5,8 @@ class EnrollmentServiceClient {
   constructor() {
     const isDocker = fs.existsSync("/.dockerenv");
     const defaultUrl = isDocker
-      ? "http://enrollment:8003"
-      : "http://localhost:8003";
+      ? "http://enrollment:8005"
+      : "http://localhost:8005";
 
     this.baseURL = process.env.ENROLLMENT_SERVICE_URL || defaultUrl;
 
@@ -32,10 +32,10 @@ class EnrollmentServiceClient {
       const list = Array.isArray(data)
         ? data
         : Array.isArray(data?.enrollments)
-        ? data.enrollments
-        : Array.isArray(data?.data)
-        ? data.data
-        : [];
+          ? data.enrollments
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
       return list.length > 0;
     } catch (error) {
       console.error("Error checking student enrollment:", error.message);
@@ -77,10 +77,10 @@ class EnrollmentServiceClient {
       const list = Array.isArray(data)
         ? data
         : Array.isArray(data?.assignments)
-        ? data.assignments
-        : Array.isArray(data?.data)
-        ? data.data
-        : [];
+          ? data.assignments
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
       return list.length > 0;
     } catch (error) {
       console.error("Error checking instructor assignment:", error.message);

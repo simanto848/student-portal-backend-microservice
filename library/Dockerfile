@@ -12,6 +12,6 @@ COPY library ./library
 WORKDIR /app/library
 RUN npm install
 
-EXPOSE 8008
+EXPOSE 8006
 
 CMD ["npm", "start"]

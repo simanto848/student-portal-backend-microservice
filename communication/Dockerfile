@@ -12,6 +12,6 @@ COPY communication ./communication
 WORKDIR /app/communication
 RUN npm install
 
-EXPOSE 8007
+EXPOSE 8004
 
 CMD ["npm", "start"]

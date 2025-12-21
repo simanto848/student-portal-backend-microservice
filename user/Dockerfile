@@ -12,6 +12,6 @@ COPY user ./user
 WORKDIR /app/user
 RUN npm install
 
-EXPOSE 8007
+EXPOSE 8001
 
 CMD ["npm", "start"]

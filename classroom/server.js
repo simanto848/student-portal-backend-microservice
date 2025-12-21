@@ -13,7 +13,7 @@ const logger = createLogger("CLASSROOM");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8011;
+const PORT = process.env.PORT || 8003;
 
 server.listen(PORT, async () => {
   await connectDB();

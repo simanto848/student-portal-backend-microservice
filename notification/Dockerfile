@@ -12,6 +12,6 @@ COPY notification ./notification
 WORKDIR /app/notification
 RUN npm install
 
-EXPOSE 8010
+EXPOSE 8007
 
 CMD ["npm", "start"]

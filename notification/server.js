@@ -11,7 +11,7 @@ import { createLogger } from "shared";
 dotenv.config();
 
 const logger = createLogger("NOTIFICATION");
-const PORT = process.env.NOTIFICATION_SERVICE_PORT || 8010;
+const PORT = process.env.NOTIFICATION_SERVICE_PORT || 8007;
 
 // Check email configuration
 function checkEmailConfig() {

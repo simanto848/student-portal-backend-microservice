@@ -1,4 +1,4 @@
-# version: "3.8"
+version: "3.8"
 
 services:
   rabbitmq:
@@ -44,13 +44,13 @@ services:
     environment:
       - PORT=8000
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - ACADEMIC_SERVICE_URL=http://academic:8001
-      - USER_SERVICE_URL=http://user:8007
-      - LIBRARY_SERVICE_URL=http://library:8008
-      - ENROLLMENT_SERVICE_URL=http://enrollment:8003
-      - NOTIFICATION_SERVICE_URL=http://notification:8010
-      - COMMUNICATION_SERVICE_URL=http://communication:8007
-      - CLASSROOM_SERVICE_URL=http://classroom:8011
+      - ACADEMIC_SERVICE_URL=http://academic:8002
+      - USER_SERVICE_URL=http://user:8001
+      - LIBRARY_SERVICE_URL=http://library:8006
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8005
+      - NOTIFICATION_SERVICE_URL=http://notification:8007
+      - COMMUNICATION_SERVICE_URL=http://communication:8004
+      - CLASSROOM_SERVICE_URL=http://classroom:8003
       - RABBITMQ_URL=amqp://rabbitmq:5672
     depends_on:
       - rabbitmq
@@ -69,7 +69,7 @@ services:
       context: .
       dockerfile: user/Dockerfile
     ports:
-      - "8007:8007"
+      - "8001:8001"
     volumes:
       - ./user:/app/user
       - ./shared:/app/shared
@@ -77,12 +77,15 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8007
+      - PORT=8001
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/user_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
-      - ACADEMIC_SERVICE_URL=http://academic:8001
+      - ACADEMIC_SERVICE_URL=http://academic:8002
+      - LIBRARY_SERVICE_URL=http://library:8006
+      - HOSTEL_SERVICE_URL=http://communication:8004
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8005
     depends_on:
       - mongodb
       - rabbitmq
@@ -95,7 +98,7 @@ services:
       context: .
       dockerfile: academic/Dockerfile
     ports:
-      - "8001:8001"
+      - "8002:8002"
     volumes:
       - ./academic:/app/academic
       - ./shared:/app/shared
@@ -103,11 +106,11 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8001
+      - PORT=8002
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/academic_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - USER_SERVICE_URL=http://user:8007
+      - USER_SERVICE_URL=http://user:8001
       - GEMINI_API=${GEMINI_API:-}
     depends_on:
       - mongodb
@@ -120,7 +123,7 @@ services:
       context: .
       dockerfile: enrollment/Dockerfile
     ports:
-      - "8003:8003"
+      - "8005:8005"
     volumes:
       - ./enrollment:/app/enrollment
       - ./shared:/app/shared
@@ -128,12 +131,13 @@ services:
       - /app/shared/node_modules
     command: sh -c "npm install && node --watch --no-warnings server.js"
     environment:
-      - PORT=8003
+      - PORT=8005
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/enrollment_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - USER_SERVICE_URL=http://user:8007
-      - ACADEMIC_SERVICE_URL=http://academic:8001
+      - USER_SERVICE_URL=http://user:8001
+      - ACADEMIC_SERVICE_URL=http://academic:8002
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8005
     depends_on:
       - mongodb
       - rabbitmq
@@ -145,7 +149,7 @@ services:
       context: .
       dockerfile: library/Dockerfile
     ports:
-      - "8008:8008"
+      - "8006:8006"
     volumes:
       - ./library:/app/library
       - ./shared:/app/shared
@@ -153,10 +157,11 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8008
+      - PORT=8006
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/library_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
+      - USER_SERVICE_URL=http://user:8001
     depends_on:
       - mongodb
       - rabbitmq
@@ -168,7 +173,7 @@ services:
       context: .
       dockerfile: classroom/Dockerfile
     ports:
-      - "8011:8011"
+      - "8003:8003"
     volumes:
       - ./classroom:/app/classroom
       - ./shared:/app/shared
@@ -176,13 +181,13 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8011
+      - PORT=8003
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/classroom_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - ACADEMIC_SERVICE_URL=http://academic:8001
-      - ENROLLMENT_SERVICE_URL=http://enrollment:8003
-      - USER_SERVICE_URL=http://user:8007
+      - ACADEMIC_SERVICE_URL=http://academic:8002
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8005
+      - USER_SERVICE_URL=http://user:8001
     depends_on:
       - mongodb
       - rabbitmq
@@ -194,7 +199,7 @@ services:
       context: .
       dockerfile: communication/Dockerfile
     ports:
-      - "8012:8007" # Map host 8012 to container 8007 to avoid conflict with user service
+      - "8004:8004"
     volumes:
       - ./communication:/app/communication
       - ./shared:/app/shared
@@ -202,13 +207,13 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8007
+      - PORT=8004
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/communication_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
-      - ACADEMIC_SERVICE_URL=http://academic:8001
-      - ENROLLMENT_SERVICE_URL=http://enrollment:8003
-      - USER_SERVICE_URL=http://user:8007
+      - ACADEMIC_SERVICE_URL=http://academic:8002
+      - ENROLLMENT_SERVICE_URL=http://enrollment:8005
+      - USER_SERVICE_URL=http://user:8001
     depends_on:
       - mongodb
       - rabbitmq
@@ -220,7 +225,7 @@ services:
       context: .
       dockerfile: notification/Dockerfile
     ports:
-      - "8010:8010"
+      - "8007:8007"
     volumes:
       - ./notification:/app/notification
       - ./shared:/app/shared
@@ -228,11 +233,14 @@ services:
       - /app/shared/node_modules
     command: node --watch --no-warnings server.js
     environment:
-      - PORT=8010
+      - PORT=8007
+      - NOTIFICATION_SERVICE_PORT=8007
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
       - MONGO_URI=mongodb://mongodb:27017/notification_db
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user:8001
+      - GATEWAY_URL=http://gateway:8000
     depends_on:
       - mongodb
       - rabbitmq

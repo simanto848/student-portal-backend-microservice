@@ -9,13 +9,13 @@ The backend follows a microservice architecture with the following services:
 | Service | Port | Description |
 | :--- | :--- | :--- |
 | **Gateway** | `8000` | API Gateway handling requests and routing to other services. |
-| **Academic** | `8001` | Manages courses, schedules, and departments. |
-| **Enrollment** | `8003` | Handles student enrollment and course registration. |
-| **User** | `8007` | Manages user profiles (Students, Teachers, Admin). |
-| **Communication**| `8012`*| Handles messages and announcements. (*Maps to container 8007) |
-| **Library** | `8008` | Manages library books and lending. |
-| **Notification** | `8010` | Sends push notifications and emails. |
-| **Classroom** | `8011` | Manages physical classrooms and resources. |
+| **User** | `8001` | Manages user profiles (Students, Teachers, Admin). |
+| **Academic** | `8002` | Manages courses, schedules, and departments. |
+| **Classroom** | `8003` | Manages physical classrooms and resources. |
+| **Communication**| `8004` | Handles messages and announcements. |
+| **Enrollment** | `8005` | Handles student enrollment and course registration. |
+| **Library** | `8006` | Manages library books and lending. |
+| **Notification** | `8007` | Sends push notifications and emails. |
 | **Shared** | - | Shared utilities and middleware library. |
 
 **Infrastructure Services:**

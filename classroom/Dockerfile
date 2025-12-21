@@ -12,6 +12,6 @@ COPY classroom ./classroom
 WORKDIR /app/classroom
 RUN npm install
 
-EXPOSE 8011
+EXPOSE 8003
 
 CMD ["npm", "start"]

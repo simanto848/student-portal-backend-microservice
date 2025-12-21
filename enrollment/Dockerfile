@@ -15,6 +15,6 @@ RUN npm install
 # Copy the rest of the service code
 COPY enrollment ./
 
-EXPOSE 8003
+EXPOSE 8005
 
 CMD ["npm", "start"]

@@ -8,7 +8,7 @@ const logger = createLogger("LIBRARY");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8008;
+const PORT = process.env.PORT || 8006;
 
 server.listen(PORT, async () => {
   await setupEmailSubscriber();
