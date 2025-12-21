@@ -86,6 +86,11 @@ services:
       - LIBRARY_SERVICE_URL=http://library:8006
       - HOSTEL_SERVICE_URL=http://communication:8004
       - ENROLLMENT_SERVICE_URL=http://enrollment:8005
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USER=${MAIL_USER}
+      - MAIL_PASS=${MAIL_PASS}
+      - MAIL_FROM=${MAIL_FROM}
     depends_on:
       - mongodb
       - rabbitmq
