@@ -39,7 +39,7 @@ class OtpService {
 
     async saveOTP(userId, otp, purpose, expiresInMinutes = 10) {
         const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
-        
+
         await UserOTP.deleteMany({ user: userId, purpose });
 
         const userOTP = await UserOTP.create({
@@ -149,9 +149,7 @@ class OtpService {
 
             await this.transporter.sendMail(mailOptions);
         } catch (error) {
-            if (process.env.NODE_ENV === 'production') {
-                throw new ApiError(500, 'Failed to send OTP email');
-            }
+            throw new ApiError(500, 'Failed to send OTP email: ' + error.message);
         }
     }
 }

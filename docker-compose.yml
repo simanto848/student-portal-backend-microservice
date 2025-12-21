@@ -79,7 +79,7 @@ services:
     environment:
       - PORT=8001
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/user_db
+      - MONGO_URI=mongodb://mongodb:27017/student_portal_users
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
       - ACADEMIC_SERVICE_URL=http://academic:8002
@@ -92,6 +92,9 @@ services:
       - redis
     networks:
       - backend-network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   academic:
     build:
@@ -108,7 +111,7 @@ services:
     environment:
       - PORT=8002
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/academic_db
+      - MONGO_URI=mongodb://mongodb:27017/student_portal_academic
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8001
       - GEMINI_API=${GEMINI_API:-}
@@ -133,7 +136,7 @@ services:
     environment:
       - PORT=8005
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/enrollment_db
+      - MONGO_URI=mongodb://mongodb:27017/enrollment_service
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8001
       - ACADEMIC_SERVICE_URL=http://academic:8002
@@ -159,7 +162,7 @@ services:
     environment:
       - PORT=8006
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/library_db
+      - MONGO_URI=mongodb://mongodb:27017/student_portal_library
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8001
     depends_on:
@@ -183,7 +186,7 @@ services:
     environment:
       - PORT=8003
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/classroom_db
+      - MONGO_URI=mongodb://mongodb:27017/classroom_service
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - ACADEMIC_SERVICE_URL=http://academic:8002
       - ENROLLMENT_SERVICE_URL=http://enrollment:8005
@@ -236,7 +239,7 @@ services:
       - PORT=8007
       - NOTIFICATION_SERVICE_PORT=8007
       - JWT_SECRET=${JWT_SECRET:-mysupersecrectkey}
-      - MONGO_URI=mongodb://mongodb:27017/notification_db
+      - MONGO_URI=mongodb://mongodb:27017/notification_service
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - REDIS_URL=redis://redis:6379
       - USER_SERVICE_URL=http://user:8001

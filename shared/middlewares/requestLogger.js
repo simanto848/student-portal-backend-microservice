@@ -24,6 +24,12 @@ export const requestLoggerMiddleware = (serviceName = "APP") => {
       ip: req.ip || req.socket?.remoteAddress || req.connection?.remoteAddress,
     };
 
+    // Skip logging for health check
+    if (req.path === "/health") {
+      res.set("X-Request-ID", requestId);
+      return next();
+    }
+
     logger.info(`${req.method} ${req.path}`, {
       requestId,
       method: req.method,
