@@ -2,10 +2,11 @@ import cron from 'node-cron';
 import BookTakenHistory from '../models/BookTakenHistory.js';
 import emailService from '../utils/emailService.js';
 import userServiceClient from '../clients/userServiceClient.js';
+import borrowingService from './borrowingService.js';
 
 class NotificationService {
     constructor() {
-        this.emailSentLog = new Map(); // Track sent emails to avoid duplicates
+        this.emailSentLog = new Map();
     }
 
     async sendDueReminders() {
@@ -197,6 +198,9 @@ class NotificationService {
         cron.schedule('0 9 * * *', async () => {
             console.log('Running scheduled reminder emails job...');
             try {
+                // Ensure overdue status is up to date before sending notices
+                await borrowingService.checkAndUpdateOverdueBooks();
+
                 await this.sendDueReminders();
                 await this.sendOverdueNotices();
             } catch (error) {

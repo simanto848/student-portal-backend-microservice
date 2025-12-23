@@ -27,7 +27,9 @@ connectDB();
 
 // Middlewares
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(morgan("dev", {
+  skip: (req, res) => req.url === "/health"
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
