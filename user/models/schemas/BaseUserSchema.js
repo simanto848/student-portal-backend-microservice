@@ -93,6 +93,24 @@ const BaseUserSchema = {
     ref: "Role",
     default: null
   },
+  // Block status for user management
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+  blockedAt: {
+    type: Date,
+    default: null,
+  },
+  blockedBy: {
+    type: String,
+    ref: "Admin",
+    default: null,
+  },
+  blockReason: {
+    type: String,
+    default: null,
+  },
   deletedAt: {
     type: Date,
     default: null,

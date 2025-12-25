@@ -133,14 +133,6 @@ class AdminService {
                 if (existing.profile) {
                     await mongoose.model('Profile').findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
                 } else {
-                    // Check if profile exists for this user but wasn't linked
-                    // Note: Admin seemingly uses 'Profile' model based on other services, but I need to be sure.
-                    // Viewing adminService imports: import Admin from '../models/Admin.js';
-                    // It doesn't import Profile. It populates 'profile'. Let's check Admin model or just use mongoose.model('Profile') safely if verified.
-                    // Actually, staffService imports Profile. adminService does not import Profile.
-                    // I should import Profile at the top if I need to use it explicitly, or use mongoose.model if it's registered.
-                    // Let's rely on standard practice or checking Admin model.
-                    // Assuming 'Profile' model is registered.
                     const Profile = mongoose.model('Profile');
                     let pf = await Profile.findOne({ user: adminId });
 
@@ -328,6 +320,232 @@ class AdminService {
         } catch (error) {
             if (error instanceof ApiError) throw error;
             throw new ApiError(500, 'Error updating registered IPs: ' + error.message);
+        }
+    }
+
+    /**
+     * Block a user (super_admin only)
+     */
+    async blockUser(userType, userId, blockedBy, reason) {
+        try {
+            const modelMap = {
+                student: mongoose.model('Student'),
+                teacher: mongoose.model('Teacher'),
+                staff: mongoose.model('Staff'),
+                admin: mongoose.model('Admin'),
+            };
+
+            const Model = modelMap[userType.toLowerCase()];
+            if (!Model) {
+                throw new ApiError(400, 'Invalid user type');
+            }
+
+            const user = await Model.findById(userId);
+            if (!user) {
+                throw new ApiError(404, 'User not found');
+            }
+
+            if (user.isBlocked) {
+                throw new ApiError(400, 'User is already blocked');
+            }
+
+            // Prevent blocking super_admin
+            if (userType === 'admin' && user.role === 'super_admin') {
+                throw new ApiError(403, 'Cannot block a super admin');
+            }
+
+            user.isBlocked = true;
+            user.blockedAt = new Date();
+            user.blockedBy = blockedBy;
+            user.blockReason = reason;
+
+            await user.save({ validateModifiedOnly: true });
+
+            return {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                userType,
+                isBlocked: true,
+                blockedAt: user.blockedAt,
+                blockReason: reason,
+            };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error blocking user: ' + error.message);
+        }
+    }
+
+    /**
+     * Unblock a user (super_admin only)
+     */
+    async unblockUser(userType, userId) {
+        try {
+            const modelMap = {
+                student: mongoose.model('Student'),
+                teacher: mongoose.model('Teacher'),
+                staff: mongoose.model('Staff'),
+                admin: mongoose.model('Admin'),
+            };
+
+            const Model = modelMap[userType.toLowerCase()];
+            if (!Model) {
+                throw new ApiError(400, 'Invalid user type');
+            }
+
+            const user = await Model.findById(userId);
+            if (!user) {
+                throw new ApiError(404, 'User not found');
+            }
+
+            if (!user.isBlocked) {
+                throw new ApiError(400, 'User is not blocked');
+            }
+
+            user.isBlocked = false;
+            user.blockedAt = null;
+            user.blockedBy = null;
+            user.blockReason = null;
+
+            await user.save({ validateModifiedOnly: true });
+
+            return {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                userType,
+                isBlocked: false,
+            };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error unblocking user: ' + error.message);
+        }
+    }
+
+    /**
+     * Get detailed user information (super_admin only)
+     */
+    async getUserDetails(userType, userId) {
+        try {
+            const modelMap = {
+                student: mongoose.model('Student'),
+                teacher: mongoose.model('Teacher'),
+                staff: mongoose.model('Staff'),
+                admin: mongoose.model('Admin'),
+            };
+
+            const Model = modelMap[userType.toLowerCase()];
+            if (!Model) {
+                throw new ApiError(400, 'Invalid user type');
+            }
+
+            const user = await Model.findById(userId)
+                .select('-password -refreshToken -twoFactorSecret')
+                .populate('profile')
+                .lean();
+
+            if (!user) {
+                throw new ApiError(404, 'User not found');
+            }
+
+            // Get additional details based on user type
+            const details = {
+                ...user,
+                userType,
+            };
+
+            // Add login history summary
+            details.loginSummary = {
+                lastLoginAt: user.lastLoginAt,
+                lastLoginIp: user.lastLoginIp,
+                registeredIps: user.registeredIpAddress || [],
+            };
+
+            // Add account status
+            details.accountStatus = {
+                isActive: user.isActive,
+                isBlocked: user.isBlocked || false,
+                blockedAt: user.blockedAt,
+                blockedBy: user.blockedBy,
+                blockReason: user.blockReason,
+                twoFactorEnabled: user.twoFactorEnabled,
+                emailUpdatesEnabled: user.emailUpdatesEnabled,
+            };
+
+            return details;
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, 'Error fetching user details: ' + error.message);
+        }
+    }
+
+    /**
+     * Get all users across all types (super_admin only)
+     */
+    async getAllUsers(options = {}) {
+        try {
+            const { search, userType, isBlocked, page = 1, limit = 20 } = options;
+            const skip = (page - 1) * limit;
+
+            const userTypes = userType
+                ? [userType]
+                : ['student', 'teacher', 'staff', 'admin'];
+
+            const results = [];
+            let totalCount = 0;
+
+            for (const type of userTypes) {
+                const modelMap = {
+                    student: mongoose.model('Student'),
+                    teacher: mongoose.model('Teacher'),
+                    staff: mongoose.model('Staff'),
+                    admin: mongoose.model('Admin'),
+                };
+
+                const Model = modelMap[type];
+                if (!Model) continue;
+
+                const query = { deletedAt: null };
+
+                if (search) {
+                    query.$or = [
+                        { fullName: { $regex: search, $options: 'i' } },
+                        { email: { $regex: search, $options: 'i' } },
+                    ];
+                }
+
+                if (typeof isBlocked === 'boolean') {
+                    query.isBlocked = isBlocked;
+                }
+
+                const [users, count] = await Promise.all([
+                    Model.find(query)
+                        .select('fullName email isActive isBlocked lastLoginAt createdAt')
+                        .sort({ createdAt: -1 })
+                        .skip(skip)
+                        .limit(limit)
+                        .lean(),
+                    Model.countDocuments(query),
+                ]);
+
+                results.push(...users.map(u => ({ ...u, userType: type })));
+                totalCount += count;
+            }
+
+            // Sort combined results
+            results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            return {
+                users: results.slice(0, limit),
+                pagination: {
+                    page,
+                    limit,
+                    total: totalCount,
+                    pages: Math.ceil(totalCount / limit),
+                },
+            };
+        } catch (error) {
+            throw new ApiError(500, 'Error fetching users: ' + error.message);
         }
     }
 }

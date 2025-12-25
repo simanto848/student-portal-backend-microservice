@@ -139,6 +139,53 @@ class AdminController {
             next(error);
         }
     }
+
+    // Super Admin only methods
+    async blockUser(req, res, next) {
+        try {
+            const { userType, userId, reason } = req.body;
+            const result = await adminService.blockUser(userType, userId, req.user.id, reason);
+            return ApiResponse.success(res, result, 'User blocked successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async unblockUser(req, res, next) {
+        try {
+            const { userType, userId } = req.body;
+            const result = await adminService.unblockUser(userType, userId);
+            return ApiResponse.success(res, result, 'User unblocked successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getUserDetails(req, res, next) {
+        try {
+            const { userType } = req.query;
+            const result = await adminService.getUserDetails(userType, req.params.id);
+            return ApiResponse.success(res, result, 'User details retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getAllUsers(req, res, next) {
+        try {
+            const { page, limit, search, userType, isBlocked } = req.query;
+            const result = await adminService.getAllUsers({
+                page: parseInt(page) || 1,
+                limit: parseInt(limit) || 20,
+                search,
+                userType,
+                isBlocked: isBlocked === 'true' ? true : isBlocked === 'false' ? false : undefined,
+            });
+            return ApiResponse.success(res, result, 'Users retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new AdminController();
