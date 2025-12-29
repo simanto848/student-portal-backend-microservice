@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import BaseUserSchema from "./schemas/BaseUserSchema.js";
 import { attachUserMethods, attachUserHooks } from "./schemas/UserMethods.js";
+import USER_TYPES, { ADMIN_ROLES } from "../constants/USER_TYPES.js";
 
 const adminSchema = new mongoose.Schema(
   {
@@ -13,9 +14,9 @@ const adminSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["super_admin", "admin", "moderator"],
+      enum: Object.values(ADMIN_ROLES),
       required: true,
-      default: "moderator",
+      default: ADMIN_ROLES.MODERATOR,
     },
     joiningDate: {
       type: Date,
