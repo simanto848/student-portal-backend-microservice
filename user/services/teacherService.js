@@ -87,15 +87,7 @@ class TeacherService {
             const registrationNumber = PasswordGenerator.generateTeacherRegistrationNumber(deptShort);
             const temporaryPassword = PasswordGenerator.generate(12);
 
-            try {
-                await emailService.sendWelcomeEmailWithCredentials(data.email, {
-                    fullName: data.fullName,
-                    email: data.email,
-                    temporaryPassword,
-                });
-            } catch (emailError) {
-                throw new ApiError(500, 'Failed to send welcome email. Teacher creation aborted: ' + emailError.message);
-            }
+            // Email sending moved to after teacher creation
 
             const teacherPayload = {
                 email: data.email,
@@ -124,6 +116,15 @@ class TeacherService {
                     console.error('Teacher profile creation failed:', profileError.message);
                 }
             }
+
+            // Send welcome email non-blockingly
+            emailService.sendWelcomeEmailWithCredentials(data.email, {
+                fullName: data.fullName,
+                email: data.email,
+                temporaryPassword,
+            }).catch(emailError => {
+                console.error('Failed to send welcome email:', emailError.message);
+            });
 
             return await Teacher.findById(teacher._id).select('-password').populate('profile').lean();
         } catch (error) {

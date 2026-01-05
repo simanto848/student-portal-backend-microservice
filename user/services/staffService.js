@@ -146,17 +146,18 @@ class StaffService {
             const temporaryPassword = PasswordGenerator.generate(12);
             staffData.password = temporaryPassword;
 
-            try {
-                await emailService.sendWelcomeEmailWithCredentials(staffData.email, {
-                    fullName: staffData.fullName,
-                    email: staffData.email,
-                    temporaryPassword: temporaryPassword,
-                });
-            } catch (emailError) {
-                throw new ApiError(500, 'Failed to send welcome email. Staff creation aborted: ' + emailError.message);
-            }
+            // Email sending moved to after staff creation
 
             const staff = await Staff.create(staffData);
+
+            // Send welcome email non-blockingly
+            emailService.sendWelcomeEmailWithCredentials(staffData.email, {
+                fullName: staffData.fullName,
+                email: staffData.email,
+                temporaryPassword: temporaryPassword,
+            }).catch(emailError => {
+                console.error('Failed to send welcome email:', emailError.message);
+            });
             const createdStaff = await Staff.findById(staff._id).select('-password').lean();
             return createdStaff;
         } catch (error) {

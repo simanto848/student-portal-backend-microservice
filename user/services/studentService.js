@@ -150,19 +150,7 @@ class StudentService {
 
       const temporaryPassword = PasswordGenerator.generate(12);
 
-      try {
-        await emailService.sendWelcomeEmailWithCredentials(data.email, {
-          fullName: data.fullName,
-          email: data.email,
-          temporaryPassword,
-        });
-      } catch (emailError) {
-        throw new ApiError(
-          500,
-          "Failed to send welcome email. Student creation aborted: " +
-            emailError.message
-        );
-      }
+      // Email sending moved to after student creation
 
       const studentPayload = {
         email: data.email,
@@ -197,8 +185,9 @@ class StudentService {
         token
       );
       try {
+        const studentProfileData = data.studentProfile || data.profile || {};
         const createdProfile = await StudentProfile.create({
-          ...data.studentProfile,
+          ...studentProfileData,
           studentId: student._id,
         });
         await Student.findByIdAndUpdate(
@@ -209,6 +198,15 @@ class StudentService {
       } catch (profileError) {
         console.error("Student profile creation failed:", profileError.message);
       }
+
+      // Send welcome email non-blockingly
+      emailService.sendWelcomeEmailWithCredentials(data.email, {
+        fullName: data.fullName,
+        email: data.email,
+        temporaryPassword,
+      }).catch(emailError => {
+        console.error("Failed to send welcome email:", emailError.message);
+      });
 
       // Publish event to RabbitMQ
       try {
@@ -366,9 +364,9 @@ class StudentService {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-            500,
-            "Error fetching deleted students: " + error.message
-          );
+          500,
+          "Error fetching deleted students: " + error.message
+        );
     }
   }
 
@@ -387,9 +385,9 @@ class StudentService {
       throw error instanceof ApiError
         ? error
         : new ApiError(
-            500,
-            "Error deleting student permanently: " + error.message
-          );
+          500,
+          "Error deleting student permanently: " + error.message
+        );
     }
   }
 }

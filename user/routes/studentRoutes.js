@@ -17,12 +17,12 @@ router.use("/profiles", studentProfileRoutes);
 router.use(authenticate);
 
 router.get("/", studentController.getAll);
+router.get("/deleted", studentController.getDeletedStudents);
 router.get("/:id", studentController.getById);
 router.post("/", upload.single('profilePicture'), transformBody, validate(createStudentSchema), studentController.create);
 router.patch("/:id", upload.single('profilePicture'), transformBody, validate(updateStudentSchema), studentController.update);
 router.delete("/:id", studentController.delete);
 router.post("/:id/restore", studentController.restore);
-router.get("/deleted", studentController.getDeletedStudents);
 router.delete("/:id/permanently", studentController.deletePermanently);
 
 export default router;

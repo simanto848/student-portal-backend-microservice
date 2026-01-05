@@ -88,17 +88,18 @@ class AdminService {
             const temporaryPassword = PasswordGenerator.generate(12);
             adminData.password = temporaryPassword;
 
-            try {
-                await emailService.sendWelcomeEmailWithCredentials(adminData.email, {
-                    fullName: adminData.fullName,
-                    email: adminData.email,
-                    temporaryPassword: temporaryPassword,
-                });
-            } catch (emailError) {
-                throw new ApiError(500, 'Failed to send welcome email. Admin creation aborted: ' + emailError.message);
-            }
+            // Email sending moved to after admin creation
 
             const admin = await Admin.create(adminData);
+
+            // Send welcome email non-blockingly
+            emailService.sendWelcomeEmailWithCredentials(adminData.email, {
+                fullName: adminData.fullName,
+                email: adminData.email,
+                temporaryPassword: temporaryPassword,
+            }).catch(emailError => {
+                console.error('Failed to send welcome email:', emailError.message);
+            });
             const createdAdmin = await Admin.findById(admin._id).select('-password').lean();
             return createdAdmin;
         } catch (error) {

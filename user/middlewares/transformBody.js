@@ -19,10 +19,11 @@ export const transformBody = (req, res, next) => {
 
     if (req.body.studentProfile) {
       req.body.studentProfile.profilePicture = filePath;
-    } else {
-      if (!req.body.profile) req.body.profile = {};
-      req.body.profile.profilePicture = filePath;
     }
+
+    // Always provide it in req.body.profile as well for consistency
+    if (!req.body.profile) req.body.profile = {};
+    req.body.profile.profilePicture = filePath;
   }
 
   next();
