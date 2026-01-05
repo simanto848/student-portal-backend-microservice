@@ -144,6 +144,7 @@ class TeacherService {
             if (payload.profile && typeof payload.profile === 'object') {
                 if (existing.profile) {
                     await Profile.findByIdAndUpdate(existing.profile, { $set: payload.profile }, { new: true, runValidators: true });
+                    delete payload.profile;
                 } else {
                     // Check if profile exists for this user but wasn't linked
                     let pf = await Profile.findOne({ user: id });

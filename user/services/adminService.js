@@ -133,6 +133,7 @@ class AdminService {
             if (updateData.profile && typeof updateData.profile === 'object') {
                 if (existing.profile) {
                     await mongoose.model('Profile').findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
+                    delete updateData.profile;
                 } else {
                     const Profile = mongoose.model('Profile');
                     let pf = await Profile.findOne({ user: adminId });

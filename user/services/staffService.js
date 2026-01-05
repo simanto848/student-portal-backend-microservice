@@ -197,6 +197,7 @@ class StaffService {
             if (updateData.profile && typeof updateData.profile === 'object') {
                 if (existing.profile) {
                     await Profile.findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
+                    delete updateData.profile;
                 } else {
                     // Check if profile exists for this user but wasn't linked
                     let pf = await Profile.findOne({ user: staffId });
