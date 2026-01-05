@@ -67,6 +67,13 @@ class EnrollmentService {
             status: "active",
           });
 
+          const [courseRes, instructorRes] = await Promise.all([
+            academicServiceClient.getCourseDetails(courseId).catch(() => null),
+            assignment?.instructorId
+              ? userServiceClient.getTeacherById(assignment.instructorId).catch(() => null)
+              : Promise.resolve(null)
+          ]);
+
           return {
             courseId: courseId,
             sessionCourseId: sc.id || sc._id,
@@ -74,6 +81,8 @@ class EnrollmentService {
             instructorId: assignment?.instructorId,
             instructorAssigned: !!assignment,
             assignmentId: assignment?.id || assignment?._id,
+            course: courseRes?.data || courseRes,
+            instructor: instructorRes?.data || instructorRes,
           };
         })
       );
