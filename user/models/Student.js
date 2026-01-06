@@ -72,6 +72,16 @@ const studentSchema = new mongoose.Schema(
         delete ret.twoFactorSecret;
       },
     },
+    toObject: {
+      transform(doc, ret) {
+        ret.id = ret._id;
+        delete ret._id;
+        delete ret.__v;
+        delete ret.password;
+        delete ret.refreshToken;
+        delete ret.twoFactorSecret;
+      },
+    },
   }
 );
 
