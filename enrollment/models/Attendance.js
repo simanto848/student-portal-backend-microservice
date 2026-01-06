@@ -84,12 +84,14 @@ attendanceSchema.index(
 );
 
 // Validation: Prevent future date attendance
-attendanceSchema.pre('save', function(next) {
+attendanceSchema.pre('save', function (next) {
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // End of today
+    // Allow a 24-hour buffer to account for timezone differences
+    const futureLimit = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    futureLimit.setHours(23, 59, 59, 999);
 
-    if (this.date > today) {
-        const error = new Error('Cannot mark attendance for future dates');
+    if (this.date > futureLimit) {
+        const error = new Error('Cannot mark attendance for future dates (beyond 24h buffer)');
         error.statusCode = 400;
         return next(error);
     }
