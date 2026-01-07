@@ -25,6 +25,10 @@ const teacherSchema = new mongoose.Schema(
         "senior_lecturer",
       ],
     },
+    isDepartmentHead: {
+      type: Boolean,
+      default: false,
+    },
     joiningDate: {
       type: Date,
     },

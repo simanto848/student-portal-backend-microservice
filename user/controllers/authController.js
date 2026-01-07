@@ -290,8 +290,28 @@ class AuthController {
       sanitizedUser.id = dbUser.id;
       // Ensure role is present for frontend routing/authorization
       sanitizedUser.role = sanitizedUser.role || req.user?.role || roleType;
+
+      // Dynamic Check: If user is a teacher, check if they head a department via Academic Service API
+      if (sanitizedUser.role === 'teacher') {
+        try {
+          const academicServiceUrl = process.env.ACADEMIC_SERVICE_URL || 'http://academic:8002';
+          const response = await fetch(`${academicServiceUrl}/departments?departmentHeadId=${userId}&limit=1`);
+
+          if (response.ok) {
+            const data = await response.json();
+            // Check if any department was found and explicitly set flag
+            const departments = data.data?.data || data.data;
+            sanitizedUser.isDepartmentHead = Array.isArray(departments) && departments.length > 0;
+          }
+        } catch (err) {
+          // Fail silently on service communication error, defaulting to existing flag or false
+          req.logger.error("Failed to check department head status via Academic Service", { error: err.message });
+        }
+      }
+
       delete sanitizedUser.password;
       delete sanitizedUser.refreshToken;
+      delete sanitizedUser.twoFactorSecret; // Ensure secret is removed if model transformation didn't catch it
 
       return ApiResponse.success(
         res,
