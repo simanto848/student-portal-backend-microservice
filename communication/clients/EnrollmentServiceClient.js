@@ -44,23 +44,25 @@ class EnrollmentServiceClient {
   }
 
   async listEnrollmentsForStudent(studentId, params = {}, accessToken) {
+    return this.listEnrollments({ studentId, ...params }, accessToken);
+  }
+
+  async listEnrollments(params = {}, accessToken) {
     try {
       const response = await this.client.get(`/enrollments`, {
-        params: { studentId, ...params },
+        params,
         headers: accessToken
           ? { Authorization: `Bearer ${accessToken}` }
           : undefined,
       });
 
-      // Enrollment service returns ApiResponse: { success, data: <result> }
-      // List can be either array or { enrollments: [] }
       const data = response.data?.data ?? response.data;
       if (Array.isArray(data)) return data;
       if (data && Array.isArray(data.enrollments)) return data.enrollments;
       if (data && Array.isArray(data.data)) return data.data;
       return [];
     } catch (error) {
-      console.error("Error listing student enrollments (Full):", error.message);
+      console.error("Error listing enrollments:", error.message);
       throw error;
     }
   }
