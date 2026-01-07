@@ -7,9 +7,9 @@ let io;
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
-    }
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    },
   });
 
   io.use((socket, next) => {
@@ -36,16 +36,16 @@ export const initSocket = (server) => {
       roomsToJoin.push('all');
       for (const r of roomsToJoin) socket.join(r);
       try {
-          await redis.sadd(`socket:rooms:${socket.id}`, roomsToJoin);
-      } catch(e){
-          // ignore
+        await redis.sadd(`socket:rooms:${socket.id}`, roomsToJoin);
+      } catch (e) {
+        // ignore
       }
     }
     socket.on('disconnect', async () => {
       try {
-          await redis.del(`socket:rooms:${socket.id}`);
-      } catch(e){
-          // ignore
+        await redis.del(`socket:rooms:${socket.id}`);
+      } catch (e) {
+        // ignore
       }
     });
   });
