@@ -8,16 +8,43 @@ import userServiceClient from '../clients/userServiceClient.js';
 class NotificationService {
   async create(data, user) {
     if (user?.role === 'teacher') {
-      const allowedTargetTypes = ['batch', 'batch_students'];
-      if (!allowedTargetTypes.includes(data.targetType)) {
-        throw new Error('Teachers can only send notifications to their assigned batches');
-      }
+      const isDepartmentHead = user.isDepartmentHead;
+      if (isDepartmentHead) {
+        const allowedTargetTypes = [
+          'batch', 'batch_students',
+          'department', 'department_students', 'department_teachers', 'department_staff',
+          'custom'
+        ];
 
-      if (!data.targetBatchIds || data.targetBatchIds.length === 0) {
-        throw new Error('Target batch IDs are required');
-      }
+        if (!allowedTargetTypes.includes(data.targetType)) {
+          throw new Error('Department heads can only send notifications to batches, their departments, or specific users');
+        }
 
-      data.senderRole = 'course_instructor';
+        if (['batch', 'batch_students'].includes(data.targetType)) {
+          if (!data.targetBatchIds || data.targetBatchIds.length === 0) {
+            throw new Error('Target batch IDs are required');
+          }
+        }
+
+        if (['department', 'department_students', 'department_teachers', 'department_staff'].includes(data.targetType)) {
+          if (!data.targetDepartmentIds || data.targetDepartmentIds.length === 0) {
+            throw new Error('Target department IDs are required');
+          }
+        }
+
+        data.senderRole = 'department_head';
+      } else {
+        const allowedTargetTypes = ['batch', 'batch_students'];
+        if (!allowedTargetTypes.includes(data.targetType)) {
+          throw new Error('Teachers can only send notifications to their assigned batches');
+        }
+
+        if (!data.targetBatchIds || data.targetBatchIds.length === 0) {
+          throw new Error('Target batch IDs are required');
+        }
+
+        data.senderRole = 'course_instructor';
+      }
     } else if (user?.role === 'admin' || user?.role === 'super_admin') {
       data.senderRole = 'admin';
     }

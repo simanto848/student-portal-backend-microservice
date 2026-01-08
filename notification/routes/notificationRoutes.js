@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import notificationController from '../controllers/notificationController.js';
 import { authenticate, authorize } from 'shared';
+import { authenticateWithProfile } from '../middlewares/authWithProfile.js';
 import { validateNotificationCreate, validateNotificationUpdate } from '../validations/notificationValidation.js';
 import { notificationWriteLimiter, notificationReadLimiter } from '../middlewares/rateLimit.js';
 
@@ -19,19 +20,15 @@ const managerRoles = [
     'hr',
     'it',
     'hostel',
-    'hostel_warden',
-    'hostel_supervisor',
-    'maintenance',
     'teacher'
 ];
 
 router.use(authenticate);
 
-// New routes for role-based notification sending
-router.get('/my-scope', notificationReadLimiter, (req, res) => notificationController.getMyScope(req, res));
+router.get('/my-scope', notificationReadLimiter, authenticateWithProfile, (req, res) => notificationController.getMyScope(req, res));
 router.get('/sent', notificationReadLimiter, authorize(...managerRoles), (req, res) => notificationController.getSent(req, res));
 
-router.post('/', notificationWriteLimiter, authorize(...managerRoles), validateNotificationCreate, (req, res) => notificationController.create(req, res));
+router.post('/', notificationWriteLimiter, authenticateWithProfile, authorize(...managerRoles), validateNotificationCreate, (req, res) => notificationController.create(req, res));
 router.get('/', notificationReadLimiter, (req, res) => notificationController.list(req, res));
 router.get('/:id', notificationReadLimiter, (req, res) => notificationController.get(req, res));
 router.put('/:id', notificationWriteLimiter, authorize(...managerRoles), validateNotificationUpdate, (req, res) => notificationController.update(req, res));
