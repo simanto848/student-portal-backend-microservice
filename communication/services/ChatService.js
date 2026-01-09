@@ -340,7 +340,7 @@ class ChatService {
           fullName:
             senderDetails.fullName ||
             `${senderDetails.firstName} ${senderDetails.lastName}`,
-          avatar: senderDetails.profilePicture || senderDetails.avatar,
+          avatar: senderDetails.profileImage || senderDetails.profile?.profilePicture || senderDetails.profilePicture || senderDetails.avatar,
         };
       } else {
         msgObj.sender = { id: senderId, fullName: "Unknown User" };
@@ -406,6 +406,7 @@ class ChatService {
                 accessToken
               );
             }
+
             if (senderDetails) {
               userCache.set(cacheKey, senderDetails);
             }
@@ -423,7 +424,7 @@ class ChatService {
             fullName:
               senderDetails.fullName ||
               `${senderDetails.firstName} ${senderDetails.lastName}`,
-            avatar: senderDetails.profilePicture || senderDetails.avatar,
+            avatar: senderDetails.profileImage || senderDetails.profile?.profilePicture || senderDetails.profilePicture || senderDetails.avatar,
           };
         } else {
           msgObj.sender = {
