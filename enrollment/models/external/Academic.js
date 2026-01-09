@@ -1,105 +1,114 @@
-import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const courseSchema = new mongoose.Schema({
     _id: {
         type: String,
-        default: uuidv4
+        default: uuidv4,
     },
     name: {
         type: String,
-        required: true
+        required: true,
     },
     code: {
         type: String,
-        required: true
+        required: true,
     },
     credit: {
         type: Number,
-        required: true
+        required: true,
     },
     departmentId: {
         type: String,
-        required: true
+        required: true,
     },
     courseType: {
         type: String,
-        default: "theory"
+        default: "theory",
     },
     deletedAt: {
-        type: Date
-    }
+        type: Date,
+    },
 });
 
 courseSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Course = mongoose.models.Course || mongoose.model('Course', courseSchema);
+export const Course =
+    mongoose.models.Course || mongoose.model("Course", courseSchema);
 
 const batchSchema = new mongoose.Schema({
     _id: {
         type: String,
-        default: uuidv4
+        default: uuidv4,
     },
     name: {
-        type: String, 
-        required: true
+        type: String,
+        required: true,
     },
     year: {
-        type: Number, 
-        required: true
+        type: Number,
+        required: true,
+    },
+    shift: {
+        type: String,
+        enum: ["day", "evening"],
+        required: true,
+        default: "day",
     },
     programId: {
-        type: String, 
-        required: true
+        type: String,
+        required: true,
     },
     departmentId: {
-        type: String, 
-        required: true
+        type: String,
+        required: true,
     },
     sessionId: {
-        type: String, 
-        required: true
+        type: String,
+        required: true,
     },
     currentStudents: {
         type: Number,
-        default: 0
+        default: 0,
     },
     deletedAt: {
-        type: Date
-    }
+        type: Date,
+    },
 });
 
 batchSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Batch = mongoose.models.Batch || mongoose.model('Batch', batchSchema);
+export const Batch =
+    mongoose.models.Batch || mongoose.model("Batch", batchSchema);
 
 const departmentSchema = new mongoose.Schema({
     _id: {
         type: String,
-        default: uuidv4
+        default: uuidv4,
     },
     name: {
         type: String,
-        required: true
+        required: true,
     },
     shortName: {
         type: String,
-        required: true
+        required: true,
     },
     departmentHeadId: {
-        type: String
+        type: String,
     },
     deletedAt: {
-        type: Date
-    }
+        type: Date,
+    },
 });
 
 departmentSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Department = mongoose.models.Department || mongoose.model('Department', departmentSchema);
+export const Department =
+    mongoose.models.Department || mongoose.model("Department", departmentSchema);

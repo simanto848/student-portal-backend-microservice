@@ -65,9 +65,9 @@ class ChatService {
       const [batchGroups, courseGroups] = await Promise.all([
         uniqueBatchIds.length
           ? BatchChatGroup.find({
-              batchId: { $in: uniqueBatchIds },
-              isActive: true,
-            })
+            batchId: { $in: uniqueBatchIds },
+            isActive: true,
+          })
           : Promise.resolve([]),
         courseGroupsPromise,
       ]);
@@ -141,9 +141,9 @@ class ChatService {
                 ),
                 group.instructorId
                   ? UserServiceClient.getTeacherDetails(
-                      group.instructorId,
-                      accessToken
-                    )
+                    group.instructorId,
+                    accessToken
+                  )
                   : Promise.resolve(null),
               ]);
               result.courseName = course?.name;
@@ -440,8 +440,7 @@ class ChatService {
   }
 
   // --- Detail Fetching ---
-  async getChatGroupDetails(chatGroupId) {
-    // Try to find in CourseChatGroup first
+  async getChatGroupDetails(chatGroupId, accessToken) {
     let group = await CourseChatGroup.findById(chatGroupId);
     let type = "CourseChatGroup";
 
@@ -461,24 +460,48 @@ class ChatService {
 
     try {
       if (type === "CourseChatGroup") {
-        const [course, batch, teacher] = await Promise.all([
-          AcademicServiceClient.getCourseDetails(group.courseId),
-          AcademicServiceClient.getBatchDetails(group.batchId),
+        const [course, batch, teacher, enrollments] = await Promise.all([
+          AcademicServiceClient.getCourseDetails(group.courseId, accessToken),
+          AcademicServiceClient.getBatchDetails(group.batchId, accessToken),
           group.instructorId
-            ? UserServiceClient.getTeacherDetails(group.instructorId)
+            ? UserServiceClient.getTeacherDetails(group.instructorId, accessToken)
             : Promise.resolve(null),
+          EnrollmentServiceClient.listEnrollments(
+            { batchId: group.batchId, courseId: group.courseId, status: "active" },
+            accessToken
+          ),
         ]);
+
         result.courseName = course?.name;
         result.courseCode = course?.code;
         result.batchName = batch?.name;
+        result.batchShift = batch?.shift ? batch.shift.charAt(0).toUpperCase() + batch.shift.slice(1) : undefined;
+        result.batchSemester = batch?.currentSemester;
         result.instructorName = teacher?.fullName;
+
+        // Count unique students
+        const enrollmentList = Array.isArray(enrollments) ? enrollments : (enrollments?.enrollments || []);
+        result.studentCount = new Set(enrollmentList.map(e => e.studentId || e._id)).size;
+
       } else if (type === "BatchChatGroup") {
-        const batch = await AcademicServiceClient.getBatchDetails(
-          group.batchId
-        );
+        const [batch, enrollments] = await Promise.all([
+          AcademicServiceClient.getBatchDetails(group.batchId, accessToken),
+          EnrollmentServiceClient.listEnrollments(
+            { batchId: group.batchId, status: "active" },
+            accessToken
+          ),
+        ]);
         result.batchName = batch?.name;
+        result.batchShift = batch?.shift ? batch.shift.charAt(0).toUpperCase() + batch.shift.slice(1) : undefined;
+        result.batchSemester = batch?.currentSemester;
+
+        // Count unique students for batch level
+        const enrollmentList = Array.isArray(enrollments) ? enrollments : (enrollments?.enrollments || []);
+        result.studentCount = new Set(enrollmentList.map(e => e.studentId || e._id)).size;
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error("Error enriching chat details:", error.message);
+    }
 
     return result;
   }
@@ -505,7 +528,7 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_updated", msgObj);
-    } catch (error) {}
+    } catch (error) { }
 
     return msgObj;
   }
@@ -573,7 +596,7 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_pinned", msgObj);
-    } catch (error) {}
+    } catch (error) { }
 
     return msgObj;
   }
@@ -600,7 +623,7 @@ class ChatService {
 
     try {
       getIO().to(message.chatGroupId).emit("message_reaction", message);
-    } catch (error) {}
+    } catch (error) { }
 
     return message;
   }

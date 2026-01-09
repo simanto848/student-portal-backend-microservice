@@ -8,9 +8,11 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.post('/', authorize('admin', 'super_admin'), validate(addMemberSchema), examCommitteeController.addMember);
-router.patch('/:id', authorize('admin', 'super_admin'), examCommitteeController.updateMember);
-router.delete('/:id', authorize('admin', 'super_admin'), examCommitteeController.removeMember);
-router.get('/', authorize('admin', 'super_admin', 'teacher'), examCommitteeController.listMembers);
+router.post('/', authorize('department_head', 'teacher'), validate(addMemberSchema), examCommitteeController.addMember);
+router.patch('/:id', authorize('department_head', 'teacher'), examCommitteeController.updateMember);
+router.delete('/:id', authorize('department_head', 'teacher'), examCommitteeController.removeMember);
+router.get('/', authorize('department_head', 'teacher'), examCommitteeController.listMembers);
+router.get('/deleted', authorize('department_head', 'teacher'), examCommitteeController.listDeletedMembers);
+router.patch('/:id/restore', authorize('department_head', 'teacher'), examCommitteeController.restoreMember);
 
 export default router;

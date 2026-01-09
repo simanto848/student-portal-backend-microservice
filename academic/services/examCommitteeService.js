@@ -1,4 +1,8 @@
 import ExamCommittee from "../models/ExamCommittee.js";
+import notificationServiceClient from "../client/notificationServiceClient.js";
+import communicationServiceClient from "../client/communicationServiceClient.js";
+import userServiceClient from "../client/userServiceClient.js";
+import Department from "../models/Department.js"; // Assume local model
 
 class ExamCommitteeService {
   async addMember(departmentId, teacherId, shift, batchId = null) {
@@ -17,13 +21,49 @@ class ExamCommitteeService {
       throw new Error("Teacher is already a member of this committee");
     }
 
-    return ExamCommittee.create({
+    const newMember = await ExamCommittee.create({
       departmentId,
       teacherId,
       shift,
       batchId,
       status: true,
     });
+
+    // Send Notifications (Non-blocking)
+    this.sendWelcomeNotification(teacherId, departmentId, shift);
+
+    return newMember;
+  }
+
+  async sendWelcomeNotification(teacherId, departmentId, shift) {
+    try {
+      const [teacher, department] = await Promise.all([
+        userServiceClient.getById(teacherId),
+        Department.findById(departmentId)
+      ]);
+
+      const deptName = department ? department.name : "Department";
+      const teacherEmail = teacher.email;
+      const teacherName = teacher.fullName || "Teacher";
+
+      // 1. System Notification
+      await notificationServiceClient.sendNotification(
+        teacherId,
+        "Exam Committee Assignment",
+        `You have been assigned to the Exam Committee for ${deptName} (${shift} Shift).`,
+        "info"
+      );
+
+      // 2. Email Notification
+      await communicationServiceClient.sendSimpleEmail(
+        teacherEmail,
+        "Exam Committee Assignment",
+        `Dear ${teacherName},\n\nYou have been added to the Exam Committee of ${deptName} for the ${shift} shift.\n\nPlease log in to the portal to view details.\n\nBest Regards,\nStudent Portal Team`
+      );
+
+    } catch (error) {
+      console.error("Failed to send exam committee notifications:", error.message);
+    }
   }
 
   async removeMember(id) {
@@ -65,6 +105,24 @@ class ExamCommitteeService {
       .populate("departmentId", "name")
       .populate("batchId", "name");
     // .populate('teacherId', ...) - removed to avoid cross-service issues. Frontend handles ID mapping if needed.
+  }
+
+  async listDeletedMembers(departmentId) {
+    // Requires includeDeleted: true option to bypass pre-find hook
+    return ExamCommittee.find({ departmentId, deletedAt: { $ne: null } })
+      .setOptions({ includeDeleted: true })
+      .sort({ deletedAt: -1 })
+      .populate("departmentId", "name")
+      .populate("batchId", "name");
+  }
+
+  async restoreMember(id) {
+    const member = await ExamCommittee.findById(id).setOptions({ includeDeleted: true });
+    if (!member) throw new Error("Member not found");
+
+    member.deletedAt = null; // Restore
+    member.status = true;    // Reactivate
+    return member.save();
   }
 }
 

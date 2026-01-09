@@ -9,10 +9,12 @@ class AttendanceService {
   validateAttendanceDate(date) {
     const attendanceDate = new Date(date);
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
+    // Allow a 24-hour buffer to account for timezone differences (e.g., User is in +06:00 while server is in UTC)
+    const futureLimit = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    futureLimit.setHours(23, 59, 59, 999);
 
-    if (attendanceDate > today) {
-      throw new ApiError(400, "Cannot mark attendance for future dates");
+    if (attendanceDate > futureLimit) {
+      throw new ApiError(400, "Cannot mark attendance for future dates (beyond 24h buffer)");
     }
   }
 

@@ -57,8 +57,8 @@ class DepartmentService {
             throw new ApiError(404, 'Department not found');
         }
 
-        const programsCount = await Program.countDocuments({departmentId: id, deletedAt: null});
-        return {...department.toJSON(), programsCount,};
+        const programsCount = await Program.countDocuments({ departmentId: id, deletedAt: null });
+        return { ...department.toJSON(), programsCount, };
     }
 
     async create(payload) {
@@ -77,7 +77,7 @@ class DepartmentService {
         if (existingDepartment) {
             const conflictField =
                 existingDepartment.name === payload.name ? 'name' :
-                existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
+                    existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
 
             throw new ApiError(409, `Department with this ${conflictField} already exists`);
         }
@@ -117,10 +117,25 @@ class DepartmentService {
                 if (existingDepartment) {
                     const conflictField =
                         existingDepartment.name === payload.name ? 'name' :
-                        existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
+                            existingDepartment.shortName === payload.shortName ? 'short name' : 'email';
 
                     throw new ApiError(409, `Department with this ${conflictField} already exists`);
                 }
+            }
+        }
+
+        // Check if head changed via update payload
+        if (payload.departmentHeadId !== undefined && payload.departmentHeadId !== department.departmentHeadId) {
+            const Teacher = (await import('../../user/models/Teacher.js')).default;
+
+            // Unset old head
+            if (department.departmentHeadId) {
+                await Teacher.findByIdAndUpdate(department.departmentHeadId, { isDepartmentHead: false });
+            }
+
+            // Set new head
+            if (payload.departmentHeadId) {
+                await Teacher.findByIdAndUpdate(payload.departmentHeadId, { isDepartmentHead: true });
             }
         }
 
@@ -152,7 +167,7 @@ class DepartmentService {
             throw new ApiError(404, 'Department not found');
         }
 
-        const query = { departmentId, ...filters};
+        const query = { departmentId, ...filters };
         if (search) {
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },
@@ -193,9 +208,28 @@ class DepartmentService {
             throw new ApiError(404, 'Department not found');
         }
 
+        // Check if head changed for sync
+        const previousHeadId = department.departmentHeadId;
+
         department.departmentHeadId = headId;
         department.isActingHead = isActingHead;
         await department.save();
+
+        // Sync with Teacher model
+        // Dynamic import to avoid circular dependency if Teacher imports DepartmentService (unlikely but safe)
+        // Adjust path based on actual location: backend/user/models/Teacher.js - relative from backend/academic/services/departmentService.js
+        // academic/services/.. -> backend/academic -> .. -> backend -> user/models/Teacher.js
+        const Teacher = (await import('../../user/models/Teacher.js')).default;
+
+        // Unset previous head if any and different
+        if (previousHeadId && previousHeadId.toString() !== headId.toString()) {
+            await Teacher.findByIdAndUpdate(previousHeadId, { isDepartmentHead: false });
+        }
+
+        // Set new head
+        if (headId) {
+            await Teacher.findByIdAndUpdate(headId, { isDepartmentHead: true });
+        }
 
         return department;
     }
@@ -204,6 +238,12 @@ class DepartmentService {
         const department = await Department.findById(departmentId);
         if (!department) {
             throw new ApiError(404, 'Department not found');
+        }
+
+        // Sync with Teacher model check before nullifying
+        if (department.departmentHeadId) {
+            const Teacher = (await import('../../user/models/Teacher.js')).default;
+            await Teacher.findByIdAndUpdate(department.departmentHeadId, { isDepartmentHead: false });
         }
 
         department.departmentHeadId = null;

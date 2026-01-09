@@ -52,7 +52,9 @@ examCommitteeSchema.index(
 );
 
 examCommitteeSchema.pre(/^find/, function (next) {
-  this.where({ deletedAt: null });
+  if (this.getOptions().includeDeleted !== true) {
+    this.where({ deletedAt: null });
+  }
   if (next) next();
 });
 

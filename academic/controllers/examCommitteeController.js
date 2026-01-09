@@ -50,6 +50,26 @@ class ExamCommitteeController {
       next(error);
     }
   }
+
+  async listDeletedMembers(req, res, next) {
+    try {
+      const { departmentId } = req.query;
+      const members = await examCommitteeService.listDeletedMembers(departmentId);
+      return ApiResponse.success(res, members);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async restoreMember(req, res, next) {
+    try {
+      const { id } = req.params;
+      const member = await examCommitteeService.restoreMember(id);
+      return ApiResponse.success(res, member, "Member restored successfully");
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default new ExamCommitteeController();
