@@ -146,11 +146,32 @@ class StaffService {
             const temporaryPassword = PasswordGenerator.generate(12);
             staffData.password = temporaryPassword;
 
-            // Email sending moved to after staff creation
+            let profileData = null;
+            if (staffData.profile && typeof staffData.profile === 'object') {
+                profileData = staffData.profile;
+                delete staffData.profile;
+            }
 
             const staff = await Staff.create(staffData);
+            if (profileData) {
+                try {
+                    const nameParts = staffData.fullName ? staffData.fullName.split(' ') : ['Unknown'];
+                    const firstName = profileData.firstName || nameParts[0];
+                    const lastName = profileData.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
 
-            // Send welcome email non-blockingly
+                    const profile = await Profile.create({
+                        firstName,
+                        lastName,
+                        ...profileData,
+                        user: staff._id
+                    });
+
+                    await Staff.findByIdAndUpdate(staff._id, { profile: profile._id });
+                } catch (profileError) {
+                    console.error('Failed to create profile:', profileError.message);
+                }
+            }
+
             emailService.sendWelcomeEmailWithCredentials(staffData.email, {
                 fullName: staffData.fullName,
                 email: staffData.email,
@@ -158,7 +179,8 @@ class StaffService {
             }).catch(emailError => {
                 console.error('Failed to send welcome email:', emailError.message);
             });
-            const createdStaff = await Staff.findById(staff._id).select('-password').lean();
+
+            const createdStaff = await Staff.findById(staff._id).select('-password').populate('profile').lean();
             return createdStaff;
         } catch (error) {
             if (error instanceof ApiError) throw error;
@@ -170,13 +192,13 @@ class StaffService {
         }
     }
 
+
     async update(staffId, updateData) {
         try {
             delete updateData.password;
             delete updateData.email;
             delete updateData.registrationNumber;
 
-            // Remove undefined or null fields
             Object.keys(updateData).forEach(key => {
                 if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
                     delete updateData[key];
@@ -199,11 +221,9 @@ class StaffService {
                     await Profile.findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
                     delete updateData.profile;
                 } else {
-                    // Check if profile exists for this user but wasn't linked
                     let pf = await Profile.findOne({ user: staffId });
 
                     if (pf) {
-                        // Update existing unlinked profile
                         pf = await Profile.findByIdAndUpdate(pf._id, { $set: updateData.profile }, { new: true, runValidators: true });
                     } else {
                         const nameParts = existing.fullName ? existing.fullName.split(' ') : ['Unknown'];
