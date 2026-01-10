@@ -268,11 +268,10 @@ app.post("/api/alerts/:id/acknowledge", express.json(), (req, res) => {
 
 // Helper to create proxy with rate limiting
 const createServiceProxy = (serviceKey, targetUrl, pathPrefix = null) => {
-  const proxyOptions = pathPrefix
-    ? {
-      proxyReqPathResolver: (req) => pathPrefix + req.url,
-    }
-    : {};
+  const proxyOptions = {
+    limit: '200mb',
+    ...(pathPrefix ? { proxyReqPathResolver: (req) => pathPrefix + req.url } : {}),
+  };
 
   return [
     rateLimiterMiddleware(serviceKey),
