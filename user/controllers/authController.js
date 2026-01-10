@@ -132,6 +132,16 @@ class AuthController {
     }
   }
 
+  async resend2FA(req, res, next) {
+    try {
+      const { tempToken } = req.body;
+      const result = await authService.resend2FAOTP(tempToken);
+      return ApiResponse.success(res, null, result.message);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async forgotPassword(req, res, next) {
     try {
       const { email, role } = req.body;
@@ -214,6 +224,35 @@ class AuthController {
       const role = req.user.role;
       const result = await authService.disable2FA(userId, password, role);
       return ApiResponse.success(res, result, "2FA disabled successfully");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getSessions(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const currentSessionId = req.user.sessionId;
+      const result = await authService.getSessions(userId);
+
+      const sessionsWithCurrent = result.map(session => ({
+        ...session.toObject(),
+        id: session._id,
+        isCurrent: session._id === currentSessionId
+      }));
+
+      return ApiResponse.success(res, sessionsWithCurrent, "Active sessions fetched successfully");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async revokeSession(req, res, next) {
+    try {
+      const { sessionId } = req.params;
+      const userId = req.user.id;
+      const result = await authService.revokeSession(userId, sessionId);
+      return ApiResponse.success(res, result, "Session revoked successfully");
     } catch (error) {
       next(error);
     }

@@ -1,11 +1,8 @@
+import "dotenv/config";
 import http from "http";
-import dotenv from "dotenv";
-import colors from "colors";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { createLogger } from "shared";
-
-dotenv.config();
 
 const logger = createLogger("USER");
 

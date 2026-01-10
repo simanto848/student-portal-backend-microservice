@@ -91,3 +91,10 @@ export const verifyResetOTPSchema = (data) => {
   });
   return schema.safeParse(data);
 };
+
+export const resend2FASchema = (data) => {
+  const schema = z.object({
+    tempToken: z.string({ required_error: "Temporary token is required" }),
+  });
+  return schema.safeParse(data);
+};

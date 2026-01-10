@@ -11,21 +11,46 @@ const __dirname = path.dirname(__filename);
 
 class OtpService {
     constructor() {
-        const mailConfig = {
-            host: process.env.MAIL_HOST,
-            port: process.env.MAIL_PORT,
-            secure: process.env.MAIL_PORT === '465',
-            auth: {
-                user: process.env.MAIL_USER,
-                pass: process.env.MAIL_PASS,
-            },
-        };
+        this.transporter = null;
+    }
 
-        if (process.env.MAIL_HOST === 'gmail') {
-            mailConfig.service = 'gmail';
+    getTransporter() {
+        if (!this.transporter) {
+            let mailHost = process.env.MAIL_HOST;
+            let mailPort = process.env.MAIL_PORT;
+            let mailUser = process.env.MAIL_USER;
+            let mailPass = process.env.MAIL_PASS;
+
+            if (!mailHost || mailHost.trim() === '') {
+                mailHost = 'sandbox.smtp.mailtrap.io';
+                mailPort = '2525';
+                mailUser = '8cbbbf4e87833a';
+                mailPass = '7161f47320a42b';
+            }
+
+            const mailConfig = {
+                host: mailHost,
+                port: mailPort,
+                secure: mailPort === '465',
+                auth: {
+                    user: mailUser,
+                    pass: mailPass,
+                },
+            };
+
+            if (process.env.MAIL_HOST === 'gmail') {
+                mailConfig.service = 'gmail';
+            }
+
+            console.log("Mail Config:", {
+                host: mailConfig.host,
+                port: mailConfig.port,
+                user: mailConfig.auth.user ? "***" : "missing"
+            });
+
+            this.transporter = nodemailer.createTransport(mailConfig);
         }
-
-        this.transporter = nodemailer.createTransport(mailConfig);
+        return this.transporter;
     }
 
     generateOTP(length = 6) {
@@ -147,7 +172,7 @@ class OtpService {
                 html,
             };
 
-            await this.transporter.sendMail(mailOptions);
+            await this.getTransporter().sendMail(mailOptions);
         } catch (error) {
             throw new ApiError(500, 'Failed to send OTP email: ' + error.message);
         }

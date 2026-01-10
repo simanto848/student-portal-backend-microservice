@@ -4,7 +4,9 @@ import Admin from "../models/Admin.js";
 import Staff from "../models/Staff.js";
 import Teacher from "../models/Teacher.js";
 import Student from "../models/Student.js";
+import Session from "../models/Session.js";
 import otpService from "./otpService.js";
+import UserOTP from "../models/OTP.js";
 import OTP_PURPOSES from "../constants/OTP_PURPOSE.js";
 import { ApiError } from "shared";
 
@@ -141,7 +143,7 @@ class AuthService {
         };
       }
 
-      return this.generateAuthTokens(user, roleKey, clientIp, res);
+      return this.generateAuthTokens(user, roleKey, req, res);
     } catch (error) {
       throw error instanceof ApiError
         ? error
@@ -149,15 +151,36 @@ class AuthService {
     }
   }
 
-  async generateAuthTokens(user, roleKey, clientIp, res) {
+  async generateAuthTokens(user, roleKey, req, res) {
+    const refreshToken = this.generateRefreshToken();
+    const clientIp = this.getClientIp(req);
+    const userAgent = req.headers["user-agent"] || "";
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    // Create session
+    const session = await Session.create({
+      user: user.id,
+      role: user.role || roleKey,
+      refreshToken,
+      ipAddress: clientIp,
+      device: {
+        browser: userAgent,
+        os: "Unknown",
+        deviceType: "desktop",
+      },
+      expiresAt,
+    });
+
     const payload = {
       id: user.id,
+      sessionId: session.id,
       role: user.role || roleKey,
       type: roleKey,
       registrationNumber: user.registrationNumber,
       fullName: user.fullName,
       email: user.email,
-      // Include batch, department, and program IDs for notification targeting
       ...(user.batchId && { batchId: user.batchId }),
       ...(user.departmentId && { departmentId: user.departmentId }),
       ...(user.programId && { programId: user.programId }),
@@ -165,15 +188,13 @@ class AuthService {
     };
 
     const accessToken = this.signToken(payload);
-    const refreshToken = this.generateRefreshToken();
-
-    const refreshTokenExpiresAt = new Date();
-    refreshTokenExpiresAt.setDate(refreshTokenExpiresAt.getDate() + 30);
 
     user.lastLoginAt = new Date();
     user.lastLoginIp = clientIp;
+    // We still keep the last refresh token on the user model for legacy support if needed, 
+    // but the primary session management is now in the Session model.
     user.refreshToken = refreshToken;
-    user.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    user.refreshTokenExpiresAt = expiresAt;
     await user.save({ validateModifiedOnly: true });
 
     this.setAuthCookie(res, accessToken);
@@ -183,9 +204,7 @@ class AuthService {
     sanitizedUser.id = user.id;
     delete sanitizedUser.password;
     delete sanitizedUser.refreshToken;
-
-    if (sanitizedUser.profile && typeof sanitizedUser.profile === "string") {
-    }
+    sanitizedUser.role = sanitizedUser.role || roleKey;
 
     return {
       accessToken,
@@ -224,8 +243,7 @@ class AuthService {
         throw new ApiError(404, "User not found");
       }
 
-      const clientIp = this.getClientIp(req);
-      return this.generateAuthTokens(user, decoded.role, clientIp, res);
+      return this.generateAuthTokens(user, decoded.role, req, res);
     } catch (error) {
       if (
         error.name === "JsonWebTokenError" ||
@@ -236,6 +254,60 @@ class AuthService {
       throw error instanceof ApiError
         ? error
         : new ApiError(500, error.message);
+    }
+  }
+
+  async resend2FAOTP(tempToken) {
+    try {
+      const decoded = jwt.verify(tempToken, this.jwtSecret);
+      if (decoded.type !== "2fa_pending") {
+        throw new ApiError(401, "Invalid token type");
+      }
+
+      const models = {
+        admin: Admin,
+        staff: Staff,
+        teacher: Teacher,
+        student: Student,
+      };
+
+      const Model = models[decoded.role];
+      const user = await Model.findById(decoded.id);
+      if (!user) {
+        throw new ApiError(404, "User not found");
+      }
+
+      // Check for existing OTP for rate limiting (e.g. 1 minute)
+      const existingOTP = await UserOTP.findOne({
+        user: user.id,
+        purpose: OTP_PURPOSES.TWO_FACTOR_AUTH,
+        createdAt: { $gt: new Date(Date.now() - 60 * 1000) } // Check if created in last 60s
+      });
+
+      if (existingOTP) {
+        const timeLeft = 60 - Math.floor((Date.now() - new Date(existingOTP.createdAt).getTime()) / 1000);
+        throw new ApiError(429, `Please wait ${timeLeft} seconds before requesting a new code.`);
+      }
+
+      const otp = otpService.generateOTP(6);
+      await otpService.saveOTP(user.id, otp, OTP_PURPOSES.TWO_FACTOR_AUTH, 5); // 5 mins expiry
+
+      await otpService.sendOTPEmail(
+        user.email,
+        otp,
+        OTP_PURPOSES.TWO_FACTOR_AUTH,
+        user.fullName
+      );
+
+      return { message: "OTP resent successfully" };
+    } catch (error) {
+      if (
+        error.name === "JsonWebTokenError" ||
+        error.name === "TokenExpiredError"
+      ) {
+        throw new ApiError(401, "Invalid or expired session. Please login again.");
+      }
+      throw error;
     }
   }
 
@@ -257,27 +329,39 @@ class AuthService {
 
   async logout(req, res) {
     try {
-      this.clearAuthCookie(res);
-      if (req.user && req.user.sub) {
-        const models = {
-          admin: Admin,
-          staff: Staff,
-          teacher: Teacher,
-          student: Student,
-        };
-
-        const Model = models[req.user.role];
-        if (Model) {
-          await Model.findByIdAndUpdate(req.user.sub, {
-            refreshToken: null,
-            refreshTokenExpiresAt: null,
-          });
-        }
+      const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+      if (refreshToken) {
+        await Session.deleteOne({ refreshToken });
       }
-
+      this.clearAuthCookie(res);
       return { message: "Logged out successfully" };
     } catch (error) {
       throw new ApiError(500, error.message);
+    }
+  }
+
+  async getSessions(userId) {
+    try {
+      const sessions = await Session.find({
+        user: userId,
+        expiresAt: { $gt: new Date() },
+      }).sort({ lastActive: -1 });
+
+      return sessions;
+    } catch (error) {
+      throw new ApiError(500, error.message);
+    }
+  }
+
+  async revokeSession(userId, sessionId) {
+    try {
+      const result = await Session.deleteOne({ _id: sessionId, user: userId });
+      if (result.deletedCount === 0) {
+        throw new ApiError(404, "Session not found or already revoked");
+      }
+      return { message: "Session revoked successfully" };
+    } catch (error) {
+      throw error instanceof ApiError ? error : new ApiError(500, error.message);
     }
   }
 
@@ -287,40 +371,31 @@ class AuthService {
         throw new ApiError(401, "Refresh token is required");
       }
 
-      const models = [
-        { Model: Admin, role: "admin" },
-        { Model: Staff, role: "staff" },
-        { Model: Teacher, role: "teacher" },
-        { Model: Student, role: "student" },
-      ];
+      const session = await Session.findOne({
+        refreshToken,
+        expiresAt: { $gt: new Date() },
+      });
 
-      let user = null;
-      let roleKey = null;
-      for (const { Model, role } of models) {
-        user = await Model.findOne({
-          refreshToken,
-          refreshTokenExpiresAt: { $gt: new Date() },
-          deletedAt: null,
-        }).select("+refreshToken");
-
-        if (user) {
-          roleKey = role;
-          break;
-        }
+      if (!session) {
+        throw new ApiError(401, "Invalid or expired session");
       }
 
-      if (!user) {
-        throw new ApiError(401, "Invalid or expired refresh token");
+      const Model = this.getModelForRole(session.role);
+      const user = await Model.findById(session.user).populate("profile");
+
+      if (!user || user.deletedAt) {
+        await Session.deleteOne({ _id: session._id });
+        throw new ApiError(401, "User no longer exists");
       }
 
       const payload = {
         id: user.id,
-        role: user.role || roleKey,
-        type: roleKey,
+        sessionId: session.id,
+        role: user.role || session.role,
+        type: session.role,
         registrationNumber: user.registrationNumber,
         fullName: user.fullName,
         email: user.email,
-        // Include batch, department, and program IDs for notification targeting
         ...(user.batchId && { batchId: user.batchId }),
         ...(user.departmentId && { departmentId: user.departmentId }),
         ...(user.programId && { programId: user.programId }),
@@ -328,9 +403,16 @@ class AuthService {
       };
 
       const accessToken = this.signToken(payload);
+
+      // Update session activity
+      session.lastActive = new Date();
+      session.ipAddress = this.getClientIp(req);
+      await session.save();
+
       this.setAuthCookie(res, accessToken);
 
       const sanitizedUser = user.toObject();
+      sanitizedUser.id = user.id;
       delete sanitizedUser.password;
       delete sanitizedUser.refreshToken;
 
