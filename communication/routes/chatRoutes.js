@@ -1,6 +1,8 @@
 import express from "express";
 import ChatController from "../controllers/ChatController.js";
 import { authenticate, authorize } from "shared";
+import upload from "../middlewares/upload.js";
+import UploadController from "../controllers/UploadController.js";
 
 const router = express.Router();
 
@@ -49,6 +51,16 @@ router.patch(
   "/messages/:messageId/react",
   authorize("super_admin", "admin", "teacher", "student"),
   ChatController.reactToMessage
+);
+
+// File Upload
+// File Upload
+
+router.post(
+  "/upload",
+  authorize("super_admin", "admin", "teacher", "student"),
+  upload.single("file"),
+  UploadController.uploadFile
 );
 
 export default router;
