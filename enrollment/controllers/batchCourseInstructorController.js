@@ -73,7 +73,8 @@ class BatchCourseInstructorController {
     async getCourseInstructors(req, res, next) {
         try {
             const { batchId, courseId, semester } = req.query;
-            const assignments = await batchCourseInstructorService.getCourseInstructors(batchId, courseId, parseInt(semester));
+            const parsedSemester = semester ? parseInt(semester) : undefined;
+            const assignments = await batchCourseInstructorService.getCourseInstructors(batchId, courseId, parsedSemester);
             return ApiResponse.success(res, assignments);
         } catch (error) {
             next(error);

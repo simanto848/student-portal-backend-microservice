@@ -28,14 +28,19 @@ class CourseScheduleService {
 			const skip = (page - 1) * limit;
 			const [schedules, total] = await Promise.all([
 				CourseSchedule.find(query)
-					.populate('batchId', 'name year programId departmentId')
+					.populate({
+						path: 'batchId',
+						select: 'name year programId departmentId shift',
+						populate: { path: 'departmentId', select: 'name shortName' }
+					})
 					.populate({
 						path: 'sessionCourseId',
 						select: 'sessionId courseId semester departmentId',
-						populate: {
-							path: 'courseId',
-							select: 'name code credits'
-						}
+						populate: [
+							{ path: 'courseId', select: 'name code credits' },
+							{ path: 'sessionId', select: 'name' },
+							{ path: 'departmentId', select: 'name shortName' }
+						]
 					})
 					.populate('classroomId', 'roomNumber buildingName floor capacity')
 					.sort({ startDate: -1, startTime: 1 })
@@ -55,14 +60,19 @@ class CourseScheduleService {
 			};
 		} else {
 			const schedules = await CourseSchedule.find(query)
-				.populate('batchId', 'name year programId departmentId')
+				.populate({
+					path: 'batchId',
+					select: 'name year programId departmentId shift',
+					populate: { path: 'departmentId', select: 'name shortName' }
+				})
 				.populate({
 					path: 'sessionCourseId',
 					select: 'sessionId courseId semester departmentId',
-					populate: {
-						path: 'courseId',
-						select: 'name code credits'
-					}
+					populate: [
+						{ path: 'courseId', select: 'name code credits' },
+						{ path: 'sessionId', select: 'name' },
+						{ path: 'departmentId', select: 'name shortName' }
+					]
 				})
 				.populate('classroomId', 'roomNumber buildingName floor capacity')
 				.sort({ startDate: -1, startTime: 1 });
@@ -76,14 +86,19 @@ class CourseScheduleService {
 
 	async getById(id) {
 		const schedule = await CourseSchedule.findById(id)
-			.populate('batchId', 'name year programId departmentId')
+			.populate({
+				path: 'batchId',
+				select: 'name year programId departmentId shift',
+				populate: { path: 'departmentId', select: 'name shortName' }
+			})
 			.populate({
 				path: 'sessionCourseId',
 				select: 'sessionId courseId semester departmentId',
-				populate: {
-					path: 'courseId',
-					select: 'name code credits'
-				}
+				populate: [
+					{ path: 'courseId', select: 'name code credits' },
+					{ path: 'sessionId', select: 'name' },
+					{ path: 'departmentId', select: 'name shortName' }
+				]
 			})
 			.populate('classroomId', 'roomNumber buildingName floor capacity');
 		if (!schedule) throw new ApiError(404, 'Course schedule not found');
@@ -126,14 +141,19 @@ class CourseScheduleService {
 
 		const schedule = await CourseSchedule.create(payload);
 		return await CourseSchedule.findById(schedule._id)
-			.populate('batchId', 'name year programId departmentId')
+			.populate({
+				path: 'batchId',
+				select: 'name year programId departmentId shift',
+				populate: { path: 'departmentId', select: 'name shortName' }
+			})
 			.populate({
 				path: 'sessionCourseId',
 				select: 'sessionId courseId semester departmentId',
-				populate: {
-					path: 'courseId',
-					select: 'name code credits'
-				}
+				populate: [
+					{ path: 'courseId', select: 'name code credits' },
+					{ path: 'sessionId', select: 'name' },
+					{ path: 'departmentId', select: 'name shortName' }
+				]
 			})
 			.populate('classroomId', 'roomNumber buildingName floor capacity');
 	}
@@ -165,14 +185,19 @@ class CourseScheduleService {
 		Object.assign(schedule, payload);
 		await schedule.save();
 		return await CourseSchedule.findById(id)
-			.populate('batchId', 'name year programId departmentId')
+			.populate({
+				path: 'batchId',
+				select: 'name year programId departmentId shift',
+				populate: { path: 'departmentId', select: 'name shortName' }
+			})
 			.populate({
 				path: 'sessionCourseId',
 				select: 'sessionId courseId semester departmentId',
-				populate: {
-					path: 'courseId',
-					select: 'name code credits'
-				}
+				populate: [
+					{ path: 'courseId', select: 'name code credits' },
+					{ path: 'sessionId', select: 'name' },
+					{ path: 'departmentId', select: 'name shortName' }
+				]
 			})
 			.populate('classroomId', 'roomNumber buildingName floor capacity');
 	}
@@ -196,13 +221,14 @@ class CourseScheduleService {
 				.populate({
 					path: 'sessionCourseId',
 					select: 'sessionId courseId semester departmentId',
-					populate: {
-					path: 'courseId',
-					select: 'name code credits'
-				}
-			})
-			.populate('classroomId', 'roomNumber buildingName floor capacity')
-			.sort({ startTime: 1 })
+					populate: [
+						{ path: 'courseId', select: 'name code credits' },
+						{ path: 'sessionId', select: 'name' },
+						{ path: 'departmentId', select: 'name shortName' }
+					]
+				})
+				.populate('classroomId', 'roomNumber buildingName floor capacity')
+				.sort({ startTime: 1 })
 				.skip(skip)
 				.limit(parseInt(limit)),
 			CourseSchedule.countDocuments(query),
@@ -220,17 +246,22 @@ class CourseScheduleService {
 		const query = { teacherId };
 		const [schedules, total] = await Promise.all([
 			CourseSchedule.find(query)
-				.populate('batchId', 'name year programId departmentId')
+				.populate({
+					path: 'batchId',
+					select: 'name year programId departmentId shift',
+					populate: { path: 'departmentId', select: 'name shortName' }
+				})
 				.populate({
 					path: 'sessionCourseId',
 					select: 'sessionId courseId semester departmentId',
-					populate: {
-					path: 'courseId',
-					select: 'name code credits'
-				}
-			})
-			.populate('classroomId', 'roomNumber buildingName floor capacity')
-			.sort({ startTime: 1 })
+					populate: [
+						{ path: 'courseId', select: 'name code credits' },
+						{ path: 'sessionId', select: 'name' },
+						{ path: 'departmentId', select: 'name shortName' }
+					]
+				})
+				.populate('classroomId', 'roomNumber buildingName floor capacity')
+				.sort({ startTime: 1 })
 				.skip(skip)
 				.limit(parseInt(limit)),
 			CourseSchedule.countDocuments(query),

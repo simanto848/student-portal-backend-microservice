@@ -135,11 +135,12 @@ class BatchCourseInstructorService {
     }
 
     async getCourseInstructors(batchId, courseId, semester) {
-        const assignments = await BatchCourseInstructor.find({
-            batchId,
-            courseId,
-            semester,
-        }).sort({ assignedDate: -1 });
+        const query = { deletedAt: null };
+        if (batchId) query.batchId = batchId;
+        if (courseId) query.courseId = courseId;
+        if (semester && !isNaN(semester)) query.semester = semester;
+
+        const assignments = await BatchCourseInstructor.find(query).sort({ assignedDate: -1 });
         return assignments;
     }
 }
