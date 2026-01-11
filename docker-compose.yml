@@ -54,6 +54,9 @@ services:
       - classroom
     networks:
       - backend-network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   user:
     build:
@@ -118,6 +121,9 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   enrollment:
     build:
@@ -145,6 +151,9 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   library:
     build:
@@ -170,6 +179,9 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   classroom:
     build:
@@ -197,6 +209,9 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   communication:
     build:
@@ -224,11 +239,15 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   notification:
     build:
       context: .
       dockerfile: notification/Dockerfile
+      network: host
     ports:
       - "8007:8007"
     volumes:
@@ -253,6 +272,9 @@ services:
       - backend-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 networks:
   backend-network:
