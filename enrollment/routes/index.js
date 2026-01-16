@@ -15,7 +15,7 @@ router.use('/enrollments', enrollmentRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/assessments', assessmentRoutes);
 router.use('/grades', courseGradeRoutes);
-router.use('/result-workflows', resultWorkflowRoutes);
+router.use('/result-workflow', resultWorkflowRoutes);
 router.use('/exam-schedules', examScheduleRoutes);
 
 export default router;
