@@ -599,6 +599,7 @@ class AuthService {
         "hostel_supervisor",
         "maintenance",
         "exam",
+        "exam_controller",
       ].includes(role)
     ) {
       return Staff;

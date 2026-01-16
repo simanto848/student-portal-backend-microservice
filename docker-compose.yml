@@ -101,7 +101,7 @@ services:
       context: .
       dockerfile: academic/Dockerfile
     ports:
-      - "8002:8002"
+      - "8012:8002"
     volumes:
       - ./academic:/app/academic
       - ./shared:/app/shared

@@ -85,7 +85,7 @@ class ResultWorkflowController {
 
             await this.verifyOTP(req.user.sub, otp, 'result_publication', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
 
-            const workflow = await resultWorkflowService.publishResult(id, req.user.sub);
+            const workflow = await resultWorkflowService.publishResult(id, req.user.sub, req.user.role);
             return ApiResponse.success(res, workflow, 'Result published');
         } catch (error) {
             next(error);
@@ -113,7 +113,7 @@ class ResultWorkflowController {
 
             await this.verifyOTP(req.user.sub, otp, 'result_return_approval', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
 
-            const workflow = await resultWorkflowService.approveReturnRequest(id, req.user.sub);
+            const workflow = await resultWorkflowService.approveReturnRequest(id, req.user.sub, req.user.role);
             return ApiResponse.success(res, workflow, 'Return request approved');
         } catch (error) {
             next(error);

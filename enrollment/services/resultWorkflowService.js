@@ -128,7 +128,7 @@ class ResultWorkflowService {
         return workflow.save();
     }
 
-    async publishResult(workflowId, headId) {
+    async publishResult(workflowId, userId, userRole) {
         const workflow = await ResultWorkflow.findById(workflowId);
         if (!workflow) throw new ApiError(404, "Workflow not found");
 
@@ -136,20 +136,14 @@ class ResultWorkflowService {
             throw new ApiError(400, "Result must be approved by committee first");
         }
 
-        const batch = await Batch.findById(workflow.batchId);
-        if (!batch) throw new ApiError(404, "Batch not found");
-
-        const department = await Department.findById(batch.departmentId);
-        if (!department) throw new ApiError(404, "Department not found");
-
-        if (department.departmentHeadId !== headId) {
-            throw new ApiError(403, "Only the Department Head can publish results");
+        if (userRole !== 'exam_controller') {
+            throw new ApiError(403, "Only the Exam Controller can publish results");
         }
 
         workflow.status = "PUBLISHED";
         workflow.history.push({
             status: "PUBLISHED",
-            changedBy: headId,
+            changedBy: userId,
             comment: "Result Published",
         });
 
@@ -183,7 +177,7 @@ class ResultWorkflowService {
         return workflow.save();
     }
 
-    async approveReturnRequest(workflowId, headId) {
+    async approveReturnRequest(workflowId, userId, userRole) {
         const workflow = await ResultWorkflow.findById(workflowId);
         if (!workflow) throw new ApiError(404, "Workflow not found");
 
@@ -191,16 +185,10 @@ class ResultWorkflowService {
             throw new ApiError(400, "No return request pending");
         }
 
-        const batch = await Batch.findById(workflow.batchId);
-        if (!batch) throw new ApiError(404, "Batch not found");
-
-        const department = await Department.findById(batch.departmentId);
-        if (!department) throw new ApiError(404, "Department not found");
-
-        if (department.departmentHeadId !== headId) {
+        if (userRole !== 'exam_controller') {
             throw new ApiError(
                 403,
-                "Only the Department Head can approve return requests"
+                "Only the Exam Controller can approve return requests"
             );
         }
 

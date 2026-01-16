@@ -1,6 +1,6 @@
 import express from "express";
 import courseGradeController from "../controllers/courseGradeController.js";
-import resultWorkflowController from "../controllers/resultWorkflowController.js";
+
 import { authenticate, authorize } from "shared";
 import { validate } from "shared";
 import {
@@ -30,13 +30,7 @@ router.get("/mark-config/:courseId", authorize("teacher"), courseGradeController
 router.post("/bulk-entry", authorize("teacher"), courseGradeController.bulkSaveMarks);
 
 // Workflow Routes
-router.get("/workflow", authorize("teacher", "admin", "super_admin"), resultWorkflowController.getWorkflow);
-router.post("/workflow/submit", authorize("teacher"), validate(submitToCommitteeSchema), resultWorkflowController.submitToCommittee);
-router.post("/workflow/:id/approve", authorize("admin", "super_admin", "teacher"), validate(approveByCommitteeSchema), resultWorkflowController.approveByCommittee);
-router.post("/workflow/:id/return", authorize("admin", "super_admin", "teacher"), validate(returnToTeacherSchema), resultWorkflowController.returnToTeacher);
-router.post("/workflow/:id/publish", authorize("admin", "super_admin", "teacher"), resultWorkflowController.publishResult);
-router.post("/workflow/:id/request-return", authorize("teacher"), validate(requestReturnSchema), resultWorkflowController.requestReturn);
-router.post("/workflow/:id/approve-return", authorize("admin", "super_admin", "teacher"), resultWorkflowController.approveReturnRequest);
+
 
 router.get("/stats/course", authorize("teacher"), courseGradeController.getCourseGradeStats);
 router.get("/student/:studentId/semester/:semester", authorize("super_admin", "admin", "teacher", "student"), courseGradeController.getStudentSemesterGrades);

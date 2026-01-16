@@ -15,7 +15,14 @@ const sessionSchema = new mongoose.Schema(
         role: {
             type: String,
             required: true,
-            enum: ['admin', 'staff', 'teacher', 'student'],
+            enum: [
+                'admin', 'staff', 'teacher', 'student',
+                'super_admin', 'moderator',
+                'program_controller', 'admission', 'library', 'it',
+                'finance', 'transport', 'hr', 'hostel',
+                'hostel_warden', 'hostel_supervisor', 'maintenance',
+                'exam', 'exam_controller', 'department_head', 'dean'
+            ],
         },
         refreshToken: {
             type: String,
