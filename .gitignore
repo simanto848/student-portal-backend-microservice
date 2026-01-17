@@ -16,12 +16,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# environment variables
+# environment variables (keep .env.example for reference)
 .env
 .env.local
+.env.docker
 .env.development.local
 .env.test.local
 .env.production.local
+*/.env
+*/.env.local
 
 docs
 logs

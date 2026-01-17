@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class AcademicServiceClient {
     constructor() {
-        this.baseURL = process.env.ACADEMIC_SERVICE_URL || 'http://localhost:8001';
+        this.baseURL = process.env.ACADEMIC_SERVICE_URL || 'http://localhost:8002';
         this.client = axios.create({
             baseURL: this.baseURL,
             timeout: 5000,
