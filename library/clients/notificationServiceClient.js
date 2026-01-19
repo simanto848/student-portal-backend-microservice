@@ -56,7 +56,7 @@ class NotificationServiceClient {
             targetType: 'custom',
             targetUserIds: [userId],
             priority: daysUntilDue <= 2 ? 'high' : 'medium',
-            deliveryChannels: ['socket']
+            deliveryChannels: ['socket', 'database']
         });
     }
 }

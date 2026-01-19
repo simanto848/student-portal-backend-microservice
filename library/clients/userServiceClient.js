@@ -1,8 +1,10 @@
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
 
 class UserServiceClient {
     constructor() {
         this.baseURL = process.env.USER_SERVICE_URL || 'http://user:8007';
+        this.jwtSecret = process.env.JWT_SECRET || 'mysupersecrectkey';
         this.client = axios.create({
             baseURL: this.baseURL,
             timeout: 10000,
@@ -10,6 +12,19 @@ class UserServiceClient {
                 'Content-Type': 'application/json',
             },
         });
+    }
+
+    generateSystemToken() {
+        return jwt.sign(
+            {
+                sub: 'system-library',
+                id: 'system-library',
+                role: 'admin',
+                type: 'admin'
+            },
+            this.jwtSecret,
+            { expiresIn: '1h' }
+        );
     }
 
     async verifyToken(token) {
@@ -32,9 +47,14 @@ class UserServiceClient {
                 `/teachers/${userId}`
             ];
 
+            const token = this.generateSystemToken();
+            const config = {
+                headers: { Authorization: `Bearer ${token}` }
+            };
+
             for (const endpoint of endpoints) {
                 try {
-                    const response = await this.client.get(endpoint);
+                    const response = await this.client.get(endpoint, config);
                     return response.data;
                 } catch (err) {
                     continue;

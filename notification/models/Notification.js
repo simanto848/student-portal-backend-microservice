@@ -98,7 +98,7 @@ const notificationSchema = new mongoose.Schema({
     },
     deliveryChannels: {
         type: [String],
-        enum: ['socket', 'email'],
+        enum: ['socket', 'email', 'database'],
         default: ['socket']
     },
     isPinned: {

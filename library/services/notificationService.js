@@ -18,35 +18,46 @@ class NotificationService {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            // Find books due in 7 days
-            const oneWeekFromNow = new Date(today);
-            oneWeekFromNow.setDate(oneWeekFromNow.getDate() + 7);
-            const oneWeekEnd = new Date(oneWeekFromNow);
-            oneWeekEnd.setHours(23, 59, 59, 999);
+            // 7-Day Reminder Window: Due in 4 to 8 days (covers the "7 days" target plus buffer)
+            const sevenDayStart = new Date(today);
+            sevenDayStart.setDate(sevenDayStart.getDate() + 4);
+            const sevenDayEnd = new Date(today);
+            sevenDayEnd.setDate(sevenDayEnd.getDate() + 8);
+            sevenDayEnd.setHours(23, 59, 59, 999);
 
-            // Find books due in 2 days
-            const twoDaysFromNow = new Date(today);
-            twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
-            const twoDaysEnd = new Date(twoDaysFromNow);
-            twoDaysEnd.setHours(23, 59, 59, 999);
+            // 2-Day Reminder Window: Due in 0 to 3 days (covers "2 days" target plus buffer/catch-up)
+            const twoDayStart = new Date(today);
+            const twoDayEnd = new Date(today);
+            twoDayEnd.setDate(twoDayEnd.getDate() + 3);
+            twoDayEnd.setHours(23, 59, 59, 999);
 
-            // Get borrowings due in 7 days
+            // Get borrowings needing 7-day reminder
+            // Logic: Due within window AND flag is false
             const sevenDayReminders = await BookTakenHistory.find({
                 status: 'borrowed',
-                dueDate: { $gte: oneWeekFromNow, $lte: oneWeekEnd },
+                dueDate: { $gte: sevenDayStart, $lte: sevenDayEnd },
+                sevenDayWarningSent: { $ne: true },
                 deletedAt: null
             })
-                .populate('bookId', 'title author')
+                .populate({
+                    path: 'copyId',
+                    populate: { path: 'bookId', select: 'title author' }
+                })
                 .populate('libraryId', 'name finePerDay')
                 .lean();
 
-            // Get borrowings due in 2 days
+            // Get borrowings needing 2-day reminder
+            // Logic: Due within window AND flag is false
             const twoDayReminders = await BookTakenHistory.find({
                 status: 'borrowed',
-                dueDate: { $gte: twoDaysFromNow, $lte: twoDaysEnd },
+                dueDate: { $gte: twoDayStart, $lte: twoDayEnd },
+                twoDayWarningSent: { $ne: true },
                 deletedAt: null
             })
-                .populate('bookId', 'title author')
+                .populate({
+                    path: 'copyId',
+                    populate: { path: 'bookId', select: 'title author' }
+                })
                 .populate('libraryId', 'name finePerDay')
                 .lean();
 
@@ -55,86 +66,109 @@ class NotificationService {
 
             // Send 7-day reminders
             for (const borrowing of sevenDayReminders) {
-                const logKey = `${borrowing.id || borrowing._id}-7days`;
-                if (this.emailSentLog.has(logKey)) {
-                    continue; // Already sent today
+                let emailSuccess = false;
+                let notificationSuccess = false;
+
+                // Get user details once
+                let userData;
+                try {
+                    const user = await userServiceClient.getUserById(borrowing.borrowerId);
+                    userData = user.data || user;
+                } catch (err) {
+                    console.error(`Failed to fetch user ${borrowing.borrowerId}:`, err.message);
+                    continue;
                 }
 
+                // 1. Try Sending Email
                 try {
-                    // Get user details
-                    const user = await userServiceClient.getUserById(borrowing.borrowerId);
-                    const userData = user.data || user;
-
                     await emailService.sendOverdueReminder(userData.email, {
                         userName: userData.fullName || userData.name || 'Student',
                         userEmail: userData.email,
-                        bookTitle: borrowing.bookId.title,
-                        author: borrowing.bookId.author,
+                        bookTitle: borrowing.copyId.bookId.title,
+                        author: borrowing.copyId.bookId.author,
                         dueDate: borrowing.dueDate,
                         daysUntilDue: 7,
                         finePerDay: borrowing.libraryId.finePerDay
                     });
-
-                    this.emailSentLog.set(logKey, today);
+                    emailSuccess = true;
                     emailsSent++;
-                    console.log(`Sent 7-day reminder to ${userData.email} for book: ${borrowing.bookId.title}`);
-
-                    // Send App Notification
-                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
-                        bookTitle: borrowing.bookId.title,
-                        author: borrowing.bookId.author,
-                        daysUntilDue: 7
-                    });
+                    console.log(`Sent 7-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
                 } catch (error) {
                     emailsFailed++;
-                    console.error(`Failed to send 7-day reminder for borrowing ${borrowing.id || borrowing._id}:`, error.message);
+                    console.error(`Failed to send 7-day reminder email for ${borrowing.id || borrowing._id}:`, error.message);
+                }
+
+                // 2. Try Sending App Notification
+                try {
+                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
+                        bookTitle: borrowing.copyId.bookId.title,
+                        author: borrowing.copyId.bookId.author,
+                        daysUntilDue: 7
+                    });
+                    notificationSuccess = true;
+                    console.log(`Sent 7-day app notification to ${borrowing.borrowerId}`);
+                } catch (error) {
+                    console.error(`Failed to send 7-day app notification for ${borrowing.id || borrowing._id}:`, error.message);
+                }
+
+                // Update Flag if AT LEAST ONE succeeded (or maybe simply if we attempted? 
+                // User requirement: "if not sent... it should sent". If we tried and failed, maybe we should retry?
+                // But preventing spam loop is key. Let's update flag if we made a solid attempt.
+                // Given the rate limit error, we DO want to suppressing the flag update so it retries? 
+                // NO, if we suppress flag, it will retry forever and hit rate limit forever.
+                // Better to update flag. 
+
+                if (emailSuccess || notificationSuccess) {
+                    await BookTakenHistory.updateOne({ _id: borrowing._id }, { sevenDayWarningSent: true });
                 }
             }
 
             // Send 2-day reminders
             for (const borrowing of twoDayReminders) {
-                const logKey = `${borrowing.id || borrowing._id}-2days`;
-                if (this.emailSentLog.has(logKey)) {
-                    continue; // Already sent today
+                let emailSuccess = false;
+                let notificationSuccess = false;
+
+                let userData;
+                try {
+                    const user = await userServiceClient.getUserById(borrowing.borrowerId);
+                    userData = user.data || user;
+                } catch (err) {
+                    console.error(`Failed to fetch user ${borrowing.borrowerId}:`, err.message);
+                    continue;
                 }
 
                 try {
-                    // Get user details
-                    const user = await userServiceClient.getUserById(borrowing.borrowerId);
-                    const userData = user.data || user;
-
                     await emailService.sendOverdueReminder(userData.email, {
                         userName: userData.fullName || userData.name || 'Student',
                         userEmail: userData.email,
-                        bookTitle: borrowing.bookId.title,
-                        author: borrowing.bookId.author,
+                        bookTitle: borrowing.copyId.bookId.title,
+                        author: borrowing.copyId.bookId.author,
                         dueDate: borrowing.dueDate,
                         daysUntilDue: 2,
                         finePerDay: borrowing.libraryId.finePerDay
                     });
-
-                    this.emailSentLog.set(logKey, today);
+                    emailSuccess = true;
                     emailsSent++;
-                    console.log(`Sent 2-day reminder to ${userData.email} for book: ${borrowing.bookId.title}`);
-
-                    // Send App Notification
-                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
-                        bookTitle: borrowing.bookId.title,
-                        author: borrowing.bookId.author,
-                        daysUntilDue: 2
-                    });
+                    console.log(`Sent 2-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
                 } catch (error) {
                     emailsFailed++;
-                    console.error(`Failed to send 2-day reminder for borrowing ${borrowing.id || borrowing._id}:`, error.message);
+                    console.error(`Failed to send 2-day reminder email for ${borrowing.id || borrowing._id}:`, error.message);
                 }
-            }
 
-            // Clean up old entries in emailSentLog (keep only last 30 days)
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            for (const [key, date] of this.emailSentLog.entries()) {
-                if (date < thirtyDaysAgo) {
-                    this.emailSentLog.delete(key);
+                try {
+                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
+                        bookTitle: borrowing.copyId.bookId.title,
+                        author: borrowing.copyId.bookId.author,
+                        daysUntilDue: 2
+                    });
+                    notificationSuccess = true;
+                    console.log(`Sent 2-day app notification to ${borrowing.borrowerId}`);
+                } catch (error) {
+                    console.error(`Failed to send 2-day app notification for ${borrowing.id || borrowing._id}:`, error.message);
+                }
+
+                if (emailSuccess || notificationSuccess) {
+                    await BookTakenHistory.updateOne({ _id: borrowing._id }, { twoDayWarningSent: true });
                 }
             }
 
@@ -151,7 +185,6 @@ class NotificationService {
             console.log('Checking for overdue books...');
 
             const today = new Date();
-            today.setHours(0, 0, 0, 0);
 
             // Find overdue books
             const overdueBorrowings = await BookTakenHistory.find({
@@ -159,7 +192,10 @@ class NotificationService {
                 finePaid: false,
                 deletedAt: null
             })
-                .populate('bookId', 'title author')
+                .populate({
+                    path: 'copyId',
+                    populate: { path: 'bookId', select: 'title author' }
+                })
                 .populate('libraryId', 'name finePerDay')
                 .lean();
 
@@ -171,11 +207,19 @@ class NotificationService {
                 const daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
                 const totalFine = daysOverdue * borrowing.libraryId.finePerDay;
 
-                // Send overdue notice every 7 days
-                const logKey = `${borrowing.id || borrowing._id}-overdue-${Math.floor(daysOverdue / 7)}`;
-                if (this.emailSentLog.has(logKey)) {
-                    continue; // Already sent for this week
+                // Check if we should send notice (if never sent, or if sent > 7 days ago)
+                let shouldSend = false;
+                if (!borrowing.lastOverdueNoticeSent) {
+                    shouldSend = true;
+                } else {
+                    const lastSent = new Date(borrowing.lastOverdueNoticeSent);
+                    const daysSinceLastNotice = Math.ceil((today - lastSent) / (1000 * 60 * 60 * 24));
+                    if (daysSinceLastNotice >= 7) {
+                        shouldSend = true;
+                    }
                 }
+
+                if (!shouldSend) continue;
 
                 try {
                     // Get user details
@@ -185,16 +229,18 @@ class NotificationService {
                     await emailService.sendBookOverdueNotice(userData.email, {
                         userName: userData.fullName || userData.name || 'Student',
                         userEmail: userData.email,
-                        bookTitle: borrowing.bookId.title,
-                        author: borrowing.bookId.author,
+                        bookTitle: borrowing.copyId.bookId.title,
+                        author: borrowing.copyId.bookId.author,
                         dueDate: borrowing.dueDate,
                         daysOverdue,
                         totalFine
                     });
 
-                    this.emailSentLog.set(logKey, today);
+                    // Update DB Flag
+                    await BookTakenHistory.updateOne({ _id: borrowing._id }, { lastOverdueNoticeSent: new Date() });
+
                     emailsSent++;
-                    console.log(`Sent overdue notice to ${userData.email} for book: ${borrowing.bookId.title}`);
+                    console.log(`Sent overdue notice to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
                 } catch (error) {
                     emailsFailed++;
                     console.error(`Failed to send overdue notice for borrowing ${borrowing.id || borrowing._id}:`, error.message);

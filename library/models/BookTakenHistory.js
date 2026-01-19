@@ -70,6 +70,18 @@ const bookTakenHistorySchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        sevenDayWarningSent: {
+            type: Boolean,
+            default: false
+        },
+        twoDayWarningSent: {
+            type: Boolean,
+            default: false
+        },
+        lastOverdueNoticeSent: {
+            type: Date,
+            default: null
+        }
     },
     {
         timestamps: true,
@@ -95,7 +107,7 @@ bookTakenHistorySchema.index({ returnDate: 1 });
 // Partial unique index: only one active borrowing per copy (borrowed or overdue status)
 bookTakenHistorySchema.index(
     { copyId: 1 },
-    { 
+    {
         unique: true,
         partialFilterExpression: {
             status: { $in: ['borrowed', 'overdue'] },

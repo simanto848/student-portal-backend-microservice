@@ -39,7 +39,17 @@ class RecipientResolverService {
       case 'faculty_staff':
         return await this.getFacultyStaff(notification.targetFacultyIds);
       case 'custom':
-        return notification.targetUserIds.map(id => ({ id, role: 'student' }));
+        // Resolve roles for each user ID
+        const resolvedUsers = await Promise.all(notification.targetUserIds.map(async (id) => {
+          try {
+            const user = await userServiceClient.getUserById(id);
+            return user ? (user.data || user) : null;
+          } catch (err) {
+            console.error(`Error resolving user ${id} for notification:`, err.message);
+            return null;
+          }
+        }));
+        return resolvedUsers.filter(u => u !== null).map(u => ({ id: u.id || u._id, role: u.role }));
       default:
         return [];
     }

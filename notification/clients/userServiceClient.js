@@ -38,6 +38,22 @@ class UserServiceClient {
   async getStaffByDepartment(deptId) { return this._getList(`/api/user/staffs?departmentId=${deptId}`); }
 
   async getUserById(userId, role) {
+    // If role is known, try the specific endpoint
+    if (role) {
+      return this._fetchUser(userId, role);
+    }
+
+    // If role is unknown, try all possible endpoints
+    const roles = ['student', 'teacher', 'staff', 'admin'];
+    for (const r of roles) {
+      const user = await this._fetchUser(userId, r);
+      if (user) return user;
+    }
+
+    return null;
+  }
+
+  async _fetchUser(userId, role) {
     try {
       let endpoint = '/api/user/students';
       if (role === 'teacher') endpoint = '/api/user/teachers';
@@ -50,8 +66,6 @@ class UserServiceClient {
       const res = await this.client.get(`${endpoint}/${userId}`);
       const data = res.data?.data || res.data;
 
-
-
       if (!data) return null;
 
       return {
@@ -63,19 +77,11 @@ class UserServiceClient {
         departmentId: data.departmentId,
         programId: data.programId,
         facultyId: data.facultyId,
-        facultyId: data.facultyId,
         isDepartmentHead: data.isDepartmentHead || (data.department?.departmentHeadId === (data.id || data._id)),
         isDean: data.isDean,
         profileImage: data.profileImage
       };
     } catch (err) {
-      const errorDetails = {
-        message: err.message,
-        code: err.code,
-        status: err.response?.status,
-        data: err.response?.data,
-        gateway: this.gatewayURL
-      };
       return null;
     }
   }
