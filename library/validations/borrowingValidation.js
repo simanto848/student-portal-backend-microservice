@@ -6,10 +6,11 @@ export const borrowBookValidation = z.object({
             errorMap: () => ({ message: 'User type must be student, teacher, staff, or admin' })
         }),
         borrowerId: z.string().min(1, 'Borrower ID is required').trim(),
-        copyId: z.string().min(1, 'Copy ID is required').trim(),
-        libraryId: z.string().min(1, 'Library ID is required').trim(),
+        copyId: z.string().trim().optional(),
+        bookId: z.string().trim().optional(),
+        libraryId: z.string().trim().optional(),
         notes: z.string().optional().default(''),
-        dueDate: z.coerce.date().optional(),
+        dueDate: z.preprocess((val) => (val === '' ? undefined : val), z.coerce.date().optional()),
     })
 });
 
@@ -34,7 +35,7 @@ export const updateBorrowingValidation = z.object({
         fineAmount: z.number().min(0, 'Fine amount cannot be negative').optional(),
         finePaid: z.boolean().optional(),
         notes: z.string().optional(),
-        returnDate: z.coerce.date().nullable().optional(),
-        dueDate: z.coerce.date().optional(),
+        returnDate: z.preprocess((val) => (val === '' ? undefined : val), z.coerce.date().nullable().optional()),
+        dueDate: z.preprocess((val) => (val === '' ? undefined : val), z.coerce.date().optional()),
     })
 });

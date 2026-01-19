@@ -1,9 +1,11 @@
-import BookReservation from '../models/BookReservation.js';
-import BookCopy from '../models/BookCopy.js';
+import BookReservation from "../models/BookReservation.js";
+import Book from "../models/Book.js";
+import BookCopy from "../models/BookCopy.js";
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
 import academicServiceClient from '../clients/academicServiceClient.js';
-import { ApiError } from 'shared';
+import { ApiError } from "shared";
+import fs from 'fs';
 
 class ReservationService {
     async createReservation({ userType, userId, copyId, libraryId, notes = '' }, token) {
@@ -18,14 +20,19 @@ class ReservationService {
             const library = await Library.findOne({ _id: libraryId, deletedAt: null }).lean();
             if (!library) throw new ApiError(404, 'Library not found');
 
+            // Find all copy IDs for this book to check for existing reservations across all copies
+            const bookCopies = await BookCopy.find({ bookId: copy.bookId, deletedAt: null }).select('_id').lean();
+            const copyIds = bookCopies.map(c => c._id);
+
             const existingReservation = await BookReservation.findOne({
                 userId,
-                copyId,
+                copyId: { $in: copyIds },
                 status: 'pending',
                 deletedAt: null
             });
+
             if (existingReservation) {
-                throw new ApiError(400, 'You already have an active reservation for this book copy');
+                throw new ApiError(400, 'You already have an active reservation for this book');
             }
 
             const activeReservations = await BookReservation.countDocuments({
@@ -133,6 +140,7 @@ class ReservationService {
 
     async getMyReservations(userId, options = {}) {
         try {
+            await this.checkAndExpireReservations();
             const { pagination, filters = {} } = options;
             const query = {
                 userId,
@@ -239,8 +247,55 @@ class ReservationService {
 
     async getAllReservations(options = {}, token) {
         try {
-            const { pagination, filters = {} } = options;
+            await this.checkAndExpireReservations();
+            const { pagination, search, filters = {} } = options;
             const query = { deletedAt: null, ...filters };
+
+            if (search) {
+                const logData = `[${new Date().toISOString()}] Search: "${search}"\n`;
+                fs.appendFileSync('/tmp/library_search_debug.log', logData);
+
+                console.log(`[ReservationService] Performing search for: "${search}"`);
+                const bookIds = await Book.find({
+                    $or: [
+                        { title: { $regex: search, $options: 'i' } },
+                        { author: { $regex: search, $options: 'i' } },
+                        { isbn: { $regex: search, $options: 'i' } }
+                    ]
+                }).distinct('_id');
+
+                const copyIds = await BookCopy.find({
+                    $or: [
+                        { bookId: { $in: bookIds } },
+                        { copyNumber: { $regex: search, $options: 'i' } }
+                    ]
+                }).distinct('_id');
+
+                // Search Users (All roles to be thorough)
+                const [students, teachers, staffs, admins] = await Promise.all([
+                    userServiceClient.searchUsers(search, 'student', token),
+                    userServiceClient.searchUsers(search, 'teacher', token),
+                    userServiceClient.searchUsers(search, 'staff', token),
+                    userServiceClient.searchUsers(search, 'admin', token)
+                ]);
+
+                const userIds = [
+                    ...students.map(u => u.id || u._id),
+                    ...teachers.map(u => u.id || u._id),
+                    ...staffs.map(u => u.id || u._id),
+                    ...admins.map(u => u.id || u._id)
+                ].filter(Boolean);
+
+                const resultLog = `Found Users: ${userIds.length} (${userIds.join(', ')})\n`;
+                fs.appendFileSync('/tmp/library_search_debug.log', resultLog);
+
+                console.log(`[ReservationService] Search results: ${bookIds.length} books, ${copyIds.length} copies, ${userIds.length} users`);
+
+                query.$or = [
+                    { copyId: { $in: copyIds } },
+                    { userId: { $in: userIds } }
+                ];
+            }
 
             const page = parseInt(pagination?.page) || 1;
             const limit = parseInt(pagination?.limit) || 10;
@@ -284,9 +339,9 @@ class ReservationService {
         return await Promise.all(reservations.map(async (reservation) => {
             try {
                 const user = await userServiceClient.validateUser(reservation.userType, reservation.userId, token);
-                let departmentName = null;
+                let departmentName = user.department?.name || user.departmentName || null;
 
-                if (user.departmentId) {
+                if (!departmentName && user.departmentId) {
                     try {
                         const dept = await academicServiceClient.getDepartmentById(user.departmentId);
                         departmentName = dept.data?.name || dept.name;

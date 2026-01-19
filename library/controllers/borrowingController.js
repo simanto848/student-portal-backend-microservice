@@ -4,7 +4,7 @@ import borrowingService from '../services/borrowingService.js';
 class BorrowingController {
     async borrowBook(req, res, next) {
         try {
-            const { userType, borrowerId, copyId, libraryId, notes } = req.validatedData || req.body;
+            const { userType, borrowerId, copyId, bookId, libraryId, notes, dueDate } = req.validatedData || req.body;
             const processedById = req.user?.id
 
             const token = req.headers.authorization?.split(' ')[1];
@@ -12,11 +12,24 @@ class BorrowingController {
                 userType,
                 borrowerId,
                 copyId,
+                bookId,
                 libraryId,
                 processedById,
-                notes
+                notes,
+                dueDate
             }, token);
             return ApiResponse.created(res, borrowing, 'Book borrowed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getBorrowingById(req, res, next) {
+        try {
+            const { id } = req.params;
+            const token = req.headers.authorization?.split(' ')[1];
+            const borrowing = await borrowingService.getBorrowingById(id, token);
+            return ApiResponse.success(res, borrowing, 'Borrowing record retrieved successfully');
         } catch (error) {
             next(error);
         }
@@ -80,10 +93,11 @@ class BorrowingController {
 
     async getAllBorrowings(req, res, next) {
         try {
-            const { page, limit, ...filters } = req.query;
+            const { page, limit, search, ...filters } = req.query;
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
             };
+            if (search) options.search = search;
             if (Object.keys(filters).length > 0) options.filters = filters;
 
             const token = req.headers.authorization?.split(' ')[1];

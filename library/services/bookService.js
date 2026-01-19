@@ -1,5 +1,6 @@
 import Book from '../models/Book.js';
 import BookCopy from '../models/BookCopy.js';
+import BookReservation from '../models/BookReservation.js';
 import Library from '../models/Library.js';
 import { ApiError } from 'shared';
 
@@ -69,12 +70,20 @@ class BookService {
 
     async create(data) {
         try {
+            const { numberOfCopies = 0, copyCondition = 'excellent', copyLocation = '', ...bookData } = data;
+
             // Verify library exists
-            const library = await Library.findById(data.libraryId);
+            const library = await Library.findById(bookData.libraryId);
             if (!library) throw new ApiError(404, 'Library not found');
 
-            const book = new Book(data);
+            const book = new Book(bookData);
             await book.save();
+
+            // Automatically generate copies if requested
+            if (numberOfCopies > 0) {
+                await this.generateBulkCopies(book, library, numberOfCopies, copyCondition, copyLocation);
+            }
+
             return book.toJSON();
         } catch (error) {
             if (error.code === 11000) {
@@ -85,6 +94,59 @@ class BookService {
             }
             throw error instanceof ApiError ? error : new ApiError(500, 'Error creating book: ' + error.message);
         }
+    }
+
+    async generateCopies(bookId, numberOfCopies, condition = 'excellent', location = '') {
+        try {
+            const book = await Book.findById(bookId);
+            if (!book) throw new ApiError(404, 'Book not found');
+
+            const library = await Library.findById(book.libraryId);
+            if (!library) throw new ApiError(404, 'Library not found');
+
+            const generatedCopies = await this.generateBulkCopies(book, library, numberOfCopies, condition, location);
+            return { message: `${generatedCopies.length} copies generated successfully`, copies: generatedCopies };
+        } catch (error) {
+            throw error instanceof ApiError ? error : new ApiError(500, 'Error generating copies: ' + error.message);
+        }
+    }
+
+    async generateBulkCopies(book, library, count, condition = 'excellent', location = '') {
+        const copies = [];
+        // Get the current highest index for this book in this library to continue numbering
+        const existingCopiesCount = await BookCopy.countDocuments({ bookId: book._id, libraryId: library._id });
+
+        for (let i = 1; i <= count; i++) {
+            const copyIndex = existingCopiesCount + i;
+            const copyNumber = await this.generateCopyNumber(book, library, copyIndex);
+            copies.push({
+                copyNumber,
+                bookId: book._id,
+                libraryId: library._id,
+                status: 'available',
+                condition: condition,
+                location: location,
+                acquisitionDate: new Date(),
+            });
+        }
+        return await BookCopy.insertMany(copies);
+    }
+
+    async generateCopyNumber(book, library, index) {
+        const prefix = library.code || 'LIB';
+        const identifier = book.isbn || book.title.substring(0, 3).toUpperCase();
+        let copyNumber = `${prefix}-${identifier}-${index}`;
+
+        // Check if copy number already exists (in case of overlaps or existing records)
+        let exists = await BookCopy.findOne({ copyNumber, libraryId: library._id });
+        let offset = index;
+        while (exists) {
+            offset++;
+            copyNumber = `${prefix}-${identifier}-${offset}`;
+            exists = await BookCopy.findOne({ copyNumber, libraryId: library._id });
+        }
+
+        return copyNumber;
     }
 
     async update(id, data) {
@@ -176,7 +238,6 @@ class BookService {
             );
 
             const total = await Book.countDocuments(query);
-
             return {
                 books: booksWithAvailability,
                 pagination: {
@@ -188,6 +249,23 @@ class BookService {
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching available books: ' + error.message);
+        }
+    }
+
+    async getBookStats(id) {
+        try {
+            const [totalCopies, availableCopies, reservationCount] = await Promise.all([
+                BookCopy.countDocuments({ bookId: id, deletedAt: null }),
+                BookCopy.countDocuments({ bookId: id, status: 'available', deletedAt: null }),
+                BookReservation.countDocuments({
+                    copyId: { $in: await BookCopy.find({ bookId: id, deletedAt: null }).distinct('_id') },
+                    status: 'pending',
+                    deletedAt: null
+                })
+            ]);
+            return { totalCopies, availableCopies, reservationCount };
+        } catch (error) {
+            throw new ApiError(500, 'Error fetching book stats: ' + error.message);
         }
     }
 }

@@ -3,6 +3,8 @@ import BookTakenHistory from '../models/BookTakenHistory.js';
 import emailService from '../utils/emailService.js';
 import userServiceClient from '../clients/userServiceClient.js';
 import borrowingService from './borrowingService.js';
+import reservationService from './reservationService.js';
+import notificationServiceClient from '../clients/notificationServiceClient.js';
 
 class NotificationService {
     constructor() {
@@ -76,6 +78,13 @@ class NotificationService {
                     this.emailSentLog.set(logKey, today);
                     emailsSent++;
                     console.log(`Sent 7-day reminder to ${userData.email} for book: ${borrowing.bookId.title}`);
+
+                    // Send App Notification
+                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
+                        bookTitle: borrowing.bookId.title,
+                        author: borrowing.bookId.author,
+                        daysUntilDue: 7
+                    });
                 } catch (error) {
                     emailsFailed++;
                     console.error(`Failed to send 7-day reminder for borrowing ${borrowing.id || borrowing._id}:`, error.message);
@@ -107,6 +116,13 @@ class NotificationService {
                     this.emailSentLog.set(logKey, today);
                     emailsSent++;
                     console.log(`Sent 2-day reminder to ${userData.email} for book: ${borrowing.bookId.title}`);
+
+                    // Send App Notification
+                    await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
+                        bookTitle: borrowing.bookId.title,
+                        author: borrowing.bookId.author,
+                        daysUntilDue: 2
+                    });
                 } catch (error) {
                     emailsFailed++;
                     console.error(`Failed to send 2-day reminder for borrowing ${borrowing.id || borrowing._id}:`, error.message);
@@ -200,6 +216,7 @@ class NotificationService {
             try {
                 // Ensure overdue status is up to date before sending notices
                 await borrowingService.checkAndUpdateOverdueBooks();
+                await reservationService.checkAndExpireReservations();
 
                 await this.sendDueReminders();
                 await this.sendOverdueNotices();

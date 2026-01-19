@@ -61,6 +61,16 @@ class BookController {
         }
     }
 
+    async generateCopies(req, res, next) {
+        try {
+            const { numberOfCopies, condition, location } = req.body;
+            const result = await bookService.generateCopies(req.params.id, numberOfCopies, condition, location);
+            return ApiResponse.success(res, result.copies, result.message);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async getAvailableBooks(req, res, next) {
         try {
             const { page, limit, search, ...filters } = req.query;
@@ -71,6 +81,15 @@ class BookController {
 
             const result = await bookService.getAvailableBooks(options);
             return ApiResponse.success(res, result, 'Available books retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getStats(req, res, next) {
+        try {
+            const result = await bookService.getBookStats(req.params.id);
+            return ApiResponse.success(res, result, 'Book stats retrieved successfully');
         } catch (error) {
             next(error);
         }

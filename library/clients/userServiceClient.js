@@ -79,6 +79,45 @@ class UserServiceClient {
             throw new Error(error.message || `Failed to validate ${userType}`);
         }
     }
+
+    async searchUsers(search, userType, token) {
+        try {
+            const typeMap = {
+                'student': 'students',
+                'teacher': 'teachers',
+                'staff': 'staffs',
+                'admin': 'admins'
+            };
+
+            const endpoint = typeMap[userType];
+            if (!endpoint) {
+                throw new Error(`Invalid user type: ${userType}`);
+            }
+
+            const config = {
+                params: { search, limit: 100 }
+            };
+            if (token) {
+                config.headers = { Authorization: `Bearer ${token}` };
+            }
+
+            const response = await this.client.get(`/${endpoint}`, config);
+            const nestedData = response.data?.data;
+            const data = nestedData?.[endpoint] || nestedData?.users || (Array.isArray(nestedData) ? nestedData : []);
+
+            console.log(`[UserServiceClient] Search ${userType} found ${data.length} matches`);
+            return data;
+        } catch (error) {
+            console.error('[UserServiceClient] Search Users Error:', {
+                userType,
+                search,
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data
+            });
+            return [];
+        }
+    }
 }
 
 export default new UserServiceClient();

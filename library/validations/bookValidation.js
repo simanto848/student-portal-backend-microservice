@@ -18,6 +18,9 @@ export const bookCreateValidation = z.object({
             errorMap: () => ({ message: 'Status must be active, inactive, or archived' })
         }).default('active'),
         libraryId: z.string().min(1, 'Library ID is required'),
+        numberOfCopies: z.number().min(0, 'Number of copies cannot be negative').optional().default(0),
+        copyCondition: z.enum(['excellent', 'good', 'fair', 'poor', 'damaged']).optional().default('excellent'),
+        copyLocation: z.string().max(100, 'Location cannot exceed 100 characters').optional().default(''),
     })
 });
 

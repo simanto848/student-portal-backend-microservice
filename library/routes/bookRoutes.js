@@ -13,10 +13,12 @@ router.get('/available', bookController.getAvailableBooks);
 router.use(authorize('super_admin', 'admin', 'library'));
 
 router.get('/', bookController.getAll);
-router.get('/:id',  bookController.getById);
-router.post('/',  validate(bookCreateValidation), bookController.create);
-router.patch('/:id',  validate(bookUpdateValidation), bookController.update);
-router.delete('/:id',  bookController.delete);
-router.post('/:id/restore',  bookController.restore);
+router.get('/:id', bookController.getById);
+router.get('/:id/stats', bookController.getStats);
+router.post('/', validate(bookCreateValidation), bookController.create);
+router.patch('/:id', validate(bookUpdateValidation), bookController.update);
+router.delete('/:id', bookController.delete);
+router.post('/:id/restore', bookController.restore);
+router.post('/:id/generate-copies', bookController.generateCopies);
 
 export default router;

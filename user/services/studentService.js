@@ -84,8 +84,21 @@ class StudentService {
           Student.countDocuments(query),
         ]);
 
+        const studentsWithDept = await Promise.all(students.map(async (student) => {
+          if (student.departmentId) {
+            try {
+              const dept = await academicServiceClient.getDepartmentById(student.departmentId, token);
+              student.department = dept.data || dept;
+              student.departmentName = student.department?.name;
+            } catch (e) {
+              console.error(`Failed to fetch department for student ${student._id}:`, e.message);
+            }
+          }
+          return student;
+        }));
+
         return {
-          students,
+          students: studentsWithDept,
           pagination: {
             page,
             limit,
@@ -100,7 +113,21 @@ class StudentService {
         .populate("profile")
         .sort({ createdAt: -1 })
         .lean();
-      return { students };
+
+      const studentsWithDept = await Promise.all(students.map(async (student) => {
+        if (student.departmentId) {
+          try {
+            const dept = await academicServiceClient.getDepartmentById(student.departmentId, token);
+            student.department = dept.data || dept;
+            student.departmentName = student.department?.name;
+          } catch (e) {
+            console.error(`Failed to fetch department for student ${student._id}:`, e.message);
+          }
+        }
+        return student;
+      }));
+
+      return { students: studentsWithDept };
     } catch (error) {
       throw new ApiError(500, "Error fetching students: " + error.message);
     }
@@ -113,6 +140,17 @@ class StudentService {
         .populate("profile")
         .lean();
       if (!student) throw new ApiError(404, "Student not found");
+
+      if (student.departmentId) {
+        try {
+          const dept = await academicServiceClient.getDepartmentById(student.departmentId);
+          student.department = dept.data || dept;
+          student.departmentName = student.department?.name;
+        } catch (e) {
+          console.error(`Failed to fetch department for student ${id}:`, e.message);
+        }
+      }
+
       return student;
     } catch (error) {
       throw error instanceof ApiError

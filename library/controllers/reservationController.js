@@ -49,6 +49,17 @@ class ReservationController {
         }
     }
 
+    async getReservationById(req, res, next) {
+        try {
+            const { id } = req.params;
+            const token = req.headers.authorization?.split(' ')[1];
+            const reservation = await reservationService.getReservationById(id, token);
+            return ApiResponse.success(res, reservation, 'Reservation record retrieved successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
+
     async cancelReservation(req, res, next) {
         try {
             const { id } = req.params;
@@ -96,10 +107,11 @@ class ReservationController {
 
     async getAllReservations(req, res, next) {
         try {
-            const { page, limit, ...filters } = req.query;
+            const { page, limit, search, ...filters } = req.query;
             const options = {
                 pagination: { page: parseInt(page) || 1, limit: parseInt(limit) || 10 }
             };
+            if (search) options.search = search;
             if (Object.keys(filters).length > 0) options.filters = filters;
 
             const token = req.headers.authorization?.split(' ')[1];
