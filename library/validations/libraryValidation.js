@@ -8,7 +8,11 @@ export const libraryCreateValidation = z.object({
         address: z.string().optional().default(''),
         phone: z.string().max(20, 'Phone number cannot exceed 20 characters').optional(),
         email: z.string().email('Please provide a valid email address').max(100, 'Email cannot exceed 100 characters').optional(),
-        operatingHours: z.record(z.string(), z.string()).optional().default({}),
+        operatingHours: z.record(z.string(), z.object({
+            open: z.string().optional(),
+            close: z.string().optional(),
+            isOpen: z.boolean().optional()
+        })).optional().default({}),
         maxBorrowLimit: z.number().min(1, 'Maximum borrow limit must be at least 1').default(3),
         borrowDuration: z.number().min(1, 'Borrow duration must be at least 1 day').default(14),
         finePerDay: z.number().min(0, 'Fine per day cannot be negative').optional().nullable(),
@@ -26,7 +30,11 @@ export const libraryUpdateValidation = z.object({
         address: z.string().optional(),
         phone: z.string().max(20, 'Phone number cannot exceed 20 characters').optional(),
         email: z.string().email('Please provide a valid email address').max(100, 'Email cannot exceed 100 characters').optional(),
-        operatingHours: z.record(z.string(), z.string()).optional(),
+        operatingHours: z.record(z.string(), z.object({
+            open: z.string().optional(),
+            close: z.string().optional(),
+            isOpen: z.boolean().optional()
+        })).optional(),
         maxBorrowLimit: z.number().min(1, 'Maximum borrow limit must be at least 1').optional(),
         borrowDuration: z.number().min(1, 'Borrow duration must be at least 1 day').optional(),
         finePerDay: z.number().min(0, 'Fine per day cannot be negative').optional().nullable(),

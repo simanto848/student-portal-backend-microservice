@@ -20,7 +20,6 @@ class ReservationService {
             const library = await Library.findOne({ _id: libraryId, deletedAt: null }).lean();
             if (!library) throw new ApiError(404, 'Library not found');
 
-            // Find all copy IDs for this book to check for existing reservations across all copies
             const bookCopies = await BookCopy.find({ bookId: copy.bookId, deletedAt: null }).select('_id').lean();
             const copyIds = bookCopies.map(c => c._id);
 
@@ -45,9 +44,46 @@ class ReservationService {
             }
 
             const reservationDate = new Date();
-            const expiryDate = new Date(reservationDate);
+            let expiryDate = new Date(reservationDate);
             const reservationHoldDays = library.reservationHoldDays || 2;
-            expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
+            const operatingHours = library.operatingHours || {};
+            const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+            let operationalDaysCounted = 0;
+            let daysAdded = 0;
+            const MAX_LOOKAHEAD = 30;
+
+            if (Object.keys(operatingHours).length === 0) {
+                expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
+            } else {
+                while (operationalDaysCounted < reservationHoldDays && daysAdded < MAX_LOOKAHEAD) {
+                    daysAdded++;
+                    const checkDate = new Date(reservationDate);
+                    checkDate.setDate(reservationDate.getDate() + daysAdded);
+
+                    const dayName = daysMap[checkDate.getDay()];
+                    const dayConfig = operatingHours[dayName];
+
+                    const isOpen = dayConfig ? dayConfig.isOpen : false;
+
+                    if (isOpen) {
+                        operationalDaysCounted++;
+                        expiryDate = new Date(checkDate);
+
+                        if (dayConfig.close) {
+                            const [hours, minutes] = dayConfig.close.split(':').map(Number);
+                            expiryDate.setHours(hours, minutes, 0, 0);
+                        } else {
+                            expiryDate.setHours(23, 59, 59, 999);
+                        }
+                    }
+                }
+
+                if (operationalDaysCounted < reservationHoldDays) {
+                    expiryDate = new Date(reservationDate);
+                    expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
+                }
+            }
 
             const reservation = new BookReservation({
                 userType,
@@ -176,7 +212,6 @@ class ReservationService {
                 const hoursUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60));
                 const isExpired = now > expiryDate;
 
-                // Transform populated fields to match frontend interface
                 let copy = null;
                 if (r.copyId && typeof r.copyId === 'object') {
                     let book = null;
@@ -199,7 +234,7 @@ class ReservationService {
                     ...r,
                     id: r._id.toString(),
                     copy,
-                    copyId: copy ? copy.id : r.copyId, // Ensure string ID
+                    copyId: copy ? copy.id : r.copyId,
                     hoursUntilExpiry,
                     isExpired,
                     canCancel: r.status === 'pending' && !isExpired
@@ -255,7 +290,6 @@ class ReservationService {
                 const logData = `[${new Date().toISOString()}] Search: "${search}"\n`;
                 fs.appendFileSync('/tmp/library_search_debug.log', logData);
 
-                console.log(`[ReservationService] Performing search for: "${search}"`);
                 const bookIds = await Book.find({
                     $or: [
                         { title: { $regex: search, $options: 'i' } },
@@ -271,7 +305,6 @@ class ReservationService {
                     ]
                 }).distinct('_id');
 
-                // Search Users (All roles to be thorough)
                 const [students, teachers, staffs, admins] = await Promise.all([
                     userServiceClient.searchUsers(search, 'student', token),
                     userServiceClient.searchUsers(search, 'teacher', token),
@@ -288,8 +321,6 @@ class ReservationService {
 
                 const resultLog = `Found Users: ${userIds.length} (${userIds.join(', ')})\n`;
                 fs.appendFileSync('/tmp/library_search_debug.log', resultLog);
-
-                console.log(`[ReservationService] Search results: ${bookIds.length} books, ${copyIds.length} copies, ${userIds.length} users`);
 
                 query.$or = [
                     { copyId: { $in: copyIds } },
