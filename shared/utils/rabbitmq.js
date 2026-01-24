@@ -9,7 +9,7 @@ class RabbitMQ {
         this.maxRetries = 20;
     }
 
-    async connect(url = process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672') {
+    async connect(url = process.env.RABBITMQ_URL || 'amqp://localhost:5672') {
         let retries = 0;
         while (retries < this.maxRetries) {
             try {
