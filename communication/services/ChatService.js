@@ -12,6 +12,8 @@ class ChatService {
     const userRole = user?.role ?? user?.type ?? "student";
     if (!userId) throw new Error("Invalid user");
 
+    let combinedGroups = [];
+
     if (userRole === "student") {
       const enrollments =
         await EnrollmentServiceClient.listEnrollmentsForStudent(
@@ -108,86 +110,89 @@ class ChatService {
         `ChatService: Found ${batchGroups.length} batchGroups and ${allCourseGroups.length} courseGroups`
       );
 
-      const combined = [
+      combinedGroups = [
         ...batchGroups.map((g) => ({ group: g, type: "BatchChatGroup" })),
         ...allCourseGroups.map((g) => ({ group: g, type: "CourseChatGroup" })),
       ];
+    } else {
+      const [batchGroups, courseGroups] = await Promise.all([
+        BatchChatGroup.find({ isActive: true, counselorId: userId }).limit(200),
+        CourseChatGroup.find({ isActive: true, instructorId: userId }).limit(200),
+      ]);
 
-      const enriched = await Promise.all(
-        combined.map(async ({ group, type }) => {
-          const lastMessage = await Message.findOne({
-            chatGroupId: group.id,
-            isDeleted: false,
-          }).sort({ createdAt: -1 });
-
-          const result = {
-            ...group.toJSON(),
-            type,
-            lastMessage: lastMessage
-              ? lastMessage.toJSON?.() ?? lastMessage
-              : null,
-          };
-
-          try {
-            if (type === "CourseChatGroup") {
-              const [course, batch, teacher] = await Promise.all([
-                AcademicServiceClient.getCourseDetails(
-                  group.courseId,
-                  accessToken
-                ),
-                AcademicServiceClient.getBatchDetails(
-                  group.batchId,
-                  accessToken
-                ),
-                group.instructorId
-                  ? UserServiceClient.getTeacherDetails(
-                    group.instructorId,
-                    accessToken
-                  )
-                  : Promise.resolve(null),
-              ]);
-              result.courseName = course?.name;
-              result.courseCode = course?.code;
-              result.batchName = batch?.name;
-              result.instructorName = teacher?.fullName;
-            } else {
-              const batch = await AcademicServiceClient.getBatchDetails(
-                group.batchId,
-                accessToken
-              );
-              result.batchName = batch?.name;
-            }
-          } catch (e) {
-            console.error("Error enriching chat group details:", e.message);
-          }
-
-          return result;
-        })
-      );
-
-      enriched.sort((a, b) => {
-        const aTime = new Date(
-          a.lastMessage?.createdAt || a.updatedAt || a.createdAt || 0
-        ).getTime();
-        const bTime = new Date(
-          b.lastMessage?.createdAt || b.updatedAt || b.createdAt || 0
-        ).getTime();
-        return bTime - aTime;
-      });
-
-      return enriched;
+      combinedGroups = [
+        ...batchGroups.map((g) => ({ group: g, type: "BatchChatGroup" })),
+        ...courseGroups.map((g) => ({ group: g, type: "CourseChatGroup" })),
+      ];
     }
 
-    const [batchGroups, courseGroups] = await Promise.all([
-      BatchChatGroup.find({ isActive: true, counselorId: userId }).limit(200),
-      CourseChatGroup.find({ isActive: true, instructorId: userId }).limit(200),
-    ]);
+    const enriched = await Promise.all(
+      combinedGroups.map(async ({ group, type }) => {
+        const lastMessage = await Message.findOne({
+          chatGroupId: group.id,
+          isDeleted: false,
+        }).sort({ createdAt: -1 });
 
-    return [
-      ...batchGroups.map((g) => ({ ...g.toJSON(), type: "BatchChatGroup" })),
-      ...courseGroups.map((g) => ({ ...g.toJSON(), type: "CourseChatGroup" })),
-    ];
+        const result = {
+          ...group.toJSON(),
+          type,
+          lastMessage: lastMessage
+            ? lastMessage.toJSON?.() ?? lastMessage
+            : null,
+        };
+
+        try {
+          if (type === "CourseChatGroup") {
+            const [course, batch, teacher] = await Promise.all([
+              AcademicServiceClient.getCourseDetails(
+                group.courseId,
+                accessToken
+              ),
+              AcademicServiceClient.getBatchDetails(
+                group.batchId,
+                accessToken
+              ),
+              group.instructorId
+                ? UserServiceClient.getTeacherDetails(
+                  group.instructorId,
+                  accessToken
+                )
+                : Promise.resolve(null),
+            ]);
+            result.courseName = course?.name;
+            result.courseCode = course?.code;
+            result.batchName = batch?.name;
+            result.batchShift = batch?.shift;
+            result.instructorName = teacher?.fullName;
+          } else {
+            const batch = await AcademicServiceClient.getBatchDetails(
+              group.batchId,
+              accessToken
+            );
+            result.batchName = batch?.name;
+            result.batchShift = batch?.shift;
+          }
+        } catch (e) {
+          console.error("Error enriching chat group details:", e.message);
+        }
+
+        return result;
+      })
+    );
+
+    enriched.sort((a, b) => {
+      const aTime = new Date(
+        a.lastMessage?.createdAt || a.updatedAt || a.createdAt || 0
+      ).getTime();
+      const bTime = new Date(
+        b.lastMessage?.createdAt || b.updatedAt || b.createdAt || 0
+      ).getTime();
+      return bTime - aTime;
+    });
+
+    return enriched;
   }
+
 
   async getOrCreateBatchChatGroup(batchId, counselorId, user) {
     const userId = user?.id ?? user?.sub;
