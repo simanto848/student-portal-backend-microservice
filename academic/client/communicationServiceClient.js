@@ -1,31 +1,34 @@
-import axios from 'axios';
 
-const COMMUNICATION_SERVICE_URL = process.env.COMMUNICATION_SERVICE_URL || 'http://communication:8005';
+import { createServiceClient, logger } from 'shared';
 
 class CommunicationServiceClient {
+    constructor() {
+        this.client = createServiceClient('communication');
+    }
+
     async sendEmail(to, subject, template, data) {
         try {
-            await axios.post(`${COMMUNICATION_SERVICE_URL}/internal/email/send`, {
+            await this.client.post('/internal/email/send', {
                 to,
                 subject,
                 template,
                 data
             });
         } catch (error) {
-            console.error('Failed to send email:', error.message);
+            logger.error('Failed to send email:', error.message);
             // Non-blocking error
         }
     }
 
     async sendSimpleEmail(to, subject, text) {
         try {
-            await axios.post(`${COMMUNICATION_SERVICE_URL}/internal/email/send-raw`, {
+            await this.client.post('/internal/email/send-raw', {
                 to,
                 subject,
                 text
             });
         } catch (error) {
-            console.error('Failed to send simple email:', error.message);
+            logger.error('Failed to send simple email:', error.message);
         }
     }
 }

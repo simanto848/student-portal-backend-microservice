@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import colors from "colors";
 import app from "./app.js";
 import connectDB from "./configs/db.js";
-import { createLogger } from "shared";
+import { createLogger, config } from "shared";
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const logger = createLogger("ACADEMIC");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8001;
+const PORT = config.ports.academic;
 
 server.listen(PORT, async () => {
   await connectDB();

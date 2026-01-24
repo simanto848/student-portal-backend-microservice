@@ -12,6 +12,8 @@ import errorHandler, { notFoundHandler } from "./middlewares/errorHandler.js";
 import rabbitmq from "./utils/rabbitmq.js";
 import { createLogger, logger } from "./utils/logger.js";
 import requestLoggerMiddleware from "./middlewares/requestLogger.js";
+import { createServiceClient } from "./utils/serviceClient.js";
+import config from "./config/env.js";
 
 export {
   // Utils
@@ -44,4 +46,6 @@ export {
 
   // Utils
   rabbitmq,
+  createServiceClient,
+  config
 };

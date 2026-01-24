@@ -25,6 +25,7 @@ pnpm-debug.log*
 .env.production.local
 */.env
 */.env.local
+*/.env.copy
 
 docs
 logs

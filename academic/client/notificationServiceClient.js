@@ -1,8 +1,11 @@
-import axios from 'axios';
 
-const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://notification:8004';
+import { createServiceClient, logger } from 'shared';
 
 class NotificationServiceClient {
+    constructor() {
+        this.client = createServiceClient('notification');
+    }
+
     async sendNotification(userId, title, message, type = 'info', targetType = 'user') {
         try {
             const payload = {
@@ -12,9 +15,9 @@ class NotificationServiceClient {
                 recipientId: userId,
             };
 
-            await axios.post(`${NOTIFICATION_SERVICE_URL}/internal/notifications`, payload);
+            await this.client.post('/internal/notifications', payload);
         } catch (error) {
-            console.error('Failed to send notification:', error.message);
+            logger.error('Failed to send notification:', error.message);
         }
     }
 }

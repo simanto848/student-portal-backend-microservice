@@ -1,36 +1,32 @@
-import axios from 'axios';
+
+import { createServiceClient, config } from 'shared';
 import jwt from 'jsonwebtoken';
 
 class UserServiceClient {
     constructor() {
-        this.baseURL = process.env.USER_SERVICE_URL || 'http://localhost:8007';
-        this.client = axios.create({
-            baseURL: this.baseURL,
-            timeout: 10000,
-        });
-
-        this.client.interceptors.request.use((config) => {
-            const token = this.generateServiceToken();
-            config.headers.Authorization = `Bearer ${token}`;
-            return config;
-        });
+        this.client = createServiceClient('user'); // Use central factory
     }
 
     generateServiceToken() {
         return jwt.sign(
             {
-                role: 'super_admin', // Use a high-privilege role for service-to-service calls
+                role: 'super_admin',
                 sub: 'academic-service',
                 type: 'service'
             },
-            process.env.JWT_SECRET || 'fallback_secret', // Ensure this matches User Service's secret
+            config.jwt.secret,
             { expiresIn: '1h' }
         );
     }
 
     async getStudentById(studentId) {
         try {
-            const response = await this.client.get(`/students/${studentId}`);
+            const token = this.generateServiceToken();
+            const response = await this.client.get(`/students/${studentId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            // Result is probably in response.data.data if using ApiResponse
+            // But let's check assumptions or keep consistent with previous implementation returning response.data
             return response.data;
         } catch (error) {
             if (error.response?.status === 404) {
