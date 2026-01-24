@@ -1,5 +1,4 @@
 import http from "http";
-import colors from "colors";
 import app from "./app.js";
 import { createLogger } from "shared";
 

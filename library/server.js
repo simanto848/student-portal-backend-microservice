@@ -1,5 +1,4 @@
 import http from "http";
-import colors from "colors";
 import app from "./app.js";
 import setupEmailSubscriber from "./subscribers/emailSubscriber.js";
 import notificationService from "./services/notificationService.js";
