@@ -190,6 +190,7 @@ class TeacherService {
     async getDeletedTeachers() {
         try {
             const teachers = await Teacher.find({ deletedAt: { $ne: null } })
+                .setOptions({ includeDeleted: true })
                 .select('-password')
                 .populate('profile')
                 .lean();
@@ -214,7 +215,7 @@ class TeacherService {
 
     async deletePermanently(id) {
         try {
-            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } });
+            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } }).setOptions({ includeDeleted: true });
             if (!t) throw new ApiError(404, 'Teacher not found');
             await t.deleteOne();
             return { message: 'Teacher deleted permanently successfully' };
@@ -225,7 +226,7 @@ class TeacherService {
 
     async restore(id) {
         try {
-            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } });
+            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } }).setOptions({ includeDeleted: true });
             if (!t) throw new ApiError(404, 'Teacher not found');
             await t.restore();
             return { message: 'Teacher restored successfully' };
