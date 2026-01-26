@@ -7,6 +7,7 @@ import { ApiError } from "shared";
 import { Course } from "../models/external/Academic.js";
 import academicClient from "../client/academicServiceClient.js";
 import ResultWorkflow from "../models/ResultWorkflow.js";
+import userServiceClient from "../client/userServiceClient.js";
 
 class CourseGradeService {
     async checkWorkflowStatus(batchId, courseId, semester) {
@@ -192,7 +193,39 @@ class CourseGradeService {
             query.isPublished = filters.isPublished === "true";
         }
 
-        const grades = await CourseGrade.find(query).sort({ createdAt: -1 });
+        const grades = await CourseGrade.find(query).sort({ createdAt: -1 }).lean();
+
+        // Populate student details if batchId is present (common use case)
+        if (filters.batchId && grades.length > 0) {
+            try {
+                // Fetch all students in the batch to map names
+                const studentsResponse = await userServiceClient.getStudentsByBatch(filters.batchId);
+
+                // Response structure is { success: true, data: { students: [...] } }
+                // So we need studentsResponse.data.students
+                const studentsData = studentsResponse?.data;
+                const studentsList = Array.isArray(studentsData) ? studentsData : (studentsData?.students || []);
+
+                const studentMap = studentsList.reduce((acc, student) => {
+                    acc[student.id || student._id] = student;
+                    return acc;
+                }, {});
+
+                return grades.map(grade => ({
+                    ...grade,
+                    student: studentMap[grade.studentId] ? {
+                        fullName: studentMap[grade.studentId].fullName,
+                        registrationNumber: studentMap[grade.studentId].registrationNumber
+                    } : null
+                }));
+
+            } catch (error) {
+                console.error("Failed to populate student details:", error.message);
+                // Return grades without population if user service fails
+                return grades;
+            }
+        }
+
         return grades;
     }
 

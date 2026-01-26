@@ -1,6 +1,17 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
+const academicDbUri = process.env.ACADEMIC_MONGO_URI || 'mongodb://localhost:27017/student_portal_academic_service';
+const academicConn = mongoose.createConnection(academicDbUri);
+
+academicConn.on('connected', () => {
+    console.log('Enrollment Service connected to Academic DB');
+});
+
+academicConn.on('error', (err) => {
+    console.error('Enrollment Service Academic DB connection error:', err);
+});
+
 const courseSchema = new mongoose.Schema({
     _id: {
         type: String,
@@ -35,8 +46,7 @@ courseSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Course =
-    mongoose.models.Course || mongoose.model("Course", courseSchema);
+export const Course = academicConn.model("Course", courseSchema);
 
 const batchSchema = new mongoose.Schema({
     _id: {
@@ -82,8 +92,7 @@ batchSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Batch =
-    mongoose.models.Batch || mongoose.model("Batch", batchSchema);
+export const Batch = academicConn.model("Batch", batchSchema);
 
 const departmentSchema = new mongoose.Schema({
     _id: {
@@ -110,5 +119,4 @@ departmentSchema.pre(/^find/, function () {
     this.where({ deletedAt: null });
 });
 
-export const Department =
-    mongoose.models.Department || mongoose.model("Department", departmentSchema);
+export const Department = academicConn.model("Department", departmentSchema);

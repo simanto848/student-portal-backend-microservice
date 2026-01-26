@@ -1,7 +1,7 @@
 import ResultWorkflow from "../models/ResultWorkflow.js";
 import CourseGrade from "../models/CourseGrade.js";
 import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
-import { Batch, } from "../models/external/Academic.js";
+import { Batch, Course } from "../models/external/Academic.js";
 import { ExamCommittee } from "../models/external/ExamCommittee.js";
 import { ApiError } from "shared";
 
@@ -11,14 +11,66 @@ class ResultWorkflowService {
             batchId,
             courseId,
             semester,
-        });
+        }).lean();
+
         if (!workflow) {
             workflow = await ResultWorkflow.create({ batchId, courseId, semester });
+            workflow = workflow.toObject();
         }
-        return workflow;
+
+        const [course, batch] = await Promise.all([
+            Course.findById(courseId).lean(),
+            Batch.findById(batchId).lean()
+        ]);
+
+        return {
+            ...workflow,
+            grade: {
+                course,
+                batch: batch ? { ...batch, code: batch.name } : null,
+                semester
+            }
+        };
+    }
+
+    async getWorkflowById(id) {
+        if (id.startsWith('virtual-')) {
+            const parts = id.split('-');
+            if (parts.length >= 3) {
+                const batchId = parts[1];
+                const courseId = parts[2];
+                const assignment = await BatchCourseInstructor.findOne({
+                    batchId,
+                    courseId,
+                    status: 'active'
+                });
+
+                if (!assignment) throw new ApiError(404, "Assignment not found for virtual workflow");
+
+                return this.getWorkflow(batchId, courseId, assignment.semester);
+            }
+        }
+
+        const workflow = await ResultWorkflow.findById(id).lean();
+        if (!workflow) throw new ApiError(404, "Workflow not found");
+
+        const [course, batch] = await Promise.all([
+            Course.findById(workflow.courseId).lean(),
+            Batch.findById(workflow.batchId).lean()
+        ]);
+
+        return {
+            ...workflow,
+            grade: {
+                course,
+                batch: batch ? { ...batch, code: batch.name } : null,
+                semester: workflow.semester
+            }
+        };
     }
 
     async listWorkflows(user) {
+        let workflows = [];
         if (user.role === "teacher") {
             const assignments = await BatchCourseInstructor.find({
                 instructorId: user.id || user.sub,
@@ -35,7 +87,7 @@ class ResultWorkflowService {
 
             if (queries.length === 0) return [];
 
-            return ResultWorkflow.find({
+            workflows = await ResultWorkflow.find({
                 $or: queries,
             })
                 .sort({ updatedAt: -1 })
@@ -66,20 +118,89 @@ class ResultWorkflowService {
                 return query;
             });
 
+            if (batchQueries.length === 0) return [];
             const batches = await Batch.find({ $or: batchQueries }, '_id');
             const batchIds = batches.map(b => b._id.toString());
 
             if (batchIds.length === 0) return [];
 
-            return ResultWorkflow.find({
+            // 1. Get all Expected Courses (Active Assignments)
+            const assignments = await BatchCourseInstructor.find({
                 batchId: { $in: batchIds },
-                status: { $in: ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'] }
-            })
-                .sort({ updatedAt: -1 })
-                .lean();
+                status: 'active'
+            }).lean();
+
+            // 2. Get all Existing Workflows
+            const existingWorkflows = await ResultWorkflow.find({
+                batchId: { $in: batchIds }
+            }).lean();
+
+            // 3. Merge
+            workflows = assignments.map(assignment => {
+                // Find matching workflow
+                const wf = existingWorkflows.find(w =>
+                    w.batchId.toString() === assignment.batchId.toString() &&
+                    w.courseId.toString() === assignment.courseId.toString() &&
+                    w.semester === assignment.semester
+                );
+
+                if (wf && ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'].includes(wf.status)) {
+                    return { ...wf, instructorId: assignment.instructorId };
+                }
+
+                return {
+                    _id: wf ? wf._id : `virtual-${assignment.batchId}-${assignment.courseId}`,
+                    batchId: assignment.batchId,
+                    courseId: assignment.courseId,
+                    semester: assignment.semester,
+                    status: 'WITH_INSTRUCTOR', // Virtual status
+                    updatedAt: wf ? wf.updatedAt : assignment.updatedAt,
+                    instructorId: assignment.instructorId
+                };
+            });
+
+            workflows.sort((a, b) => {
+                const priority = {
+                    'SUBMITTED_TO_COMMITTEE': 0,
+                    'COMMITTEE_APPROVED': 1,
+                    'PUBLISHED': 2,
+                    'WITH_INSTRUCTOR': 3
+                };
+                const pA = priority[a.status] !== undefined ? priority[a.status] : 99;
+                const pB = priority[b.status] !== undefined ? priority[b.status] : 99;
+
+                if (pA !== pB) return pA - pB;
+
+                return new Date(b.updatedAt) - new Date(a.updatedAt);
+            });
+
+        } else {
+            workflows = await ResultWorkflow.find().sort({ updatedAt: -1 }).lean();
         }
 
-        return ResultWorkflow.find().sort({ updatedAt: -1 }).lean();
+        if (workflows.length > 0) {
+            const courseIds = [...new Set(workflows.map(w => w.courseId.toString()))];
+            const batchIds = [...new Set(workflows.map(w => w.batchId.toString()))];
+
+            const [courses, batches] = await Promise.all([
+                Course.find({ _id: { $in: courseIds } }).lean(),
+                Batch.find({ _id: { $in: batchIds } }).lean()
+            ]);
+
+            const courseMap = courses.reduce((acc, c) => ({ ...acc, [c._id.toString()]: c }), {});
+            const batchMap = batches.reduce((acc, b) => ({ ...acc, [b._id.toString()]: b }), {});
+
+            workflows = workflows.map(w => ({
+                ...w,
+                grade: {
+                    course: courseMap[w.courseId.toString()],
+                    batch: batchMap[w.batchId.toString()] ? { ...batchMap[w.batchId.toString()], code: batchMap[w.batchId.toString()].name } : null,
+                    semester: w.semester
+                }
+            }));
+        }
+
+        return workflows;
     }
 
     async submitToCommittee(batchId, courseId, semester, teacherId) {

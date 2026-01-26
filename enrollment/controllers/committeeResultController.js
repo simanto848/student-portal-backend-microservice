@@ -5,7 +5,17 @@ class CommitteeResultController {
     async listWorkflows(req, res, next) {
         try {
             const workflows = await resultWorkflowService.listWorkflows(req.user);
-            return ApiResponse.success(res, workflows);
+            return ApiResponse.success(res, workflows, "Result workflows fetched successfully");
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    async getWorkflow(req, res, next) {
+        try {
+            const { id } = req.params;
+            const workflow = await resultWorkflowService.getWorkflowById(id);
+            return ApiResponse.success(res, workflow, "Result workflow fetched successfully");
         } catch (error) {
             next(error);
         }
@@ -19,7 +29,7 @@ class CommitteeResultController {
             const memberName = req.user.fullName;
 
             const workflow = await resultWorkflowService.approveByCommittee(id, memberId, comment, memberName);
-            return ApiResponse.success(res, workflow, "Result approved");
+            return ApiResponse.success(res, workflow, "Result approved successfully");
         } catch (error) {
             next(error);
         }
@@ -32,7 +42,7 @@ class CommitteeResultController {
             const memberId = req.user.id || req.user.sub;
 
             const workflow = await resultWorkflowService.returnToTeacher(id, memberId, comment);
-            return ApiResponse.success(res, workflow, "Result returned to teacher");
+            return ApiResponse.success(res, workflow, "Result returned to teacher successfully");
         } catch (error) {
             next(error);
         }
