@@ -6,8 +6,22 @@ import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
 import { ApiError } from "shared";
 import { Course } from "../models/external/Academic.js";
 import academicClient from "../client/academicServiceClient.js";
+import ResultWorkflow from "../models/ResultWorkflow.js";
 
 class CourseGradeService {
+    async checkWorkflowStatus(batchId, courseId, semester) {
+        const workflow = await ResultWorkflow.findOne({
+            batchId,
+            courseId,
+            semester
+        });
+
+        if (workflow &&
+            ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'].includes(workflow.status)) {
+            throw new ApiError(400, "Cannot update grades after submission to committee");
+        }
+    }
+
     async calculateStudentGrade(data, instructorId) {
         try {
             const enrollment = await CourseEnrollment.findById(data.enrollmentId);
@@ -25,6 +39,8 @@ class CourseGradeService {
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
+
+            await this.checkWorkflowStatus(enrollment.batchId, enrollment.courseId, enrollment.semester);
 
             const existingGrade = await CourseGrade.findOne({
                 studentId: data.studentId,
@@ -78,6 +94,8 @@ class CourseGradeService {
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
+
+            await this.checkWorkflowStatus(enrollment.batchId, enrollment.courseId, enrollment.semester);
 
             const assessments = await Assessment.find({
                 courseId: enrollment.courseId,
@@ -191,6 +209,8 @@ class CourseGradeService {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
+        await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
+
         Object.assign(grade, data);
         if (
             data.totalMarksObtained !== undefined ||
@@ -215,6 +235,8 @@ class CourseGradeService {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
+        await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
+
         if (grade.isPublished) {
             throw new ApiError(400, "Grade is already published");
         }
@@ -238,6 +260,8 @@ class CourseGradeService {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
+        await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
+
         grade.isPublished = false;
         grade.publishedAt = null;
         await grade.save();
@@ -256,6 +280,8 @@ class CourseGradeService {
         if (!assignment) {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
+
+        await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
 
         await grade.softDelete();
         return grade;
@@ -523,6 +549,8 @@ class CourseGradeService {
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
+
+            await this.checkWorkflowStatus(batchId, courseId, semester);
 
             // Get course to determine type
             const courseResponse = await academicClient.verifyCourse(courseId);

@@ -41,7 +41,10 @@ class ResultWorkflowController {
     async submitToCommittee(req, res, next) {
         try {
             const { batchId, courseId, semester, otp } = req.body;
-            await this.verifyOTP(req.user.sub, otp, 'result_submission', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
+            // Extract token from header or cookie
+            const token = req.cookies.accessToken || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+
+            await this.verifyOTP(req.user.sub, otp, 'result_submission', token);
 
             const workflow = await resultWorkflowService.submitToCommittee(batchId, courseId, parseInt(semester), req.user.sub);
             return ApiResponse.success(res, workflow, 'Result submitted to committee');
@@ -121,6 +124,13 @@ class ResultWorkflowController {
     }
     constructor() {
         this.verifyOTP = this.verifyOTP.bind(this);
+        this.getWorkflow = this.getWorkflow.bind(this);
+        this.submitToCommittee = this.submitToCommittee.bind(this);
+        this.approveByCommittee = this.approveByCommittee.bind(this);
+        this.returnToTeacher = this.returnToTeacher.bind(this);
+        this.publishResult = this.publishResult.bind(this);
+        this.requestReturn = this.requestReturn.bind(this);
+        this.approveReturnRequest = this.approveReturnRequest.bind(this);
     }
 }
 
