@@ -2,7 +2,7 @@ import ExamCommittee from "../models/ExamCommittee.js";
 import notificationServiceClient from "../client/notificationServiceClient.js";
 import communicationServiceClient from "../client/communicationServiceClient.js";
 import userServiceClient from "../client/userServiceClient.js";
-import Department from "../models/Department.js"; // Assume local model
+import Department from "../models/Department.js";
 
 class ExamCommitteeService {
   async addMember(departmentId, teacherId, shift, batchId = null) {
@@ -14,8 +14,7 @@ class ExamCommitteeService {
     });
     if (existing) {
       if (existing.status === false) {
-        // Was 'INACTIVE'
-        existing.status = true; // Was 'ACTIVE'
+        existing.status = true;
         return existing.save();
       }
       throw new Error("Teacher is already a member of this committee");
@@ -29,7 +28,6 @@ class ExamCommitteeService {
       status: true,
     });
 
-    // Send Notifications (Non-blocking)
     this.sendWelcomeNotification(teacherId, departmentId, shift);
 
     return newMember;
@@ -70,7 +68,7 @@ class ExamCommitteeService {
     const member = await ExamCommittee.findById(id);
     if (!member) throw new Error("Member not found");
     member.deletedAt = new Date();
-    member.status = false; // Soft delete - mark inactive
+    member.status = false;
     return member.save();
   }
 
@@ -81,34 +79,27 @@ class ExamCommitteeService {
     if (data.status !== undefined) member.status = data.status;
     if (data.shift !== undefined) member.shift = data.shift;
     if (data.batchId !== undefined) {
-      // Handle 'all' or specific batch logic if needed, but assuming ID or null
-      member.batchId =
-        data.batchId === "all" || data.batchId === "null" ? null : data.batchId;
+      member.batchId = data.batchId === "all" || data.batchId === "null" ? null : data.batchId;
     }
 
     return member.save();
   }
 
-  async listMembers(departmentId, batchId = null, shift = null) {
-    const query = {}; // Fetch all regardless of status (Active/Inactive)
-    // Ensure not deleted (handled by pre-hook, but good to be explicit if using lean)
-    // Soft delete hook handles 'deletedAt: null'
+  async listMembers(departmentId, batchId = null, shift = null, teacherId = null, status = null) {
+    const query = {};
 
     if (departmentId) query.departmentId = departmentId;
     if (batchId && batchId !== "all") query.batchId = batchId;
     if (shift && shift !== "all") query.shift = shift;
+    if (teacherId) query.teacherId = teacherId;
+    if (status !== null && status !== undefined) query.status = status === 'true';
 
-    // Populate references for frontend display
-    // Note: Teacher population might fail if Teacher model is not in this service's context.
-    // Assuming Department and Batch are local.
     return ExamCommittee.find(query)
       .populate("departmentId", "name")
       .populate("batchId", "name");
-    // .populate('teacherId', ...) - removed to avoid cross-service issues. Frontend handles ID mapping if needed.
   }
 
   async listDeletedMembers(departmentId) {
-    // Requires includeDeleted: true option to bypass pre-find hook
     return ExamCommittee.find({ departmentId, deletedAt: { $ne: null } })
       .setOptions({ includeDeleted: true })
       .sort({ deletedAt: -1 })
@@ -120,8 +111,8 @@ class ExamCommitteeService {
     const member = await ExamCommittee.findById(id).setOptions({ includeDeleted: true });
     if (!member) throw new Error("Member not found");
 
-    member.deletedAt = null; // Restore
-    member.status = true;    // Reactivate
+    member.deletedAt = null;
+    member.status = true;
     return member.save();
   }
 }

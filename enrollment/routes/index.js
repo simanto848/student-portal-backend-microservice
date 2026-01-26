@@ -7,6 +7,7 @@ import batchCourseInstructorRoutes from './batchCourseInstructorRoutes.js';
 
 import resultWorkflowRoutes from './resultWorkflowRoutes.js';
 import examScheduleRoutes from './examScheduleRoutes.js';
+import committeeResultRoutes from "./committeeResultRoutes.js";
 
 const router = express.Router();
 
@@ -17,6 +18,6 @@ router.use('/assessments', assessmentRoutes);
 router.use('/grades', courseGradeRoutes);
 router.use('/result-workflow', resultWorkflowRoutes);
 router.use('/exam-schedules', examScheduleRoutes);
+router.use('/committee-results', committeeResultRoutes);
 
 export default router;
-

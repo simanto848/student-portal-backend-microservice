@@ -39,11 +39,13 @@ class ExamCommitteeController {
 
   async listMembers(req, res, next) {
     try {
-      const { departmentId, batchId, shift } = req.query;
+      const { departmentId, batchId, shift, teacherId, status } = req.query;
       const members = await examCommitteeService.listMembers(
         departmentId,
         batchId,
-        shift
+        shift,
+        teacherId,
+        status
       );
       return ApiResponse.success(res, members);
     } catch (error) {

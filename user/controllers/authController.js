@@ -327,30 +327,49 @@ class AuthController {
 
       const sanitizedUser = dbUser.toObject();
       sanitizedUser.id = dbUser.id;
-      // Ensure role is present for frontend routing/authorization
       sanitizedUser.role = sanitizedUser.role || req.user?.role || roleType;
-
-      // Dynamic Check: If user is a teacher, check if they head a department via Academic Service API
       if (sanitizedUser.role === 'teacher') {
         try {
           const academicServiceUrl = process.env.ACADEMIC_SERVICE_URL || 'http://academic:8002';
-          const response = await fetch(`${academicServiceUrl}/departments?departmentHeadId=${userId}&limit=1`);
 
-          if (response.ok) {
-            const data = await response.json();
-            // Check if any department was found and explicitly set flag
+          // Headers for internal service calls
+          const headers = {
+            'Authorization': req.headers.authorization || '',
+            'Content-Type': 'application/json'
+          };
+          if (!headers.Authorization && req.cookies && req.cookies.accessToken) {
+            headers.Authorization = `Bearer ${req.cookies.accessToken}`;
+          }
+
+          // 1. Check Department Head Status
+          const deptResponse = await fetch(`${academicServiceUrl}/departments?departmentHeadId=${userId}&limit=1`, { headers });
+          if (deptResponse.ok) {
+            const data = await deptResponse.json();
             const departments = data.data?.data || data.data;
             sanitizedUser.isDepartmentHead = Array.isArray(departments) && departments.length > 0;
           }
+
+          // 2. Check Exam Committee Member Status
+          const committeeUrl = `${academicServiceUrl}/exam-committees?teacherId=${userId}&status=true`;
+          const committeeResponse = await fetch(committeeUrl, { headers });
+          if (committeeResponse.ok) {
+            const data = await committeeResponse.json();
+            const committees = data.data;
+            sanitizedUser.isExamCommitteeMember = Array.isArray(committees) && committees.length > 0;
+          } else {
+            sanitizedUser.isExamCommitteeMember = false;
+          }
+
         } catch (err) {
-          // Fail silently on service communication error, defaulting to existing flag or false
-          req.logger.error("Failed to check department head status via Academic Service", { error: err.message });
+          req.logger.error("Failed to fetch additional teacher roles via Academic Service", { error: err.message, stack: err.stack });
+          if (sanitizedUser.isDepartmentHead === undefined) sanitizedUser.isDepartmentHead = false;
+          sanitizedUser.isExamCommitteeMember = false;
         }
       }
 
       delete sanitizedUser.password;
       delete sanitizedUser.refreshToken;
-      delete sanitizedUser.twoFactorSecret; // Ensure secret is removed if model transformation didn't catch it
+      delete sanitizedUser.twoFactorSecret;
 
       return ApiResponse.success(
         res,
