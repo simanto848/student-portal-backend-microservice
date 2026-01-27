@@ -67,7 +67,7 @@ class NotificationService {
             // Send 7-day reminders
             for (const borrowing of sevenDayReminders) {
                 // Add a small delay to avoid rate limiting (Mailtrap free tier)
-                await new Promise(resolve => setTimeout(resolve, 1100));
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
                 let emailSuccess = false;
                 let notificationSuccess = false;
@@ -82,18 +82,19 @@ class NotificationService {
 
                 // 1. Try Sending Email
                 try {
+                    const daysTotal = Math.max(1, Math.ceil((new Date(borrowing.dueDate) - today) / (1000 * 60 * 60 * 24)));
                     await emailService.sendOverdueReminder(userData.email, {
                         userName: userData.fullName || userData.name || 'Student',
                         userEmail: userData.email,
                         bookTitle: borrowing.copyId.bookId.title,
                         author: borrowing.copyId.bookId.author,
                         dueDate: borrowing.dueDate,
-                        daysUntilDue: 7,
+                        daysUntilDue: daysTotal,
                         finePerDay: borrowing.libraryId.finePerDay
                     });
                     emailSuccess = true;
                     emailsSent++;
-                    console.log(`Sent 7-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
+                    console.log(`Sent ${daysTotal}-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
                 } catch (error) {
                     emailsFailed++;
                     console.error(`Failed to send 7-day reminder email for ${borrowing.id || borrowing._id}:`, error.message);
@@ -101,13 +102,14 @@ class NotificationService {
 
                 // 2. Try Sending App Notification
                 try {
+                    const daysTotal = Math.max(1, Math.ceil((new Date(borrowing.dueDate) - today) / (1000 * 60 * 60 * 24)));
                     await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
                         bookTitle: borrowing.copyId.bookId.title,
                         author: borrowing.copyId.bookId.author,
-                        daysUntilDue: 7
+                        daysUntilDue: daysTotal
                     });
                     notificationSuccess = true;
-                    console.log(`Sent 7-day app notification to ${borrowing.borrowerId}`);
+                    console.log(`Sent ${daysTotal}-day app notification to ${borrowing.borrowerId}`);
                 } catch (error) {
                     console.error(`Failed to send 7-day app notification for ${borrowing.id || borrowing._id}:`, error.message);
                 }
@@ -127,7 +129,7 @@ class NotificationService {
             // Send 2-day reminders
             for (const borrowing of twoDayReminders) {
                 // Add a small delay to avoid rate limiting (Mailtrap free tier)
-                await new Promise(resolve => setTimeout(resolve, 1100));
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
                 let emailSuccess = false;
                 let notificationSuccess = false;
@@ -141,31 +143,33 @@ class NotificationService {
                 }
 
                 try {
+                    const daysTotal = Math.max(0, Math.ceil((new Date(borrowing.dueDate) - today) / (1000 * 60 * 60 * 24)));
                     await emailService.sendOverdueReminder(userData.email, {
                         userName: userData.fullName || userData.name || 'Student',
                         userEmail: userData.email,
                         bookTitle: borrowing.copyId.bookId.title,
                         author: borrowing.copyId.bookId.author,
                         dueDate: borrowing.dueDate,
-                        daysUntilDue: 2,
+                        daysUntilDue: daysTotal,
                         finePerDay: borrowing.libraryId.finePerDay
                     });
                     emailSuccess = true;
                     emailsSent++;
-                    console.log(`Sent 2-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
+                    console.log(`Sent ${daysTotal}-day reminder to ${userData.email} for book: ${borrowing.copyId.bookId.title}`);
                 } catch (error) {
                     emailsFailed++;
                     console.error(`Failed to send 2-day reminder email for ${borrowing.id || borrowing._id}:`, error.message);
                 }
 
                 try {
+                    const daysTotal = Math.max(0, Math.ceil((new Date(borrowing.dueDate) - today) / (1000 * 60 * 60 * 24)));
                     await notificationServiceClient.sendDueReminder(borrowing.borrowerId, {
                         bookTitle: borrowing.copyId.bookId.title,
                         author: borrowing.copyId.bookId.author,
-                        daysUntilDue: 2
+                        daysUntilDue: daysTotal
                     });
                     notificationSuccess = true;
-                    console.log(`Sent 2-day app notification to ${borrowing.borrowerId}`);
+                    console.log(`Sent ${daysTotal}-day app notification to ${borrowing.borrowerId}`);
                 } catch (error) {
                     console.error(`Failed to send 2-day app notification for ${borrowing.id || borrowing._id}:`, error.message);
                 }
@@ -207,7 +211,7 @@ class NotificationService {
 
             for (const borrowing of overdueBorrowings) {
                 // Add a small delay to avoid rate limiting (Mailtrap free tier)
-                await new Promise(resolve => setTimeout(resolve, 1100));
+                await new Promise(resolve => setTimeout(resolve, 1500));
 
                 const dueDate = new Date(borrowing.dueDate);
                 const daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));

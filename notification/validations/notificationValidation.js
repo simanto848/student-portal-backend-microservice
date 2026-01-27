@@ -19,7 +19,7 @@ const baseSchema = {
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   requireAcknowledgment: z.boolean().optional(),
   sendEmail: z.boolean().optional(),
-  deliveryChannels: z.array(z.enum(['socket', 'email'])).optional(),
+  deliveryChannels: z.array(z.enum(['socket', 'email', 'database'])).optional(),
   scheduleAt: z.coerce.date().optional(),
   expiresAt: z.coerce.date().optional()
 };
