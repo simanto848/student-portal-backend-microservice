@@ -28,21 +28,22 @@ class NotificationServiceClient {
             const token = this.generateSystemToken();
 
             // 1. Create the notification
-            const createRes = await axios.post(`${this.baseUrl}/`, payload, {
+            const createRes = await axios.post(`${this.baseUrl}/notifications`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             const notificationId = createRes.data.data.id || createRes.data.data._id;
 
             // 2. Publish the notification
-            await axios.post(`${this.baseUrl}/${notificationId}/publish`, {}, {
+            await axios.post(`${this.baseUrl}/notifications/${notificationId}/publish`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
             logger.info(`App notification sent: ${payload.title} to ${payload.targetUserIds.join(', ')}`);
             return true;
         } catch (error) {
-            logger.error('Failed to send app notification:', error.response?.data || error.message);
+            const errorMsg = error.response?.data?.message || error.response?.data || error.message;
+            logger.error(`Failed to send app notification: ${errorMsg}`);
             return false;
         }
     }
@@ -56,6 +57,19 @@ class NotificationServiceClient {
             targetType: 'custom',
             targetUserIds: [userId],
             priority: daysUntilDue <= 2 ? 'high' : 'medium',
+            deliveryChannels: ['socket', 'database']
+        });
+    }
+
+    async sendOverdueNotice(userId, details) {
+        const { bookTitle, author, daysOverdue, totalFine } = details;
+
+        return await this.createAndPublish({
+            title: `OVERDUE: ${bookTitle}`,
+            content: `URGENT: The book "${bookTitle}" by ${author} is ${daysOverdue} days overdue. Current accumulated fine: ${totalFine}. Please return it immediately.`,
+            targetType: 'custom',
+            targetUserIds: [userId],
+            priority: 'high',
             deliveryChannels: ['socket', 'database']
         });
     }

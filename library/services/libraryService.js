@@ -128,6 +128,74 @@ class LibraryService {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring library: ' + error.message);
         }
     }
+
+    /**
+     * Calculates the due date based on borrow duration and library operating hours.
+     * If the target due date falls on an off day, it moves it to the next available working day.
+     * 
+     * @param {string} libraryId 
+     * @param {Date} startDate 
+     * @param {number} durationInDays 
+     * @returns {Promise<Date>}
+     */
+    async calculateDueDate(libraryId, startDate, durationInDays) {
+        const library = await Library.findById(libraryId).lean();
+        if (!library) throw new ApiError(404, 'Library not found');
+
+        let dueDate = new Date(startDate);
+        dueDate.setDate(dueDate.getDate() + durationInDays);
+
+        // Utility to get day config
+        const getDayConfig = (date) => {
+            const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date).toLowerCase();
+            return library.operatingHours?.[dayName];
+        };
+
+        const maxIterations = 30;
+        let iterations = 0;
+
+        while (iterations < maxIterations) {
+            const dayConfig = getDayConfig(dueDate);
+
+            // 1. Check if the day is closed
+            if (library.operatingHours && Object.keys(library.operatingHours).length > 0 && dayConfig && dayConfig.isOpen === false) {
+                dueDate.setDate(dueDate.getDate() + 1);
+                dueDate.setHours(0, 0, 0, 0); // Reset time when moving to next day
+                iterations++;
+                continue;
+            }
+
+            // 2. Check if the time is "off-time"
+            // If the library has closing hours and we are past them
+            if (dayConfig && dayConfig.close) {
+                const [closeHours, closeMinutes] = dayConfig.close.split(':').map(Number);
+                const closeTime = new Date(dueDate);
+                closeTime.setHours(closeHours, closeMinutes, 0, 0);
+
+                if (dueDate > closeTime) {
+                    // We are past closing time, so give extra day
+                    dueDate.setDate(dueDate.getDate() + 1);
+                    dueDate.setHours(0, 0, 0, 0); // Reset time to start of next day and re-evaluate
+                    iterations++;
+                    continue;
+                }
+            }
+
+            // If we are here, the day is open and we are not past closing time
+            break;
+        }
+
+        // Finalize the time to the library's closing time on the finalized due date
+        const finalDayConfig = getDayConfig(dueDate);
+        if (finalDayConfig && finalDayConfig.close) {
+            const [hours, minutes] = finalDayConfig.close.split(':').map(Number);
+            dueDate.setHours(hours, minutes, 0, 0);
+        } else {
+            dueDate.setHours(23, 59, 59, 999);
+        }
+
+        return dueDate;
+    }
 }
 
 export default new LibraryService();

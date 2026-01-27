@@ -3,6 +3,7 @@ import Book from '../models/Book.js';
 import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import Reservation from '../models/BookReservation.js';
+import libraryService from './libraryService.js';
 import userServiceClient from '../clients/userServiceClient.js';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
@@ -76,8 +77,7 @@ class BorrowingService {
             if (customDueDate) {
                 dueDate = new Date(customDueDate);
             } else {
-                dueDate = new Date(borrowDate);
-                dueDate.setDate(dueDate.getDate() + library.borrowDuration);
+                dueDate = await libraryService.calculateDueDate(finalLibraryId, borrowDate, library.borrowDuration);
             }
 
             const borrowing = new BookTakenHistory({
@@ -487,12 +487,11 @@ class BorrowingService {
 
     async checkAndUpdateOverdueBooks() {
         try {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            const now = new Date();
             const result = await BookTakenHistory.updateMany(
                 {
                     status: 'borrowed',
-                    dueDate: { $lt: today },
+                    dueDate: { $lt: now },
                     deletedAt: null
                 },
                 {

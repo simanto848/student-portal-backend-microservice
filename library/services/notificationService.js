@@ -66,10 +66,11 @@ class NotificationService {
 
             // Send 7-day reminders
             for (const borrowing of sevenDayReminders) {
+                // Add a small delay to avoid rate limiting (Mailtrap free tier)
+                await new Promise(resolve => setTimeout(resolve, 1100));
+
                 let emailSuccess = false;
                 let notificationSuccess = false;
-
-                // Get user details once
                 let userData;
                 try {
                     const user = await userServiceClient.getUserById(borrowing.borrowerId);
@@ -125,9 +126,11 @@ class NotificationService {
 
             // Send 2-day reminders
             for (const borrowing of twoDayReminders) {
+                // Add a small delay to avoid rate limiting (Mailtrap free tier)
+                await new Promise(resolve => setTimeout(resolve, 1100));
+
                 let emailSuccess = false;
                 let notificationSuccess = false;
-
                 let userData;
                 try {
                     const user = await userServiceClient.getUserById(borrowing.borrowerId);
@@ -203,6 +206,9 @@ class NotificationService {
             let emailsFailed = 0;
 
             for (const borrowing of overdueBorrowings) {
+                // Add a small delay to avoid rate limiting (Mailtrap free tier)
+                await new Promise(resolve => setTimeout(resolve, 1100));
+
                 const dueDate = new Date(borrowing.dueDate);
                 const daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
                 const totalFine = daysOverdue * borrowing.libraryId.finePerDay;
@@ -236,6 +242,19 @@ class NotificationService {
                         totalFine
                     });
 
+                    // Send App Notification
+                    try {
+                        await notificationServiceClient.sendOverdueNotice(borrowing.borrowerId, {
+                            bookTitle: borrowing.copyId.bookId.title,
+                            author: borrowing.copyId.bookId.author,
+                            daysOverdue,
+                            totalFine
+                        });
+                        console.log(`Sent overdue app notification to ${borrowing.borrowerId}`);
+                    } catch (error) {
+                        console.error(`Failed to send overdue app notification for ${borrowing.id || borrowing._id}:`, error.message);
+                    }
+
                     // Update DB Flag
                     await BookTakenHistory.updateOne({ _id: borrowing._id }, { lastOverdueNoticeSent: new Date() });
 
@@ -256,9 +275,9 @@ class NotificationService {
     }
 
     startScheduledJobs() {
-        // Run at 9:00 AM every day
-        cron.schedule('0 9 * * *', async () => {
-            console.log('Running scheduled reminder emails job...');
+        // Run at 6:00 AM, 10:00 AM, and 6:00 PM every day
+        cron.schedule('0 6,10,18 * * *', async () => {
+            console.log('Running scheduled reminder emails and notifications job...');
             try {
                 // Ensure overdue status is up to date before sending notices
                 await borrowingService.checkAndUpdateOverdueBooks();
@@ -271,7 +290,7 @@ class NotificationService {
             }
         });
 
-        console.log('Scheduled jobs started: Daily reminders at 9:00 AM');
+        console.log('Scheduled jobs started: Daily reminders at 6:00 AM, 10:00 AM, and 6:00 PM');
     }
 }
 

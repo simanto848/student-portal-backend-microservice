@@ -55,8 +55,9 @@ class UserServiceClient {
             for (const endpoint of endpoints) {
                 try {
                     const response = await this.client.get(endpoint, config);
-                    return response.data;
+                    if (response.data) return response.data;
                 } catch (err) {
+                    // Continue to next endpoint if not found
                     continue;
                 }
             }
