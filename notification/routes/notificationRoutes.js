@@ -37,6 +37,7 @@ router.post('/:id/schedule', notificationWriteLimiter, authorize(...managerRoles
 router.post('/:id/cancel', notificationWriteLimiter, authorize(...managerRoles), (req, res) => notificationController.cancel(req, res));
 router.post('/:id/publish', notificationWriteLimiter, authorize(...managerRoles), (req, res) => notificationController.publish(req, res));
 router.post('/:id/read', notificationReadLimiter, (req, res) => notificationController.markRead(req, res));
+router.post('/mark-all-read', notificationWriteLimiter, (req, res) => notificationController.markAllRead(req, res));
 router.post('/:id/ack', notificationWriteLimiter, (req, res) => notificationController.acknowledge(req, res));
 router.post('/:id/react', notificationWriteLimiter, (req, res) => notificationController.react(req, res));
 router.get('/:id/receipts', notificationReadLimiter, authorize(...managerRoles), (req, res) => notificationController.receipts(req, res));

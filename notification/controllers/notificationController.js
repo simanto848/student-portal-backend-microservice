@@ -94,6 +94,16 @@ class NotificationController {
         }
     }
 
+    async markAllRead(req, res) {
+        try {
+            if (!req.user) return ApiResponse.unauthorized(res, 'Not authenticated');
+            const r = await notificationService.markAllRead(req.user);
+            return ApiResponse.success(res, r, 'All marked as read');
+        } catch (err) {
+            return ApiResponse.error(res, err.message, 400);
+        }
+    }
+
     async acknowledge(req, res) {
         try {
             const r = await notificationService.acknowledge(req.params.id, req.user);

@@ -286,6 +286,41 @@ class NotificationService {
     return receipt;
   }
 
+  async markAllRead(user) {
+    const userId = user.id || user.sub;
+    const result = await this.listForUser(user, { limit: 1000 });
+    const unreadIds = result.notifications
+      .filter(n => !n.isRead)
+      .map(n => n.id);
+
+    if (unreadIds.length === 0) return { message: 'All already read' };
+
+    const now = new Date();
+    await Promise.all(unreadIds.map(async (id) => {
+      let receipt = await NotificationReceipt.findOne({ notificationId: id, userId });
+      if (!receipt) {
+        await NotificationReceipt.create({
+          notificationId: id,
+          userId,
+          userRole: user.role,
+          readAt: now
+        });
+      } else if (!receipt.readAt) {
+        receipt.readAt = now;
+        await receipt.save();
+      }
+
+      const notification = await Notification.findById(id);
+      if (notification) {
+        notification.readCount = await NotificationReceipt.countDocuments({ notificationId: id, readAt: { $ne: null } });
+        await notification.save();
+      }
+    }));
+
+    emitNotificationEvent('notification.read_all', { userId }, [`user:${userId}`]);
+    return { count: unreadIds.length };
+  }
+
   async acknowledge(notificationId, user) {
     const userId = user.id || user.sub;
     const notification = await Notification.findById(notificationId);

@@ -19,8 +19,8 @@ const receiptSchema = new mongoose.Schema({
   },
   userRole: {
       type: String,
-      enum: ['student', 'teacher', 'staff', 'admin'],
-      required: true
+      required: true,
+      index: true
   },
   readAt: {
       type: Date
