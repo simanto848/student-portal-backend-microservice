@@ -1,8 +1,11 @@
+import axios from "axios";
 import Submission from "../models/Submission.js";
 import Assignment from "../models/Assignment.js";
 import Feedback from "../models/Feedback.js";
 import StreamItem from "../models/StreamItem.js";
+
 import WorkspaceService from "./workspaceService.js";
+import Workspace from "../models/Workspace.js";
 import { emitWorkspace, emitUser } from "../utils/events.js";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -179,7 +182,111 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
     token
   );
 
-  return Submission.find({ assignmentId }).sort({ submittedAt: -1 });
+  /* 
+     Enhanced Logic: Fetch all students in the workspace to identify who hasn't submitted yet.
+     Return both existing submissions and placeholder "missing" submissions.
+  */
+  const workspace = await Workspace.findById(assignment.workspaceId);
+  const submissions = await Submission.find({ assignmentId }).lean();
+  const submissionMap = new Map(submissions.map((s) => [s.studentId, s]));
+
+  let allStudentIds = [...(workspace?.studentIds || [])];
+  const studentDetailsMap = new Map();
+
+  // Fallback: If workspace list is empty, fetch by Batch ID
+  if (
+    allStudentIds.length === 0 &&
+    workspace.batchId &&
+    process.env.USER_SERVICE_URL
+  ) {
+    try {
+      const batchResponse = await axios.get(
+        `${process.env.USER_SERVICE_URL}/students`,
+        {
+          params: { batchId: workspace.batchId, limit: 1000 },
+          headers: { Authorization: token },
+        }
+      );
+
+      if (batchResponse.data && batchResponse.data.success) {
+        const students =
+          batchResponse.data.data.students || batchResponse.data.data;
+        if (Array.isArray(students)) {
+          students.forEach((s) => {
+            const sId = s.id || s._id;
+            allStudentIds.push(sId);
+            studentDetailsMap.set(sId, s);
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch batch students", e.message);
+    }
+  }
+
+  // Combine current workspace students and any prior submitters
+  allStudentIds = [...new Set([...allStudentIds, ...submissionMap.keys()])];
+
+  const populatedSubmissions = await Promise.all(
+    allStudentIds.map(async (studentId) => {
+      let submission = submissionMap.get(studentId);
+
+      if (!submission) {
+        submission = {
+          _id: `missing-${studentId}`,
+          assignmentId: assignmentId,
+          studentId: studentId,
+          status: "missing",
+          files: [],
+          submittedAt: null,
+          grade: null,
+          late: false,
+        };
+      }
+
+      // Optimization: Use pre-fetched details
+      if (studentDetailsMap.has(studentId)) {
+        submission.studentId = studentDetailsMap.get(studentId);
+        return submission;
+      }
+
+      try {
+        if (!process.env.USER_SERVICE_URL) {
+          return submission;
+        }
+        const response = await axios.get(
+          `${process.env.USER_SERVICE_URL}/students/${submission.studentId}`,
+          {
+            headers: {
+              Authorization: token,
+            },
+          }
+        );
+
+        if (response.data && response.data.success) {
+          submission.studentId = response.data.data;
+        }
+        return submission;
+      } catch (error) {
+        console.error(
+          `Failed to fetch student details for ${submission.studentId}`,
+          error.message
+        );
+        return submission;
+      }
+    })
+  );
+
+  return populatedSubmissions.sort((a, b) => {
+    // Show Missing items at the bottom
+    if (a.status === "missing" && b.status !== "missing") return 1;
+    if (a.status !== "missing" && b.status === "missing") return -1;
+    // Sort submitted by date desc
+    if (a.submittedAt && b.submittedAt) {
+      return new Date(b.submittedAt) - new Date(a.submittedAt);
+    }
+    return 0;
+  });
 };
 
 const getSubmission = async (submissionId, userId, role, token) => {
@@ -333,6 +440,64 @@ const addFeedback = async (submissionId, data, userId, role, token) => {
   return feedback;
 };
 
+const removeFileFromSubmission = async (
+  submissionId,
+  fileId,
+  userId,
+  role,
+  token
+) => {
+  const submission = await Submission.findById(submissionId);
+  if (!submission) throw new Error("Submission not found");
+
+  const assignment = await Assignment.findById(submission.assignmentId);
+  if (!assignment) throw new Error("Assignment not found");
+
+  if (role === "student" && submission.studentId !== userId) {
+    throw new Error("Not your submission");
+  }
+
+  // Double check workspace access
+  await WorkspaceService.getWorkspaceById(
+    assignment.workspaceId,
+    userId,
+    role,
+    token
+  );
+
+  if (submission.status === "graded") {
+    throw new Error("Cannot modify graded submission");
+  }
+
+  const fileIndex = submission.files.findIndex((f) => f.id === fileId);
+  if (fileIndex === -1) {
+    throw new Error("File not found in submission");
+  }
+
+  const file = submission.files[fileIndex];
+
+  // Physically delete the file if possible
+  if (file.path) {
+    await deleteStoredFileIfExists(file.path);
+  }
+
+  // Remove from array
+  submission.files.splice(fileIndex, 1);
+
+  // Update metadata
+  submission.updatedAt = new Date();
+
+  await submission.save();
+
+  // Return updated submission with download URLs
+  submission.files = (submission.files || []).map((f) => ({
+    ...f,
+    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
+  }));
+
+  return submission;
+};
+
 export default {
   submitAssignment,
   submitAssignmentWithFiles,
@@ -342,4 +507,5 @@ export default {
   getSubmissionFileForDownload,
   gradeSubmission,
   addFeedback,
+  removeFileFromSubmission,
 };

@@ -129,6 +129,22 @@ class SubmissionController {
       next(e);
     }
   }
+
+  async removeFile(req, res, next) {
+    try {
+      const { id, fileId } = req.params;
+      const submission = await SubmissionService.removeFileFromSubmission(
+        id,
+        fileId,
+        req.user.id,
+        req.user.role,
+        req.headers.authorization
+      );
+      return ApiResponse.success(res, submission, "File removed");
+    } catch (e) {
+      next(e);
+    }
+  }
 }
 
 export default new SubmissionController();

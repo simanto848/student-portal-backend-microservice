@@ -32,6 +32,10 @@ const assignmentSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  requiresFileUpload: {
+    type: Boolean,
+    default: false
+  },
   maxScore: {
     type: Number,
     default: 100
@@ -42,7 +46,7 @@ const assignmentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft','published','closed'],
+    enum: ['draft', 'published', 'closed'],
     default: 'draft'
   },
   publishedAt: {
@@ -52,26 +56,27 @@ const assignmentSchema = new mongoose.Schema({
     type: String
   },
   deletedAt: {
-    type: Date },
+    type: Date
+  },
   reminder24hSentAt: {
     type: Date
   },
   reminder1hSentAt: {
     type: Date
   }
-},{
-  timestamps:true,
-  toJSON:{
-    transform(doc,ret) {
-      ret.id=ret._id;
+}, {
+  timestamps: true,
+  toJSON: {
+    transform(doc, ret) {
+      ret.id = ret._id;
       delete ret._id;
       delete ret.__v;
     }
   }
 });
 
-assignmentSchema.index({ workspaceId:1, dueAt:1 });
-assignmentSchema.pre(/^find/, function(next){ this.where({ deletedAt: null }); if(next) next(); });
+assignmentSchema.index({ workspaceId: 1, dueAt: 1 });
+assignmentSchema.pre(/^find/, function (next) { this.where({ deletedAt: null }); if (next) next(); });
 
 const Assignment = mongoose.model('Assignment', assignmentSchema);
 export default Assignment;

@@ -17,19 +17,22 @@ const submissionSchema = new mongoose.Schema({
   },
   studentId: {
     type: String,
-    required: true
+    required: true,
+    ref: 'Student'
   },
   submittedAt: {
-    type: Date },
+    type: Date
+  },
   files: {
     type: [Object],
     default: []
   },
   textAnswer: {
-    type: String },
+    type: String
+  },
   status: {
     type: String,
-    enum: ['none','draft','submitted','resubmitted','graded'],
+    enum: ['none', 'draft', 'submitted', 'resubmitted', 'graded'],
     default: 'none'
   },
   grade: {
@@ -57,12 +60,12 @@ const submissionSchema = new mongoose.Schema({
   deletedAt: {
     type: Date
   }
-},{ timestamps:true, toJSON:{ transform(doc,ret){ ret.id=ret._id; delete ret._id; delete ret.__v;} } });
+}, { timestamps: true, toJSON: { transform(doc, ret) { ret.id = ret._id; delete ret._id; delete ret.__v; } } });
 
-submissionSchema.index({ assignmentId:1, studentId:1 }, { unique: true });
-submissionSchema.pre(/^find/, function(next){
+submissionSchema.index({ assignmentId: 1, studentId: 1 }, { unique: true });
+submissionSchema.pre(/^find/, function (next) {
   this.where({ deletedAt: null });
-  if(next)next();
+  if (next) next();
 });
 
 const Submission = mongoose.model('Submission', submissionSchema);

@@ -46,6 +46,11 @@ router.get(
   authorize("super_admin", "admin", "program_controller", "teacher", "student"),
   submissionController.get
 );
+router.delete(
+  "/item/:id/files/:fileId",
+  authorize("student"),
+  submissionController.removeFile
+);
 router.post(
   "/:id/grade",
   authorize("super_admin", "admin", "program_controller", "teacher"),
