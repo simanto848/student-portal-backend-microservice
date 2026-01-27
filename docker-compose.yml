@@ -175,6 +175,7 @@ services:
       - MONGO_URI=${MONGO_URI:-mongodb://host.docker.internal:27017/student_portal_library}
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - USER_SERVICE_URL=http://user:8001
+      - NOTIFICATION_SERVICE_URL=http://notification:8007
       - MAIL_HOST=sandbox.smtp.mailtrap.io
       - MAIL_PORT=2525
       - MAIL_USER=8cbbbf4e87833a

@@ -1,6 +1,7 @@
 import userServiceClient from '../clients/userServiceClient.js';
 import { authenticate as baseAuthenticate } from 'shared/middlewares/auth.js';
 import { ApiResponse } from 'shared';
+import jwt from 'jsonwebtoken';
 
 export const authenticateWithProfile = (req, res, next) => {
   const token =
@@ -8,6 +9,20 @@ export const authenticateWithProfile = (req, res, next) => {
 
   if (!token) {
     return ApiResponse.unauthorized(res, 'Authentication credentials were not provided');
+  }
+
+  // Handle system tokens by decoding and checking role
+  try {
+    const decoded = jwt.decode(token);
+    if (decoded && (decoded.id?.startsWith('system-') || decoded.sub?.startsWith('system-'))) {
+      req.user = {
+        ...decoded,
+        sub: decoded.id || decoded.sub
+      };
+      return next();
+    }
+  } catch (e) {
+    // Ignore decode error, proceed to getFullUserByToken
   }
 
   userServiceClient.getFullUserByToken(token)
