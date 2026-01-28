@@ -204,7 +204,16 @@ class ResultWorkflowService {
     }
 
     async submitToCommittee(batchId, courseId, semester, teacherId) {
-        const workflow = await this.getWorkflow(batchId, courseId, semester);
+        let workflow = await ResultWorkflow.findOne({
+            batchId,
+            courseId,
+            semester,
+        });
+
+        if (!workflow) {
+            workflow = await ResultWorkflow.create({ batchId, courseId, semester });
+        }
+
         const assignment = await BatchCourseInstructor.findOne({
             batchId,
             courseId,
