@@ -277,31 +277,13 @@ class ResultWorkflowService {
             timestamp: new Date()
         });
 
-        // Check if ALL members have approved
-        const totalMembers = await ExamCommittee.countDocuments({
-            departmentId: batch.departmentId,
-            shift: batch.shift,
-            status: true,
-            $or: [{ batchId: null }, { batchId: workflow.batchId }],
+        // Single member approval is sufficient now
+        workflow.status = "COMMITTEE_APPROVED";
+        workflow.history.push({
+            status: "COMMITTEE_APPROVED",
+            changedBy: committeeMemberId,
+            comment: "Approved by committee member",
         });
-
-        const approvedCount = workflow.approvals.length;
-
-        // If all members have approved
-        if (approvedCount >= totalMembers) {
-            workflow.status = "COMMITTEE_APPROVED";
-            workflow.history.push({
-                status: "COMMITTEE_APPROVED",
-                changedBy: committeeMemberId,
-                comment: "Approved by all committee members",
-            });
-        } else {
-            workflow.history.push({
-                status: "SUBMITTED_TO_COMMITTEE",
-                changedBy: committeeMemberId,
-                comment: `Approved by 1 member (${approvedCount}/${totalMembers})`,
-            });
-        }
 
         return workflow.save();
     }
