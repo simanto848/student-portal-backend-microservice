@@ -288,6 +288,9 @@ class NotificationService {
 
   async markAllRead(user) {
     const userId = user.id || user.sub;
+
+    // Logic: find all notifications that this user is a recipient of,
+    // but don't have a read receipt yet.
     const result = await this.listForUser(user, { limit: 1000 });
     const unreadIds = result.notifications
       .filter(n => !n.isRead)
@@ -310,6 +313,7 @@ class NotificationService {
         await receipt.save();
       }
 
+      // Update individual read counts if needed (could be slow but keeps data consistent)
       const notification = await Notification.findById(id);
       if (notification) {
         notification.readCount = await NotificationReceipt.countDocuments({ notificationId: id, readAt: { $ne: null } });

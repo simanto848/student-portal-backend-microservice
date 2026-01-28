@@ -764,10 +764,31 @@ class AuthService {
         user.emailUpdatesEnabled = preferences.emailUpdatesEnabled;
       }
 
+      if (preferences?.notificationPreferences) {
+        if (!user.notificationPreferences) {
+          user.notificationPreferences = { email: {}, push: {} };
+        }
+
+        if (preferences.notificationPreferences.email) {
+          user.notificationPreferences.email = {
+            ...user.notificationPreferences.email,
+            ...preferences.notificationPreferences.email,
+          };
+        }
+
+        if (preferences.notificationPreferences.push) {
+          user.notificationPreferences.push = {
+            ...user.notificationPreferences.push,
+            ...preferences.notificationPreferences.push,
+          };
+        }
+      }
+
       await user.save();
 
       return {
         emailUpdatesEnabled: user.emailUpdatesEnabled,
+        notificationPreferences: user.notificationPreferences,
       };
     } catch (error) {
       throw error instanceof ApiError

@@ -67,6 +67,20 @@ const BaseUserSchema = {
     type: Boolean,
     default: true,
   },
+  notificationPreferences: {
+    email: {
+      gradeUpdates: { type: Boolean, default: true },
+      newAssignments: { type: Boolean, default: true },
+      deadlineReminders: { type: Boolean, default: true },
+      announcements: { type: Boolean, default: true },
+      directMessages: { type: Boolean, default: false },
+    },
+    push: {
+      messages: { type: Boolean, default: true },
+      classReminders: { type: Boolean, default: true },
+      libraryAlerts: { type: Boolean, default: false },
+    },
+  },
   lastLoginIp: {
     type: String,
     default: null,

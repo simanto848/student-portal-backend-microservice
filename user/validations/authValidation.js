@@ -74,6 +74,26 @@ export const disable2FASchema = (data) => {
 export const updatePreferencesSchema = (data) => {
   const schema = z.object({
     emailUpdatesEnabled: z.boolean().optional(),
+    notificationPreferences: z
+      .object({
+        email: z
+          .object({
+            gradeUpdates: z.boolean().optional(),
+            newAssignments: z.boolean().optional(),
+            deadlineReminders: z.boolean().optional(),
+            announcements: z.boolean().optional(),
+            directMessages: z.boolean().optional(),
+          })
+          .optional(),
+        push: z
+          .object({
+            messages: z.boolean().optional(),
+            classReminders: z.boolean().optional(),
+            libraryAlerts: z.boolean().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
   });
   return schema.safeParse(data);
 };
