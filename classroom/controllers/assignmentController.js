@@ -36,6 +36,22 @@ class AssignmentController {
     }
   }
 
+  async upload(req, res, next) {
+    try {
+      const { workspaceId } = req.body;
+      const files = Array.isArray(req.files) ? req.files : [];
+      const attachments = await AssignmentService.uploadAssignmentFiles(
+        workspaceId,
+        files,
+        req.user.id,
+        req.headers.authorization
+      );
+      return ApiResponse.created(res, attachments, "Files uploaded");
+    } catch (e) {
+      next(e);
+    }
+  }
+
   async list(req, res, next) {
     try {
       const { workspaceId } = req.params;
@@ -115,6 +131,24 @@ class AssignmentController {
         req.headers.authorization
       );
       return ApiResponse.success(res, null, "Assignment deleted");
+    } catch (e) {
+      next(e);
+    }
+  }
+
+  async downloadAttachment(req, res, next) {
+    try {
+      const { id, attachmentId } = req.params;
+      const { absolutePath, downloadName } =
+        await AssignmentService.getAssignmentAttachmentForDownload(
+          id,
+          attachmentId,
+          req.user.id,
+          req.user.role,
+          req.headers.authorization
+        );
+
+      return res.download(absolutePath, downloadName);
     } catch (e) {
       next(e);
     }

@@ -182,13 +182,12 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
     token
   );
 
-  /* 
-     Enhanced Logic: Fetch all students in the workspace to identify who hasn't submitted yet.
-     Return both existing submissions and placeholder "missing" submissions.
-  */
   const workspace = await Workspace.findById(assignment.workspaceId);
   const submissions = await Submission.find({ assignmentId }).lean();
-  const submissionMap = new Map(submissions.map((s) => [s.studentId, s]));
+  const submissionMap = new Map(submissions.map((s) => {
+    s.id = s._id.toString();
+    return [s.studentId, s];
+  }));
 
   let allStudentIds = [...(workspace?.studentIds || [])];
   const studentDetailsMap = new Map();
@@ -233,7 +232,8 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
 
       if (!submission) {
         submission = {
-          _id: `missing-${studentId}`,
+          _id: `missing:${assignmentId}:${studentId}`,
+          id: `missing:${assignmentId}:${studentId}`,
           assignmentId: assignmentId,
           studentId: studentId,
           status: "missing",
@@ -367,7 +367,47 @@ const getSubmissionFileForDownload = async (
 };
 
 const gradeSubmission = async (submissionId, data, userId, token) => {
-  const submission = await Submission.findById(submissionId);
+  let submission;
+
+  if (submissionId.startsWith("missing:")) {
+    const parts = submissionId.split(":");
+    if (parts.length !== 3) {
+      throw new Error("Invalid missing submission ID");
+    }
+
+    const assignmentId = parts[1];
+    const studentId = parts[2];
+
+    const assignment = await Assignment.findById(assignmentId);
+    if (!assignment) throw new Error("Assignment not found");
+
+    submission = await Submission.create({
+      assignmentId,
+      workspaceId: assignment.workspaceId,
+      studentId,
+      status: "graded",
+      grade: data.grade,
+      rubricScores: data.rubricScores || [],
+      gradedAt: new Date(),
+      gradedById: userId,
+      files: [],
+      textAnswer: "",
+    });
+
+    await StreamItem.create({
+      workspaceId: assignment.workspaceId,
+      type: "grade_event",
+      refId: submission.id,
+      actorId: userId,
+    });
+
+    emitWorkspace(assignment.workspaceId, "submission.graded", submission);
+    emitUser(submission.studentId, "submission.graded", submission);
+
+    return submission;
+  }
+
+  submission = await Submission.findById(submissionId);
   if (!submission) throw new Error("Submission not found");
 
   const assignment = await Assignment.findById(submission.assignmentId);
@@ -383,7 +423,7 @@ const gradeSubmission = async (submissionId, data, userId, token) => {
   }
 
   submission.grade = data.grade;
-  submission.rubricScores = data.rubricScores || [];
+  submission.rubricScores = data.rubricScores || []; c
   submission.status = "graded";
   submission.gradedAt = new Date();
   submission.gradedById = userId;
