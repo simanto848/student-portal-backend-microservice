@@ -91,6 +91,26 @@ const createFileMaterial = async (workspaceId, data, files, userId, token) => {
   return material;
 };
 
+const uploadMaterialFiles = async (files) => {
+  const fileList = Array.isArray(files) ? files : [];
+  if (fileList.length === 0) return [];
+
+  return fileList.map((f) => {
+    const storedPath = toStoredPath({
+      subdir: "materials",
+      filename: f.filename,
+    });
+    return {
+      id: uuidv4(),
+      name: f.originalname,
+      type: f.mimetype,
+      size: f.size,
+      path: storedPath,
+      uploadedAt: new Date().toISOString(),
+    };
+  });
+};
+
 const listMaterials = async (workspaceId, userId, role, token) => {
   await WorkspaceService.getWorkspaceById(workspaceId, userId, role, token);
 
@@ -193,4 +213,5 @@ export default {
   updateMaterial,
   deleteMaterial,
   getMaterialAttachmentForDownload,
+  uploadMaterialFiles,
 };

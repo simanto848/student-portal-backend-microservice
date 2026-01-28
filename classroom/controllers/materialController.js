@@ -37,6 +37,16 @@ class MaterialController {
     }
   }
 
+  async uploadAttachments(req, res, next) {
+    try {
+      const files = Array.isArray(req.files) ? req.files : [];
+      const attachments = await MaterialService.uploadMaterialFiles(files);
+      return ApiResponse.success(res, attachments, "Files uploaded");
+    } catch (e) {
+      next(e);
+    }
+  }
+
   async list(req, res, next) {
     try {
       const { workspaceId } = req.params;
