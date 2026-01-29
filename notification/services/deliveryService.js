@@ -24,9 +24,6 @@ class DeliveryService {
 
     // Check both sendEmail flag and deliveryChannels for email
     const shouldSendEmail = notification.sendEmail || notification.deliveryChannels?.includes('email');
-    console.log(`[DeliveryService] sendEmail: ${notification.sendEmail}, deliveryChannels: ${JSON.stringify(notification.deliveryChannels)}, shouldSendEmail: ${shouldSendEmail}`);
-    console.log(`[DeliveryService] Recipients with email: ${recipients.filter(r => r.email).map(r => r.email).join(', ') || 'NONE'}`);
-
     if (shouldSendEmail) {
       await this.sendEmails(notification, recipients);
     }
@@ -54,19 +51,12 @@ class DeliveryService {
 
   async sendEmails(notification, recipients) {
     const recipientsWithEmail = recipients.filter(r => r.email);
-    console.log(`[DeliveryService] sendEmails called. Total recipients: ${recipients.length}, with email: ${recipientsWithEmail.length}`);
-
     if (recipientsWithEmail.length === 0) {
-      console.log('[DeliveryService] No recipients with email addresses found');
       return { successful: 0, failed: 0 };
     }
 
     const maxEmails = parseInt(process.env.MAX_EMAILS_PER_NOTIFICATION) || 200;
     const subset = recipientsWithEmail.slice(0, maxEmails);
-
-    if (recipientsWithEmail.length > maxEmails) {
-      console.warn(`[DeliveryService] Limiting email send from ${recipientsWithEmail.length} to ${maxEmails} recipients`);
-    }
 
     const notificationData = {
       title: notification.title,
@@ -78,13 +68,13 @@ class DeliveryService {
 
     let successCount = 0;
     let failCount = 0;
+    const errors = [];
 
     const batchSize = parseInt(process.env.EMAIL_BATCH_SIZE) || 10;
     const delayBetweenBatches = parseInt(process.env.EMAIL_BATCH_DELAY_MS) || 1000;
 
     for (let i = 0; i < subset.length; i += batchSize) {
       const batch = subset.slice(i, i + batchSize);
-
       const batchPromises = batch.map(async (recipient) => {
         try {
           await emailService.sendNotificationEmail(recipient.email, notificationData);
@@ -92,6 +82,7 @@ class DeliveryService {
           return { success: true, email: recipient.email };
         } catch (error) {
           failCount++;
+          errors.push({ email: recipient.email, error: error.message });
           return { success: false, email: recipient.email, error: error.message };
         }
       });
@@ -102,7 +93,7 @@ class DeliveryService {
       }
     }
 
-    return { successful: successCount, failed: failCount };
+    return { successful: successCount, failed: failCount, errors };
   }
 
   buildRooms(notification) {
@@ -131,7 +122,6 @@ class DeliveryService {
       case 'custom':
         return notification.targetUserIds.map(id => `user:${id}`);
       default:
-        console.warn(`[DeliveryService] Unknown targetType: ${notification.targetType}`);
         return [];
     }
   }
