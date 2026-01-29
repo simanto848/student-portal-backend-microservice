@@ -2,8 +2,8 @@ import ResultWorkflow from "../models/ResultWorkflow.js";
 import CourseGrade from "../models/CourseGrade.js";
 import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
 import { Batch, Course } from "../models/external/Academic.js";
-import { ExamCommittee } from "../models/external/ExamCommittee.js";
 import notificationServiceClient from "../client/notificationServiceClient.js";
+import academicClient from "../client/academicServiceClient.js";
 import { ApiError, createLogger } from "shared";
 
 const logger = createLogger('RESULT_WORKFLOW');
@@ -97,10 +97,7 @@ class ResultWorkflowService {
                 .lean();
         } else if (user.isExamCommitteeMember) {
             const teacherId = user.id || user.sub;
-            const committees = await ExamCommittee.find({
-                teacherId: teacherId,
-                status: true
-            });
+            const committees = await academicClient.getTeacherCommittees(teacherId);
 
             if (!committees || committees.length === 0) return [];
 
@@ -253,13 +250,13 @@ class ResultWorkflowService {
         const batch = await Batch.findById(workflow.batchId);
         if (!batch) throw new ApiError(404, "Batch not found");
 
-        const isMember = await ExamCommittee.findOne({
-            departmentId: batch.departmentId,
-            teacherId: committeeMemberId,
-            status: true,
-            shift: batch.shift,
-            $or: [{ batchId: null }, { batchId: workflow.batchId }],
-        });
+        // Check committee membership via academic service API
+        const { isMember } = await academicClient.checkExamCommitteeMembership(
+            batch.departmentId,
+            committeeMemberId,
+            batch.shift,
+            workflow.batchId
+        );
 
         if (!isMember) {
             throw new ApiError(
@@ -371,13 +368,12 @@ class ResultWorkflowService {
 
         if (!isAuthorized && committeeMemberId) {
             const batch = await Batch.findById(workflow.batchId);
-            const isMember = await ExamCommittee.findOne({
-                departmentId: batch.departmentId,
-                teacherId: committeeMemberId,
-                status: true,
-                shift: batch.shift,
-                $or: [{ batchId: null }, { batchId: workflow.batchId }],
-            });
+            const { isMember } = await academicClient.checkExamCommitteeMembership(
+                batch.departmentId,
+                committeeMemberId,
+                batch.shift,
+                workflow.batchId
+            );
             if (isMember) isAuthorized = true;
         }
 

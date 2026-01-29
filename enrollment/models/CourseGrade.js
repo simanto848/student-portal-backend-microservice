@@ -140,18 +140,6 @@ const courseGradeSchema = new mongoose.Schema(
             labReports: {
                 type: Number,
                 min: 0,
-                max: 20,
-                default: 0,
-            },
-            viva: {
-                type: Number,
-                min: 0,
-                max: 20,
-                default: 0,
-            },
-            experiment: {
-                type: Number,
-                min: 0,
                 max: 10,
                 default: 0,
             },
@@ -251,8 +239,6 @@ courseGradeSchema.methods.calculateGrade = function () {
     if (this.courseType === "lab" || this.courseType === "combined") {
         this.labMarks.totalObtained =
             (this.labMarks.labReports || 0) +
-            (this.labMarks.viva || 0) +
-            (this.labMarks.experiment || 0) +
             (this.labMarks.attendance || 0) +
             (this.labMarks.finalLab || 0);
         this.labMarks.totalPossible = 50;

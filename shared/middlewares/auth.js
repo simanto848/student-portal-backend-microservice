@@ -30,6 +30,11 @@ export const authenticate = (req, res, next) => {
 
 export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
+    // Allow service-to-service calls and super_admin to bypass role checks
+    if (req.user?.type === 'service' || req.user?.role === 'super_admin') {
+      return next();
+    }
+
     if (!req.user || !allowedRoles.includes(req.user.role)) {
       return ApiResponse.forbidden(
         res,
@@ -53,6 +58,6 @@ export const optionalAuth = (req, res, next) => {
       decoded.sub = decoded.id;
     }
     req.user = decoded;
-  } catch (error) {}
+  } catch (error) { }
   next();
 };

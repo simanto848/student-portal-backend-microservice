@@ -7,12 +7,23 @@ const examCommitteeSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    teacherId: { 
+    teacherId: {
         type: String,
         required: true
     },
+    shift: {
+        type: String,
+        enum: ["day", "evening"],
+        default: "day",
+    },
     status: {
-        type: String
+        type: Boolean,
+        default: true
+    },
+    batchId: {
+        type: String,
+        ref: "Batch",
+        default: null,
     },
     deletedAt: {
         type: Date

@@ -525,9 +525,9 @@ class CourseGradeService {
             } else if (courseType === "lab") {
                 config.totalMarks = 50;
                 config.components = {
-                    labReports: { label: "Lab Reports", maxMarks: 20, weight: 40 },
-                    viva: { label: "Viva", maxMarks: 20, weight: 40 },
-                    experiment: { label: "Experiment", maxMarks: 10, weight: 20 },
+                    labReports: { label: "Lab Reports", maxMarks: 10, weight: 20 },
+                    attendance: { label: "Lab Attendance", maxMarks: 10, weight: 20 },
+                    finalLab: { label: "Final Lab", maxMarks: 30, weight: 60 },
                 };
             } else if (courseType === "combined") {
                 config.components = {
@@ -549,9 +549,9 @@ class CourseGradeService {
                         label: "Lab Component (40%)",
                         maxMarks: 40,
                         subcomponents: {
-                            labReports: { label: "Lab Reports", maxMarks: 16, weight: 40 },
-                            viva: { label: "Viva", maxMarks: 16, weight: 40 },
-                            experiment: { label: "Experiment", maxMarks: 8, weight: 20 },
+                            labReports: { label: "Lab Reports", maxMarks: 8, weight: 20 },
+                            attendance: { label: "Lab Attendance", maxMarks: 8, weight: 20 },
+                            finalLab: { label: "Final Lab", maxMarks: 24, weight: 60 },
                         },
                     },
                 };
@@ -728,12 +728,8 @@ class CourseGradeService {
         if (courseType === "lab" || courseType === "combined") {
             if (entry.labMarks) {
                 const lab = entry.labMarks;
-                if (lab.labReports !== undefined && lab.labReports > 20)
-                    return "Lab Reports marks cannot exceed 20";
-                if (lab.viva !== undefined && lab.viva > 20)
-                    return "Viva marks cannot exceed 20";
-                if (lab.experiment !== undefined && lab.experiment > 10)
-                    return "Experiment marks cannot exceed 10";
+                if (lab.labReports !== undefined && lab.labReports > 10)
+                    return "Lab Reports marks cannot exceed 10";
                 if (lab.attendance !== undefined && lab.attendance > 10)
                     return "Lab Attendance marks cannot exceed 10";
                 if (lab.finalLab !== undefined && lab.finalLab > 30)
