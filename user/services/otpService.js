@@ -4,7 +4,7 @@ import ejs from 'ejs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import UserOTP from '../models/OTP.js';
-import { ApiError } from 'shared';
+import { ApiError, config } from 'shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,17 +16,10 @@ class OtpService {
 
     getTransporter() {
         if (!this.transporter) {
-            let mailHost = process.env.MAIL_HOST;
-            let mailPort = process.env.MAIL_PORT;
-            let mailUser = process.env.MAIL_USER;
-            let mailPass = process.env.MAIL_PASS;
-
-            if (!mailHost || mailHost.trim() === '') {
-                mailHost = 'sandbox.smtp.mailtrap.io';
-                mailPort = '2525';
-                mailUser = '8cbbbf4e87833a';
-                mailPass = '7161f47320a42b';
-            }
+            let mailHost = config.email.host;
+            let mailPort = config.email.port;
+            let mailUser = config.email.user;
+            let mailPass = config.email.pass;
 
             const mailConfig = {
                 host: mailHost,
@@ -38,15 +31,9 @@ class OtpService {
                 },
             };
 
-            if (process.env.MAIL_HOST === 'gmail') {
+            if (config.email.host === 'gmail') {
                 mailConfig.service = 'gmail';
             }
-
-            console.log("Mail Config:", {
-                host: mailConfig.host,
-                port: mailConfig.port,
-                user: mailConfig.auth.user ? "***" : "missing"
-            });
 
             this.transporter = nodemailer.createTransport(mailConfig);
         }
@@ -66,7 +53,6 @@ class OtpService {
         const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
 
         await UserOTP.deleteMany({ user: userId, purpose });
-
         const userOTP = await UserOTP.create({
             user: userId,
             otp,
