@@ -109,16 +109,30 @@ questionSchema.methods.checkAnswer = function (answer) {
     switch (this.type) {
         case 'mcq_single':
             const correctOption = this.options.find(o => o.isCorrect);
-            return correctOption && answer === correctOption.id;
+            return correctOption && (
+                answer === correctOption.id ||
+                String(answer).trim().toLowerCase() === String(correctOption.text).trim().toLowerCase()
+            );
 
         case 'mcq_multiple':
-            const correctIds = this.options.filter(o => o.isCorrect).map(o => o.id).sort();
-            const answerIds = (Array.isArray(answer) ? answer : []).sort();
-            return JSON.stringify(correctIds) === JSON.stringify(answerIds);
+            const correctOptions = this.options.filter(o => o.isCorrect);
+            const answerArr = (Array.isArray(answer) ? answer : []);
+
+            if (answerArr.length !== correctOptions.length) return false;
+
+            return answerArr.every(ans =>
+                correctOptions.some(opt =>
+                    opt.id === ans ||
+                    String(opt.text).trim().toLowerCase() === String(ans).trim().toLowerCase()
+                )
+            );
 
         case 'true_false':
             const tfCorrect = this.options.find(o => o.isCorrect);
-            return tfCorrect && answer === tfCorrect.id;
+            return tfCorrect && (
+                answer === tfCorrect.id ||
+                String(answer).trim().toLowerCase() === String(tfCorrect.text).trim().toLowerCase()
+            );
 
         case 'short_answer':
             if (!this.correctAnswer) return null; // Needs manual grading

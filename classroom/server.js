@@ -4,6 +4,7 @@ import app from "./app.js";
 import connectDB from "./config/db.js";
 import { initSocket } from "./socket.js";
 import { startDueReminderJob } from "./cron/dueReminderJob.js";
+import { startQuizNotificationJob } from "./cron/quizNotificationJob.js";
 import { createLogger } from "shared";
 
 dotenv.config();
@@ -18,5 +19,6 @@ server.listen(PORT, async () => {
   await connectDB();
   initSocket(server);
   startDueReminderJob();
+  startQuizNotificationJob();
   logger.info(`Server started on port http://localhost:${PORT}`);
 });

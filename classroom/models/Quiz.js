@@ -65,6 +65,13 @@ const quizSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    allowLateSubmissions: {
+        type: Boolean,
+        default: false
+    },
+    notificationSentAt: {
+        type: Date
+    },
     showCorrectAnswers: {
         type: Boolean,
         default: false

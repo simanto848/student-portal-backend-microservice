@@ -1,33 +1,12 @@
-import Quiz from '../models/Quiz.js';
-import Question from '../models/Question.js';
-import QuizAttempt from '../models/QuizAttempt.js';
-import { ApiError, ApiResponse } from 'shared';
+import QuizService from '../services/quizService.js';
+import { ApiResponse } from 'shared';
 
 class QuizController {
     // Create a new quiz
     async create(req, res, next) {
         try {
-            const { workspaceId, title, description, instructions, duration, maxAttempts, passingScore, startAt, endAt, shuffleQuestions, shuffleOptions, showResultsAfterSubmit, showCorrectAnswers } = req.body;
-
-            const quiz = await Quiz.create({
-                workspaceId,
-                title,
-                description,
-                instructions,
-                duration,
-                maxAttempts: maxAttempts || 1,
-                passingScore: passingScore || 0,
-                startAt,
-                endAt,
-                shuffleQuestions: shuffleQuestions || false,
-                shuffleOptions: shuffleOptions || false,
-                showResultsAfterSubmit: showResultsAfterSubmit !== false,
-                showCorrectAnswers: showCorrectAnswers || false,
-                createdById: req.user.sub || req.user.id,
-                status: 'draft'
-            });
-
-            return ApiResponse.created(res, quiz, 'Quiz created successfully');
+            const result = await QuizService.createQuiz(req.body, req.user.sub || req.user.id);
+            return ApiResponse.created(res, result, 'Quiz created successfully');
         } catch (error) {
             next(error);
         }
@@ -37,18 +16,8 @@ class QuizController {
     async getById(req, res, next) {
         try {
             const { id } = req.params;
-            const quiz = await Quiz.findById(id);
-
-            if (!quiz) {
-                throw new ApiError(404, 'Quiz not found');
-            }
-
-            // Get questions count
-            const questions = await Question.find({ quizId: id }).sort({ order: 1 });
-            const quizData = quiz.toObject();
-            quizData.questions = questions;
-
-            return ApiResponse.success(res, quizData);
+            const result = await QuizService.getQuizById(id);
+            return ApiResponse.success(res, result, 'Quiz retrieved successfully');
         } catch (error) {
             next(error);
         }
@@ -60,23 +29,8 @@ class QuizController {
             const { workspaceId } = req.params;
             const { status } = req.query;
 
-            const query = { workspaceId };
-            if (status) query.status = status;
-
-            const quizzes = await Quiz.find(query).sort({ createdAt: -1 });
-
-            // Get attempt counts for each quiz
-            const quizzesWithStats = await Promise.all(quizzes.map(async (quiz) => {
-                const attemptCount = await QuizAttempt.countDocuments({ quizId: quiz._id });
-                const submittedCount = await QuizAttempt.countDocuments({ quizId: quiz._id, status: { $in: ['submitted', 'graded'] } });
-                return {
-                    ...quiz.toObject(),
-                    attemptCount,
-                    submittedCount
-                };
-            }));
-
-            return ApiResponse.success(res, quizzesWithStats);
+            const result = await QuizService.listQuizzesByWorkspace(workspaceId, status);
+            return ApiResponse.success(res, result, 'Quizzes retrieved successfully');
         } catch (error) {
             next(error);
         }
@@ -88,23 +42,8 @@ class QuizController {
             const { id } = req.params;
             const updates = req.body;
 
-            const quiz = await Quiz.findById(id);
-            if (!quiz) {
-                throw new ApiError(404, 'Quiz not found');
-            }
-
-            // Don't allow updating published quizzes with attempts
-            if (quiz.status === 'published') {
-                const hasAttempts = await QuizAttempt.exists({ quizId: id });
-                if (hasAttempts) {
-                    throw new ApiError(400, 'Cannot update quiz with existing attempts');
-                }
-            }
-
-            Object.assign(quiz, updates);
-            await quiz.save();
-
-            return ApiResponse.success(res, quiz, 'Quiz updated successfully');
+            const result = await QuizService.updateQuiz(id, updates);
+            return ApiResponse.success(res, result, 'Quiz updated successfully');
         } catch (error) {
             next(error);
         }
@@ -115,28 +54,8 @@ class QuizController {
         try {
             const { id } = req.params;
 
-            const quiz = await Quiz.findById(id);
-            if (!quiz) {
-                throw new ApiError(404, 'Quiz not found');
-            }
-
-            // Verify quiz has questions
-            const questionCount = await Question.countDocuments({ quizId: id });
-            if (questionCount === 0) {
-                throw new ApiError(400, 'Cannot publish quiz without questions');
-            }
-
-            // Calculate max score from questions
-            const questions = await Question.find({ quizId: id });
-            const maxScore = questions.reduce((sum, q) => sum + q.points, 0);
-
-            quiz.status = 'published';
-            quiz.publishedAt = new Date();
-            quiz.questionCount = questionCount;
-            quiz.maxScore = maxScore;
-            await quiz.save();
-
-            return ApiResponse.success(res, quiz, 'Quiz published successfully');
+            const result = await QuizService.publishQuiz(id);
+            return ApiResponse.success(res, result, 'Quiz published successfully');
         } catch (error) {
             next(error);
         }
@@ -147,15 +66,21 @@ class QuizController {
         try {
             const { id } = req.params;
 
-            const quiz = await Quiz.findById(id);
-            if (!quiz) {
-                throw new ApiError(404, 'Quiz not found');
-            }
+            const result = await QuizService.closeQuiz(id);
+            return ApiResponse.success(res, result, 'Quiz closed successfully');
+        } catch (error) {
+            next(error);
+        }
+    }
 
-            quiz.status = 'closed';
-            await quiz.save();
+    // Re-open quiz
+    async reopen(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { endAt } = req.body;
 
-            return ApiResponse.success(res, quiz, 'Quiz closed successfully');
+            const result = await QuizService.reopenQuiz(id, endAt);
+            return ApiResponse.success(res, result, 'Quiz re-opened successfully');
         } catch (error) {
             next(error);
         }
@@ -166,16 +91,7 @@ class QuizController {
         try {
             const { id } = req.params;
 
-            const quiz = await Quiz.findById(id);
-            if (!quiz) {
-                throw new ApiError(404, 'Quiz not found');
-            }
-
-            await quiz.softDelete();
-
-            // Also soft delete all questions
-            await Question.updateMany({ quizId: id }, { deletedAt: new Date() });
-
+            await QuizService.deleteQuiz(id);
             return ApiResponse.success(res, null, 'Quiz deleted successfully');
         } catch (error) {
             next(error);
@@ -187,10 +103,8 @@ class QuizController {
         try {
             const { id } = req.params;
 
-            const attempts = await QuizAttempt.find({ quizId: id, status: { $in: ['submitted', 'graded', 'timed_out'] } })
-                .sort({ submittedAt: -1 });
-
-            return ApiResponse.success(res, attempts);
+            const result = await QuizService.getSubmissions(id);
+            return ApiResponse.success(res, result, 'Quiz submissions retrieved successfully');
         } catch (error) {
             next(error);
         }

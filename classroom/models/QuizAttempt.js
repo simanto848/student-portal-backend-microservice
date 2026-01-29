@@ -70,6 +70,10 @@ const quizAttemptSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    isLate: {
+        type: Boolean,
+        default: false
+    },
     score: {
         type: Number,
         default: null
@@ -96,6 +100,14 @@ const quizAttemptSchema = new mongoose.Schema({
     },
     gradedById: {
         type: String
+    },
+    manualScore: {
+        type: Number,
+        default: null
+    },
+    graderFeedback: {
+        type: String,
+        trim: true
     },
     gradedAt: {
         type: Date
@@ -141,8 +153,14 @@ quizAttemptSchema.methods.calculateScore = function () {
         }
     }
 
-    this.score = totalAwarded;
-    this.percentage = this.maxScore > 0 ? Math.round((totalAwarded / this.maxScore) * 100) : 0;
+    // If manual score is set, use it. Otherwise sum points.
+    if (this.manualScore !== null && this.manualScore !== undefined) {
+        this.score = this.manualScore;
+    } else {
+        this.score = totalAwarded;
+    }
+
+    this.percentage = this.maxScore > 0 ? Math.round((this.score / this.maxScore) * 100) : 0;
 
     if (allGraded) {
         this.status = 'graded';
