@@ -3,7 +3,10 @@ import CourseGrade from "../models/CourseGrade.js";
 import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
 import { Batch, Course } from "../models/external/Academic.js";
 import { ExamCommittee } from "../models/external/ExamCommittee.js";
-import { ApiError } from "shared";
+import notificationServiceClient from "../client/notificationServiceClient.js";
+import { ApiError, createLogger } from "shared";
+
+const logger = createLogger('RESULT_WORKFLOW');
 
 class ResultWorkflowService {
     async getWorkflow(batchId, courseId, semester) {
@@ -307,7 +310,51 @@ class ResultWorkflowService {
             changedBy: reviewerId,
             comment,
         });
-        return workflow.save();
+
+        await workflow.save();
+
+        // Send Anonymous Notification to Instructor (Email + In-App)
+        try {
+            // 1. Find the instructor
+            const assignment = await BatchCourseInstructor.findOne({
+                batchId: workflow.batchId,
+                courseId: workflow.courseId,
+                semester: workflow.semester,
+                status: 'active'
+            });
+
+            if (assignment) {
+                const [course, batch] = await Promise.all([
+                    Course.findById(workflow.courseId),
+                    Batch.findById(workflow.batchId)
+                ]);
+
+                if (course && batch) {
+                    // Send notification via HTTP client - keeps it anonymous
+                    // We do NOT pass reviewerId to maintain anonymity
+                    await notificationServiceClient.sendResultReturnedNotification(
+                        assignment.instructorId,
+                        {
+                            courseName: course.title || course.name,
+                            courseCode: course.code,
+                            batchName: batch.name,
+                            batchShift: batch.shift, // Include shift for D-/E- prefix
+                            semester: workflow.semester,
+                            comment: comment,
+                            workflowId: workflow._id.toString(),
+                            courseId: workflow.courseId.toString(),
+                            batchId: workflow.batchId.toString()
+                        }
+                    );
+                    logger.info(`Result return notification sent to instructor ${assignment.instructorId} for course ${course.code}`);
+                }
+            }
+        } catch (error) {
+            logger.error("Failed to send return notification:", error.message);
+            // Don't fail the transaction just because notification failed
+        }
+
+        return workflow;
     }
 
     async publishResult(workflowId, userId, userRole, committeeMemberId = null) {

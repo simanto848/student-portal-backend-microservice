@@ -11,7 +11,7 @@ const targetTypeEnum = [
     'faculty', 'faculty_students', 'faculty_teachers', 'faculty_staff',
     'custom'
 ];
-const senderRoleEnum = ['admin', 'dean', 'department_head', 'batch_counselor', 'course_instructor'];
+const senderRoleEnum = ['admin', 'dean', 'department_head', 'batch_counselor', 'course_instructor', 'system'];
 
 const notificationSchema = new mongoose.Schema({
     _id: {
@@ -27,7 +27,22 @@ const notificationSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    message: {
+        type: String,
+        trim: true
+    },
     summary: {
+        type: String,
+        trim: true
+    },
+    redirectUrl: {
+        type: String,
+        trim: true
+    },
+    data: {
+        type: mongoose.Schema.Types.Mixed
+    },
+    type: {
         type: String,
         trim: true
     },
@@ -76,6 +91,10 @@ const notificationSchema = new mongoose.Schema({
         default: []
     },
     targetUserIds: {
+        type: [String],
+        default: []
+    },
+    targetUserRoles: {
         type: [String],
         default: []
     },

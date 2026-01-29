@@ -63,8 +63,10 @@ class UserServiceClient {
         endpoint = '/api/user/admins';
       }
 
+      console.log(`[UserServiceClient] Fetching user ${userId} from ${endpoint}/${userId}`);
       const res = await this.client.get(`${endpoint}/${userId}`);
       const data = res.data?.data || res.data;
+      console.log(`[UserServiceClient] Response for ${userId}:`, data ? `email=${data.email}` : 'NO DATA');
 
       if (!data) return null;
 

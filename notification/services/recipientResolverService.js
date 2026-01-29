@@ -39,17 +39,29 @@ class RecipientResolverService {
       case 'faculty_staff':
         return await this.getFacultyStaff(notification.targetFacultyIds);
       case 'custom':
-        // Resolve roles for each user ID
-        const resolvedUsers = await Promise.all(notification.targetUserIds.map(async (id) => {
+        // Resolve roles for each user ID - include email for email delivery
+        console.log(`[RecipientResolver] Resolving custom recipients: ${notification.targetUserIds?.join(', ')}`);
+        const targetRoles = notification.targetUserRoles || [];
+        const resolvedUsers = await Promise.all(notification.targetUserIds.map(async (id, index) => {
           try {
-            const user = await userServiceClient.getUserById(id);
+            // Use role hint if provided (helps fetch from correct endpoint)
+            const roleHint = targetRoles[index] || targetRoles[0] || null;
+            const user = await userServiceClient.getUserById(id, roleHint);
+            console.log(`[RecipientResolver] User ${id} resolved:`, user ? `email=${user.email}, role=${user.role}` : 'NOT FOUND');
             return user ? (user.data || user) : null;
           } catch (err) {
             console.error(`Error resolving user ${id} for notification:`, err.message);
             return null;
           }
         }));
-        return resolvedUsers.filter(u => u !== null).map(u => ({ id: u.id || u._id, role: u.role }));
+        const mappedUsers = resolvedUsers.filter(u => u !== null).map(u => ({
+          id: u.id || u._id,
+          role: u.role,
+          email: u.email,
+          fullName: u.fullName
+        }));
+        console.log(`[RecipientResolver] Final mapped users:`, JSON.stringify(mappedUsers));
+        return mappedUsers;
       default:
         return [];
     }
