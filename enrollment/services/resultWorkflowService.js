@@ -72,40 +72,27 @@ class ResultWorkflowService {
         };
     }
 
-    async listWorkflows(user) {
+    async listWorkflows(user, forCommittee = false) {
         let workflows = [];
-        if (user.role === "teacher") {
-            const assignments = await BatchCourseInstructor.find({
-                instructorId: user.id || user.sub,
-                status: "active",
-            });
 
-            if (!assignments.length) return [];
-
-            const queries = assignments.map((a) => ({
-                batchId: a.batchId,
-                courseId: a.courseId,
-                semester: a.semester,
-            }));
-
-            if (queries.length === 0) return [];
-
-            workflows = await ResultWorkflow.find({
-                $or: queries,
-            })
-                .sort({ updatedAt: -1 })
-                .lean();
-        } else if (user.isExamCommitteeMember) {
+        // If called for committee view, check committee membership first
+        if (forCommittee || user.isExamCommitteeMember) {
             const teacherId = user.id || user.sub;
             const committees = await academicClient.getTeacherCommittees(teacherId);
 
-            if (!committees || committees.length === 0) return [];
+            if (!committees || committees.length === 0) {
+                logger.info(`[Committee] No committees found for teacher ${teacherId}`);
+                return [];
+            }
 
+            // Handle departmentId being either a string or an object {id, name}
             const shiftDepartmentPairs = committees.map(c => ({
                 shift: c.shift,
-                departmentId: c.departmentId,
+                departmentId: typeof c.departmentId === 'object' ? c.departmentId.id : c.departmentId,
                 batchId: c.batchId
             }));
+
+            logger.info(`[Committee] Found ${committees.length} committees, shift/dept pairs: ${JSON.stringify(shiftDepartmentPairs)}`);
 
             const batchQueries = shiftDepartmentPairs.map(criteria => {
                 const query = {
@@ -119,8 +106,11 @@ class ResultWorkflowService {
             });
 
             if (batchQueries.length === 0) return [];
+
+            logger.info(`[Committee] Batch queries: ${JSON.stringify(batchQueries)}`);
             const batches = await Batch.find({ $or: batchQueries }, '_id');
             const batchIds = batches.map(b => b._id.toString());
+            logger.info(`[Committee] Found ${batches.length} batches: ${batchIds.join(', ')}`);
 
             if (batchIds.length === 0) return [];
 
@@ -130,22 +120,34 @@ class ResultWorkflowService {
                 status: 'active'
             }).lean();
 
-            // 2. Get all Existing Workflows
+            logger.info(`[Committee] Found ${assignments.length} active assignments`);
+
+            // 2. Get all Existing Workflows for these batches
             const existingWorkflows = await ResultWorkflow.find({
                 batchId: { $in: batchIds }
             }).lean();
 
-            // 3. Merge
+            logger.info(`[Committee] Found ${existingWorkflows.length} existing workflows for batches: ${batchIds.join(', ')}`);
+            existingWorkflows.forEach(wf => {
+                logger.info(`[Committee] Workflow ${wf._id}: status=${wf.status}, courseId=${wf.courseId}`);
+            });
+
+            // 3. Track processed workflow IDs
+            const processedWorkflowIds = new Set();
+
+            // 4. Merge assignments with workflows
             workflows = assignments.map(assignment => {
-                // Find matching workflow
                 const wf = existingWorkflows.find(w =>
                     w.batchId.toString() === assignment.batchId.toString() &&
                     w.courseId.toString() === assignment.courseId.toString() &&
                     w.semester === assignment.semester
                 );
 
-                if (wf && ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'].includes(wf.status)) {
-                    return { ...wf, instructorId: assignment.instructorId };
+                if (wf) {
+                    processedWorkflowIds.add(wf._id.toString());
+                    if (['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'].includes(wf.status)) {
+                        return { ...wf, instructorId: assignment.instructorId };
+                    }
                 }
 
                 return {
@@ -153,11 +155,19 @@ class ResultWorkflowService {
                     batchId: assignment.batchId,
                     courseId: assignment.courseId,
                     semester: assignment.semester,
-                    status: 'WITH_INSTRUCTOR', // Virtual status
+                    status: 'WITH_INSTRUCTOR',
                     updatedAt: wf ? wf.updatedAt : assignment.updatedAt,
                     instructorId: assignment.instructorId
                 };
             });
+
+            // 5. Add orphaned workflows (submitted/approved but no active assignment)
+            const orphanedWorkflows = existingWorkflows.filter(wf =>
+                !processedWorkflowIds.has(wf._id.toString()) &&
+                ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED'].includes(wf.status)
+            );
+
+            workflows = [...workflows, ...orphanedWorkflows];
 
             workflows.sort((a, b) => {
                 const priority = {
@@ -166,15 +176,36 @@ class ResultWorkflowService {
                     'PUBLISHED': 2,
                     'WITH_INSTRUCTOR': 3
                 };
-                const pA = priority[a.status] !== undefined ? priority[a.status] : 99;
-                const pB = priority[b.status] !== undefined ? priority[b.status] : 99;
+                const pA = priority[a.status] ?? 99;
+                const pB = priority[b.status] ?? 99;
 
                 if (pA !== pB) return pA - pB;
-
                 return new Date(b.updatedAt) - new Date(a.updatedAt);
             });
 
+        } else if (user.role === "teacher") {
+            // Teacher viewing their own courses (not committee view)
+            const assignments = await BatchCourseInstructor.find({
+                instructorId: user.id || user.sub,
+                status: "active",
+            });
+
+            if (!assignments.length) return [];
+
+            const queries = assignments.map((a) => ({
+                batchId: a.batchId,
+                courseId: a.courseId,
+                semester: a.semester,
+            }));
+
+            workflows = await ResultWorkflow.find({
+                $or: queries,
+            })
+                .sort({ updatedAt: -1 })
+                .lean();
+
         } else {
+            // Admin or other roles - show all workflows
             workflows = await ResultWorkflow.find().sort({ updatedAt: -1 }).lean();
         }
 
@@ -200,6 +231,7 @@ class ResultWorkflowService {
             }));
         }
 
+        logger.info(`[Committee] Returning ${workflows.length} workflows total`);
         return workflows;
     }
 

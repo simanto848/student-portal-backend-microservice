@@ -4,7 +4,8 @@ import { ApiResponse } from "shared";
 class CommitteeResultController {
     async listWorkflows(req, res, next) {
         try {
-            const workflows = await resultWorkflowService.listWorkflows(req.user);
+            // Pass forCommittee=true to use committee logic
+            const workflows = await resultWorkflowService.listWorkflows(req.user, true);
             return ApiResponse.success(res, workflows, "Result workflows fetched successfully");
         } catch (error) {
             next(error);
