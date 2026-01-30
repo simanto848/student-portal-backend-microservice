@@ -80,6 +80,19 @@ class BatchCourseInstructorController {
             next(error);
         }
     }
+
+    async cleanupMismatchedAssignments(req, res, next) {
+        try {
+            const { batchId } = req.params;
+            if (!batchId) {
+                return ApiResponse.badRequest(res, 'Batch ID is required');
+            }
+            const result = await batchCourseInstructorService.cleanupMismatchedAssignments(batchId);
+            return ApiResponse.success(res, result, `Cleaned up ${result.deletedCount} mismatched assignments`);
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 export default new BatchCourseInstructorController();

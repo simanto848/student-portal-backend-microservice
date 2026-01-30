@@ -143,6 +143,42 @@ class BatchCourseInstructorService {
         const assignments = await BatchCourseInstructor.find(query).sort({ assignedDate: -1 });
         return assignments;
     }
+
+    async cleanupMismatchedAssignments(batchId) {
+        try {
+            const batch = await academicServiceClient.getBatchDetails(batchId);
+            const batchData = batch.data || batch;
+            if (!batchData) {
+                throw new ApiError(404, 'Batch not found');
+            }
+
+            const currentSemester = parseInt(batchData.currentSemester) || 1;
+            const mismatchedAssignments = await BatchCourseInstructor.find({
+                batchId,
+                status: 'active',
+                semester: { $ne: currentSemester }
+            });
+
+            const deletedCount = mismatchedAssignments.length;
+            for (const assignment of mismatchedAssignments) {
+                await assignment.softDelete();
+            }
+
+            return {
+                batchId,
+                currentSemester,
+                deletedCount,
+                deletedAssignments: mismatchedAssignments.map(a => ({
+                    id: a._id,
+                    courseId: a.courseId,
+                    semester: a.semester
+                }))
+            };
+        } catch (error) {
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(500, error.message || 'Failed to cleanup mismatched assignments');
+        }
+    }
 }
 
 export default new BatchCourseInstructorService();

@@ -24,8 +24,6 @@ class ResultWorkflowController {
     async getWorkflow(req, res, next) {
         try {
             const { batchId, courseId, semester } = req.query;
-
-            // If params are missing, list accessible workflows
             if (!batchId || !courseId || !semester) {
                 const workflows = await resultWorkflowService.listWorkflows(req.user);
                 return ApiResponse.success(res, workflows);
@@ -41,11 +39,8 @@ class ResultWorkflowController {
     async submitToCommittee(req, res, next) {
         try {
             const { batchId, courseId, semester, otp } = req.body;
-            // Extract token from header or cookie
             const token = req.cookies.accessToken || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
-
             await this.verifyOTP(req.user.sub, otp, 'result_submission', token);
-
             const workflow = await resultWorkflowService.submitToCommittee(batchId, courseId, parseInt(semester), req.user.sub);
             return ApiResponse.success(res, workflow, 'Result submitted to committee');
         } catch (error) {
@@ -57,9 +52,7 @@ class ResultWorkflowController {
         try {
             const { id } = req.params;
             const { comment, otp } = req.body;
-
             await this.verifyOTP(req.user.sub, otp, 'result_approval', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
             const workflow = await resultWorkflowService.approveByCommittee(id, req.user.sub, comment);
             return ApiResponse.success(res, workflow, 'Result approved by committee');
         } catch (error) {
@@ -71,9 +64,7 @@ class ResultWorkflowController {
         try {
             const { id } = req.params;
             const { comment, otp } = req.body;
-
             await this.verifyOTP(req.user.sub, otp, 'result_return', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
             const workflow = await resultWorkflowService.returnToTeacher(id, req.user.sub, comment);
             return ApiResponse.success(res, workflow, 'Result returned to teacher');
         } catch (error) {
@@ -85,10 +76,9 @@ class ResultWorkflowController {
         try {
             const { id } = req.params;
             const { otp } = req.body;
-
             await this.verifyOTP(req.user.sub, otp, 'result_publication', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
-            const workflow = await resultWorkflowService.publishResult(id, req.user.sub, req.user.role);
+            const committeeMemberId = req.user.role === 'teacher' ? req.user.sub : null;
+            const workflow = await resultWorkflowService.publishResult(id, req.user.sub, req.user.role, committeeMemberId);
             return ApiResponse.success(res, workflow, 'Result published');
         } catch (error) {
             next(error);
@@ -99,9 +89,7 @@ class ResultWorkflowController {
         try {
             const { id } = req.params;
             const { comment, otp } = req.body;
-
             await this.verifyOTP(req.user.sub, otp, 'result_return', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
             const workflow = await resultWorkflowService.requestReturn(id, req.user.sub, comment);
             return ApiResponse.success(res, workflow, 'Return request submitted');
         } catch (error) {
@@ -113,9 +101,7 @@ class ResultWorkflowController {
         try {
             const { id } = req.params;
             const { otp } = req.body;
-
             await this.verifyOTP(req.user.sub, otp, 'result_return_approval', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
             const workflow = await resultWorkflowService.approveReturnRequest(id, req.user.sub, req.user.role);
             return ApiResponse.success(res, workflow, 'Return request approved');
         } catch (error) {
@@ -123,25 +109,21 @@ class ResultWorkflowController {
         }
     }
 
-    /**
-     * Bulk publish all approved results for a batch and semester
-     */
     async bulkPublishResults(req, res, next) {
         try {
             const { batchId, semester, otp } = req.body;
-
             if (!batchId || !semester) {
                 throw new ApiError(400, "Batch ID and semester are required");
             }
 
             await this.verifyOTP(req.user.sub, otp, 'result_publication', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
-
+            const committeeMemberId = req.user.role === 'teacher' ? req.user.sub : null;
             const result = await resultWorkflowService.publishBatchSemesterResults(
                 batchId,
                 semester,
                 req.user.sub,
                 req.user.role,
-                req.user.isExamCommitteeMember ? req.user.sub : null
+                committeeMemberId
             );
 
             return ApiResponse.success(res, result, `Published ${result.publishedCount} results for semester ${semester}`);
@@ -150,9 +132,6 @@ class ResultWorkflowController {
         }
     }
 
-    /**
-     * Get summary of approved workflows for bulk publishing
-     */
     async getApprovedSummary(req, res, next) {
         try {
             const summary = await resultWorkflowService.getApprovedWorkflowsSummary(req.user);

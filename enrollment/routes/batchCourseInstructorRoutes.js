@@ -22,4 +22,6 @@ router.get('/:id', authorize('super_admin', 'admin', 'teacher'), validate(getBat
 router.put('/:id', authorize('super_admin', 'admin'), validate(updateBatchCourseInstructorSchema), batchCourseInstructorController.updateAssignment);
 router.delete('/:id', authorize('super_admin', 'admin'), validate(getBatchCourseInstructorSchema), batchCourseInstructorController.deleteAssignment);
 
+router.post('/batch/:batchId/cleanup', authorize('super_admin', 'admin'), batchCourseInstructorController.cleanupMismatchedAssignments);
+
 export default router;

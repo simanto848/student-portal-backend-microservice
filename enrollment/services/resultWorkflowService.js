@@ -74,26 +74,18 @@ class ResultWorkflowService {
 
     async listWorkflows(user, forCommittee = false) {
         let workflows = [];
-
-        // If called for committee view, check committee membership first
         if (forCommittee || user.isExamCommitteeMember) {
             const teacherId = user.id || user.sub;
             const committees = await academicClient.getTeacherCommittees(teacherId);
-
             if (!committees || committees.length === 0) {
-                logger.info(`[Committee] No committees found for teacher ${teacherId}`);
                 return [];
             }
 
-            // Handle departmentId being either a string or an object {id, name}
             const shiftDepartmentPairs = committees.map(c => ({
                 shift: c.shift,
                 departmentId: typeof c.departmentId === 'object' ? c.departmentId.id : c.departmentId,
                 batchId: c.batchId
             }));
-
-            logger.info(`[Committee] Found ${committees.length} committees, shift/dept pairs: ${JSON.stringify(shiftDepartmentPairs)}`);
-
             const batchQueries = shiftDepartmentPairs.map(criteria => {
                 const query = {
                     shift: criteria.shift,
@@ -107,29 +99,82 @@ class ResultWorkflowService {
 
             if (batchQueries.length === 0) return [];
 
-            logger.info(`[Committee] Batch queries: ${JSON.stringify(batchQueries)}`);
-            const batches = await Batch.find({ $or: batchQueries }, '_id');
+            const batches = await Batch.find({ $or: batchQueries });
             const batchIds = batches.map(b => b._id.toString());
-            logger.info(`[Committee] Found ${batches.length} batches: ${batchIds.join(', ')}`);
+            const batchDataMap = batches.reduce((acc, batch) => {
+                acc[batch._id.toString()] = {
+                    currentSemester: parseInt(batch.currentSemester) || 1,
+                    sessionId: batch.sessionId?.toString() || batch.sessionId,
+                    departmentId: batch.departmentId?.toString() || batch.departmentId
+                };
+                return acc;
+            }, {});
 
             if (batchIds.length === 0) return [];
 
+            const validCourseIdsPerBatch = {};
+            for (const batch of batches) {
+                try {
+                    const batchId = batch._id.toString();
+                    const currentSemester = parseInt(batch.currentSemester) || 1;
+                    const sessionId = batch.sessionId?.toString() || batch.sessionId;
+                    const departmentId = batch.departmentId?.toString() || batch.departmentId;
+
+                    // Get session courses for this batch's session, department, and current semester
+                    const sessionCoursesResponse = await academicClient.getSessionCourses(
+                        sessionId,
+                        currentSemester,
+                        departmentId
+                    );
+
+                    let sessionCourses = [];
+                    if (sessionCoursesResponse?.data?.data) {
+                        sessionCourses = sessionCoursesResponse.data.data;
+                    } else if (sessionCoursesResponse?.data && Array.isArray(sessionCoursesResponse.data)) {
+                        sessionCourses = sessionCoursesResponse.data;
+                    } else if (Array.isArray(sessionCoursesResponse)) {
+                        sessionCourses = sessionCoursesResponse;
+                    }
+
+                    // Extract course IDs
+                    validCourseIdsPerBatch[batchId] = new Set(
+                        sessionCourses.map(sc => {
+                            const courseId = typeof sc.courseId === 'object'
+                                ? (sc.courseId.id || sc.courseId._id)
+                                : sc.courseId;
+                            return courseId?.toString();
+                        }).filter(Boolean)
+                    );
+                } catch (error) {
+                    validCourseIdsPerBatch[batch._id.toString()] = new Set();
+                }
+            }
+
             // 1. Get all Expected Courses (Active Assignments)
-            const assignments = await BatchCourseInstructor.find({
+            const allAssignments = await BatchCourseInstructor.find({
                 batchId: { $in: batchIds },
                 status: 'active'
             }).lean();
 
-            logger.info(`[Committee] Found ${assignments.length} active assignments`);
+            const assignments = allAssignments.filter(a => {
+                const batchId = a.batchId.toString();
+                const courseId = a.courseId.toString();
+                const validCourseIds = validCourseIdsPerBatch[batchId];
+                const isValid = validCourseIds && validCourseIds.has(courseId);
+
+                return isValid;
+            });
 
             // 2. Get all Existing Workflows for these batches
-            const existingWorkflows = await ResultWorkflow.find({
+            const allWorkflows = await ResultWorkflow.find({
                 batchId: { $in: batchIds }
             }).lean();
 
-            logger.info(`[Committee] Found ${existingWorkflows.length} existing workflows for batches: ${batchIds.join(', ')}`);
-            existingWorkflows.forEach(wf => {
-                logger.info(`[Committee] Workflow ${wf._id}: status=${wf.status}, courseId=${wf.courseId}`);
+            const existingWorkflows = allWorkflows.filter(wf => {
+                const batchId = wf.batchId.toString();
+                const courseId = wf.courseId.toString();
+                const validCourseIds = validCourseIdsPerBatch[batchId];
+                return validCourseIds && validCourseIds.has(courseId);
             });
 
             // 3. Track processed workflow IDs
@@ -139,10 +184,8 @@ class ResultWorkflowService {
             workflows = assignments.map(assignment => {
                 const wf = existingWorkflows.find(w =>
                     w.batchId.toString() === assignment.batchId.toString() &&
-                    w.courseId.toString() === assignment.courseId.toString() &&
-                    w.semester === assignment.semester
+                    w.courseId.toString() === assignment.courseId.toString()
                 );
-
                 if (wf) {
                     processedWorkflowIds.add(wf._id.toString());
                     if (['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'].includes(wf.status)) {
@@ -168,7 +211,6 @@ class ResultWorkflowService {
             );
 
             workflows = [...workflows, ...orphanedWorkflows];
-
             workflows.sort((a, b) => {
                 const priority = {
                     'SUBMITTED_TO_COMMITTEE': 0,
@@ -184,12 +226,10 @@ class ResultWorkflowService {
             });
 
         } else if (user.role === "teacher") {
-            // Teacher viewing their own courses (not committee view)
             const assignments = await BatchCourseInstructor.find({
                 instructorId: user.id || user.sub,
                 status: "active",
             });
-
             if (!assignments.length) return [];
 
             const queries = assignments.map((a) => ({
@@ -203,16 +243,13 @@ class ResultWorkflowService {
             })
                 .sort({ updatedAt: -1 })
                 .lean();
-
         } else {
-            // Admin or other roles - show all workflows
             workflows = await ResultWorkflow.find().sort({ updatedAt: -1 }).lean();
         }
 
         if (workflows.length > 0) {
             const courseIds = [...new Set(workflows.map(w => w.courseId.toString()))];
             const batchIds = [...new Set(workflows.map(w => w.batchId.toString()))];
-
             const [courses, batches] = await Promise.all([
                 Course.find({ _id: { $in: courseIds } }).lean(),
                 Batch.find({ _id: { $in: batchIds } }).lean()
@@ -220,7 +257,6 @@ class ResultWorkflowService {
 
             const courseMap = courses.reduce((acc, c) => ({ ...acc, [c._id.toString()]: c }), {});
             const batchMap = batches.reduce((acc, b) => ({ ...acc, [b._id.toString()]: b }), {});
-
             workflows = workflows.map(w => ({
                 ...w,
                 grade: {
@@ -231,7 +267,6 @@ class ResultWorkflowService {
             }));
         }
 
-        logger.info(`[Committee] Returning ${workflows.length} workflows total`);
         return workflows;
     }
 
@@ -241,7 +276,6 @@ class ResultWorkflowService {
             courseId,
             semester,
         });
-
         if (!workflow) {
             workflow = await ResultWorkflow.create({ batchId, courseId, semester });
         }
@@ -282,14 +316,12 @@ class ResultWorkflowService {
         const batch = await Batch.findById(workflow.batchId);
         if (!batch) throw new ApiError(404, "Batch not found");
 
-        // Check committee membership via academic service API
         const { isMember } = await academicClient.checkExamCommitteeMembership(
             batch.departmentId,
             committeeMemberId,
             batch.shift,
             workflow.batchId
         );
-
         if (!isMember) {
             throw new ApiError(
                 403,
@@ -308,8 +340,6 @@ class ResultWorkflowService {
             name: memberName || "Committee Member",
             timestamp: new Date()
         });
-
-        // Single member approval is sufficient now
         workflow.status = "COMMITTEE_APPROVED";
         workflow.history.push({
             status: "COMMITTEE_APPROVED",
@@ -333,7 +363,7 @@ class ResultWorkflowService {
 
         workflow.status = "RETURNED_TO_TEACHER";
         workflow.returnRequested = false;
-        workflow.approvals = []; // Reset approvals
+        workflow.approvals = [];
         workflow.history.push({
             status: "RETURNED_TO_TEACHER",
             changedBy: reviewerId,
@@ -341,8 +371,6 @@ class ResultWorkflowService {
         });
 
         await workflow.save();
-
-        // Send Anonymous Notification to Instructor (Email + In-App)
         try {
             // 1. Find the instructor
             const assignment = await BatchCourseInstructor.findOne({
@@ -359,15 +387,14 @@ class ResultWorkflowService {
                 ]);
 
                 if (course && batch) {
-                    // Send notification via HTTP client - keeps it anonymous
-                    // We do NOT pass reviewerId to maintain anonymity
+                    // Send notification via HTTP client
                     await notificationServiceClient.sendResultReturnedNotification(
                         assignment.instructorId,
                         {
                             courseName: course.title || course.name,
                             courseCode: course.code,
                             batchName: batch.name,
-                            batchShift: batch.shift, // Include shift for D-/E- prefix
+                            batchShift: batch.shift,
                             semester: workflow.semester,
                             comment: comment,
                             workflowId: workflow._id.toString(),
@@ -375,13 +402,9 @@ class ResultWorkflowService {
                             batchId: workflow.batchId.toString()
                         }
                     );
-                    logger.info(`Result return notification sent to instructor ${assignment.instructorId} for course ${course.code}`);
                 }
             }
-        } catch (error) {
-            logger.error("Failed to send return notification:", error.message);
-            // Don't fail the transaction just because notification failed
-        }
+        } catch (error) {}
 
         return workflow;
     }
@@ -394,7 +417,6 @@ class ResultWorkflowService {
             throw new ApiError(400, "Result must be fully approved by committee first");
         }
 
-        // Allowed roles: exam_controller OR a valid committee member
         let isAuthorized = false;
         if (userRole === 'exam_controller') isAuthorized = true;
 
@@ -485,16 +507,7 @@ class ResultWorkflowService {
         return workflow.save();
     }
 
-    /**
-     * Bulk publish all approved workflows for a batch and semester
-     * @param {string} batchId - The batch ID
-     * @param {number} semester - The semester number
-     * @param {string} userId - The user performing the action
-     * @param {string} userRole - The user's role
-     * @param {string} committeeMemberId - Optional committee member ID for authorization
-     */
     async publishBatchSemesterResults(batchId, semester, userId, userRole, committeeMemberId = null) {
-        // Find all approved workflows for this batch and semester
         const workflows = await ResultWorkflow.find({
             batchId,
             semester: parseInt(semester),
@@ -505,7 +518,6 @@ class ResultWorkflowService {
             throw new ApiError(400, "No approved results found for this batch and semester");
         }
 
-        // Check authorization
         let isAuthorized = false;
         if (userRole === 'exam_controller') isAuthorized = true;
 
@@ -528,8 +540,6 @@ class ResultWorkflowService {
 
         const publishedWorkflows = [];
         const errors = [];
-
-        // Publish each workflow
         for (const workflow of workflows) {
             try {
                 workflow.status = "PUBLISHED";
@@ -539,8 +549,6 @@ class ResultWorkflowService {
                     comment: "Result Published (Bulk)",
                 });
                 await workflow.save();
-
-                // Update course grades to published
                 await CourseGrade.updateMany(
                     {
                         batchId: workflow.batchId,
@@ -552,12 +560,10 @@ class ResultWorkflowService {
 
                 publishedWorkflows.push(workflow);
             } catch (error) {
-                logger.error(`Failed to publish workflow ${workflow._id}: ${error.message}`);
                 errors.push({ workflowId: workflow._id, error: error.message });
             }
         }
 
-        // Get batch info for response
         const batch = await Batch.findById(batchId).lean();
 
         return {
@@ -571,18 +577,13 @@ class ResultWorkflowService {
         };
     }
 
-    /**
-     * Get summary of approved workflows grouped by batch and semester for bulk publishing
-     */
     async getApprovedWorkflowsSummary(user) {
         const teacherId = user.id || user.sub;
         const committees = await academicClient.getTeacherCommittees(teacherId);
-
         if (!committees || committees.length === 0) {
             return [];
         }
 
-        // Get batch IDs from committees
         const shiftDepartmentPairs = committees.map(c => ({
             shift: c.shift,
             departmentId: typeof c.departmentId === 'object' ? c.departmentId.id : c.departmentId,
@@ -602,10 +603,8 @@ class ResultWorkflowService {
 
         const batches = await Batch.find({ $or: batchQueries }).lean();
         const batchIds = batches.map(b => b._id.toString());
-
         if (batchIds.length === 0) return [];
 
-        // Get all approved workflows grouped by batch and semester
         const approvedWorkflows = await ResultWorkflow.aggregate([
             {
                 $match: {
@@ -622,7 +621,6 @@ class ResultWorkflowService {
             }
         ]);
 
-        // Enrich with batch info
         const batchMap = batches.reduce((acc, b) => ({ ...acc, [b._id.toString()]: b }), {});
 
         return approvedWorkflows.map(group => ({
