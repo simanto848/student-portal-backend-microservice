@@ -21,7 +21,6 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// List grades with filters (must be before /:id route)
 router.get("/", authorize("super_admin", "admin", "teacher", "student"), courseGradeController.listGrades);
 
 router.post("/", authorize("teacher"), validate(createCourseGradeSchema), courseGradeController.calculateGrade);
@@ -30,14 +29,11 @@ router.get("/mark-config/:courseId", authorize("teacher"), courseGradeController
 router.post("/bulk-entry", authorize("teacher"), courseGradeController.bulkSaveMarks);
 
 // Workflow Routes
-
-
 router.get("/stats/course", authorize("teacher"), courseGradeController.getCourseGradeStats);
 router.get("/student/:studentId/semester/:semester", authorize("super_admin", "admin", "teacher", "student"), courseGradeController.getStudentSemesterGrades);
 router.get("/student/:studentId/semester/:semester/gpa", authorize("super_admin", "admin", "teacher", "student"), courseGradeController.calculateSemesterGPA);
 router.get("/student/:studentId/cgpa", authorize("super_admin", "admin", "teacher", "student"), courseGradeController.calculateCGPA);
 
-// Generic ID routes (Must be last)
 router.get("/:id", authorize("super_admin", "admin", "teacher", "student"), validate(getCourseGradeSchema), courseGradeController.getGrade);
 router.put("/:id", authorize("teacher"), validate(updateCourseGradeSchema), courseGradeController.updateGrade);
 router.post("/:id/publish", authorize("teacher"), validate(publishGradeSchema), courseGradeController.publishGrade);

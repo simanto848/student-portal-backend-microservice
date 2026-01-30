@@ -37,13 +37,11 @@ class CourseGradeService {
                 instructorId,
                 status: "active",
             });
-
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
 
             await this.checkWorkflowStatus(enrollment.batchId, enrollment.courseId, enrollment.semester);
-
             const existingGrade = await CourseGrade.findOne({
                 studentId: data.studentId,
                 courseId: data.courseId,
@@ -92,20 +90,17 @@ class CourseGradeService {
                 instructorId,
                 status: "active",
             });
-
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
 
             await this.checkWorkflowStatus(enrollment.batchId, enrollment.courseId, enrollment.semester);
-
             const assessments = await Assessment.find({
                 courseId: enrollment.courseId,
                 batchId: enrollment.batchId,
                 semester: enrollment.semester,
                 status: "graded",
             });
-
             if (assessments.length === 0) {
                 throw new ApiError(400, "No graded assessments found for this course");
             }
@@ -118,22 +113,18 @@ class CourseGradeService {
 
             let totalWeightedMarks = 0;
             let totalWeightage = 0;
-
             for (const assessment of assessments) {
                 const submission = submissions.find(
                     (s) => s.assessmentId.toString() === assessment._id.toString()
                 );
-
                 if (submission && submission.marksObtained != null) {
-                    const percentage =
-                        (submission.marksObtained / assessment.totalMarks) * 100;
+                    const percentage = (submission.marksObtained / assessment.totalMarks) * 100;
                     totalWeightedMarks += (percentage * assessment.weightage) / 100;
                     totalWeightage += assessment.weightage;
                 }
             }
 
-            const finalPercentage =
-                totalWeightage > 0 ? (totalWeightedMarks / totalWeightage) * 100 : 0;
+            const finalPercentage = totalWeightage > 0 ? (totalWeightedMarks / totalWeightage) * 100 : 0;
             let grade = await CourseGrade.findOne({
                 studentId: enrollment.studentId,
                 courseId: enrollment.courseId,
@@ -147,7 +138,6 @@ class CourseGradeService {
                 calculatedBy: instructorId,
                 calculatedAt: new Date(),
             };
-
             if (grade) {
                 Object.assign(grade, gradeData);
                 grade.calculateGrade();
@@ -168,10 +158,7 @@ class CourseGradeService {
             return grade;
         } catch (error) {
             if (error instanceof ApiError) throw error;
-            throw new ApiError(
-                500,
-                error.message || "Failed to auto-calculate grade"
-            );
+            throw new ApiError(500, error.message || "Failed to auto-calculate grade");
         }
     }
 
@@ -180,6 +167,7 @@ class CourseGradeService {
         if (!grade) {
             throw new ApiError(404, "Grade not found");
         }
+
         return grade;
     }
 
@@ -195,14 +183,9 @@ class CourseGradeService {
         }
 
         const grades = await CourseGrade.find(query).sort({ createdAt: -1 }).lean();
-
-        // Always populate course details for all grades
         if (grades.length > 0) {
             try {
-                // Get unique course IDs (convert to strings for consistent comparison)
                 const courseIds = [...new Set(grades.map(g => g.courseId?.toString()).filter(Boolean))];
-
-                // Fetch all courses
                 const courses = await Course.find({ _id: { $in: courseIds } }).lean();
                 const courseMap = courses.reduce((acc, course) => {
                     acc[course._id.toString()] = {
@@ -216,36 +199,28 @@ class CourseGradeService {
                     return acc;
                 }, {});
 
-                // Map course details to grades (use string comparison for IDs)
                 grades.forEach(grade => {
                     const courseIdStr = grade.courseId?.toString();
                     grade.course = courseIdStr ? (courseMap[courseIdStr] || null) : null;
                 });
             } catch (error) {
-                console.error("Failed to populate course details:", error.message);
+                //
             }
 
-            // Populate marks breakdown (in-course vs final) for student queries
             if (filters.studentId && filters.includeMarksBreakdown === 'true') {
                 try {
                     await this._populateMarksBreakdown(grades);
                 } catch (error) {
-                    console.error("Failed to populate marks breakdown:", error.message);
+                    //
                 }
             }
         }
 
-        // Populate student details if batchId is present (common use case)
         if (filters.batchId && grades.length > 0) {
             try {
-                // Fetch all students in the batch to map names
                 const studentsResponse = await userServiceClient.getStudentsByBatch(filters.batchId);
-
-                // Response structure is { success: true, data: { students: [...] } }
-                // So we need studentsResponse.data.students
                 const studentsData = studentsResponse?.data;
                 const studentsList = Array.isArray(studentsData) ? studentsData : (studentsData?.students || []);
-
                 const studentMap = studentsList.reduce((acc, student) => {
                     acc[student.id || student._id] = student;
                     return acc;
@@ -260,8 +235,6 @@ class CourseGradeService {
                 }));
 
             } catch (error) {
-                console.error("Failed to populate student details:", error.message);
-                // Return grades without population if user service fails
                 return grades;
             }
         }
@@ -325,7 +298,6 @@ class CourseGradeService {
                     for (const score of grade.assessmentScores) {
                         const assessment = assessmentMap[score.assessmentId?.toString()];
                         const isFinal = assessment && finalTypeIds.includes(assessment.assessmentTypeId?.toString());
-
                         if (isFinal) {
                             finalMarks.obtained += score.marksObtained || 0;
                             finalMarks.total += score.totalMarks || 0;
@@ -376,13 +348,11 @@ class CourseGradeService {
             instructorId,
             status: "active",
         });
-
         if (!assignment) {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
         await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
-
         Object.assign(grade, data);
         if (
             data.totalMarksObtained !== undefined ||
@@ -390,6 +360,7 @@ class CourseGradeService {
         ) {
             grade.calculateGrade();
         }
+
         await grade.save();
         return grade;
     }
@@ -402,13 +373,11 @@ class CourseGradeService {
             instructorId,
             status: "active",
         });
-
         if (!assignment) {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
         await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
-
         if (grade.isPublished) {
             throw new ApiError(400, "Grade is already published");
         }
@@ -427,13 +396,11 @@ class CourseGradeService {
             instructorId,
             status: "active",
         });
-
         if (!assignment) {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
         await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
-
         grade.isPublished = false;
         grade.publishedAt = null;
         await grade.save();
@@ -448,13 +415,11 @@ class CourseGradeService {
             instructorId,
             status: "active",
         });
-
         if (!assignment) {
             throw new ApiError(403, "You are not assigned to teach this course");
         }
 
         await this.checkWorkflowStatus(grade.batchId, grade.courseId, grade.semester);
-
         await grade.softDelete();
         return grade;
     }
@@ -469,12 +434,7 @@ class CourseGradeService {
     }
 
     async calculateSemesterGPA(studentId, semester) {
-        const grades = await CourseGrade.find({
-            studentId,
-            semester,
-            isPublished: true,
-        });
-
+        const grades = await CourseGrade.find({ studentId, semester, isPublished: true, });
         if (grades.length === 0) {
             return {
                 gpa: 0,
@@ -486,11 +446,9 @@ class CourseGradeService {
         let totalWeightedPoints = 0;
         let totalCredits = 0;
         const gradeDetails = [];
-
         for (const grade of grades) {
             const course = await Course.findById(grade.courseId);
             const credits = course ? course.credit : 0;
-
             if (credits > 0) {
                 totalWeightedPoints += (grade.gradePoint || 0) * credits;
                 totalCredits += credits;
@@ -504,8 +462,7 @@ class CourseGradeService {
             });
         }
 
-        const gpa =
-            totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
+        const gpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
 
         return {
             gpa: parseFloat(gpa),
@@ -516,11 +473,7 @@ class CourseGradeService {
     }
 
     async calculateCGPA(studentId) {
-        const grades = await CourseGrade.find({
-            studentId,
-            isPublished: true,
-        });
-
+        const grades = await CourseGrade.find({ studentId, isPublished: true,});
         if (grades.length === 0) {
             return {
                 cgpa: 0,
@@ -533,7 +486,6 @@ class CourseGradeService {
         let totalWeightedPoints = 0;
         let totalCredits = 0;
         const semesterBreakdown = {};
-
         for (const grade of grades) {
             const course = await Course.findById(grade.courseId);
             const credits = course ? course.credit : 0;
@@ -551,25 +503,17 @@ class CourseGradeService {
                     courses: 0,
                 };
             }
-            semesterBreakdown[grade.semester].totalWeightedPoints +=
-                (grade.gradePoint || 0) * credits;
+            semesterBreakdown[grade.semester].totalWeightedPoints += (grade.gradePoint || 0) * credits;
             semesterBreakdown[grade.semester].totalCredits += credits;
             semesterBreakdown[grade.semester].courses += 1;
         }
 
-        const cgpa =
-            totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
-
+        const cgpa = totalCredits > 0 ? (totalWeightedPoints / totalCredits).toFixed(2) : 0;
         // Calculate GPA for each semester in breakdown
         Object.keys(semesterBreakdown).forEach((sem) => {
             const data = semesterBreakdown[sem];
-            data.gpa =
-                data.totalCredits > 0
-                    ? parseFloat(
-                        (data.totalWeightedPoints / data.totalCredits).toFixed(2)
-                    )
-                    : 0;
-            delete data.totalWeightedPoints; // Cleanup intermediate data
+            data.gpa = data.totalCredits > 0 ? parseFloat((data.totalWeightedPoints / data.totalCredits).toFixed(2)) : 0;
+            delete data.totalWeightedPoints;
         });
 
         return {
@@ -616,14 +560,10 @@ class CourseGradeService {
 
         grades.forEach((grade) => {
             const letter = grade.letterGrade || "N/A";
-            stats.gradeDistribution[letter] =
-                (stats.gradeDistribution[letter] || 0) + 1;
+            stats.gradeDistribution[letter] = (stats.gradeDistribution[letter] || 0) + 1;
         });
 
-        const totalPercentage = grades.reduce(
-            (sum, g) => sum + (g.percentage || 0),
-            0
-        );
+        const totalPercentage = grades.reduce((sum, g) => sum + (g.percentage || 0), 0);
         const totalGPA = grades.reduce((sum, g) => sum + (g.gradePoint || 0), 0);
 
         stats.averagePercentage = (totalPercentage / grades.length).toFixed(2);
@@ -634,10 +574,8 @@ class CourseGradeService {
 
     async getMarkEntryConfig(courseId) {
         try {
-            // Fetch course from Academic service
             const courseResponse = await academicClient.verifyCourse(courseId);
             const course = courseResponse?.data;
-
             if (!course) {
                 throw new ApiError(404, "Course not found");
             }
@@ -649,7 +587,6 @@ class CourseGradeService {
                 totalMarks: 100,
                 components: {},
             };
-
             if (courseType === "theory") {
                 config.components = {
                     finalExam: { label: "Final Exam", maxMarks: 50, weight: 50 },
@@ -709,21 +646,17 @@ class CourseGradeService {
     async bulkSaveMarks(data, instructorId) {
         try {
             const { courseId, batchId, semester, entries } = data;
-
-            // Verify instructor assignment
             const assignment = await BatchCourseInstructor.findOne({
                 instructorId,
                 courseId,
                 batchId,
                 status: "active",
             });
-
             if (!assignment) {
                 throw new ApiError(403, "You are not assigned to teach this course");
             }
 
             await this.checkWorkflowStatus(batchId, courseId, semester);
-
             // Get course to determine type
             const courseResponse = await academicClient.verifyCourse(courseId);
             const course = courseResponse?.data;
@@ -733,7 +666,6 @@ class CourseGradeService {
 
             const courseType = course.courseType || "theory";
             const results = [];
-
             for (const entry of entries) {
                 try {
                     const enrollment = await CourseEnrollment.findOne({
@@ -744,12 +676,26 @@ class CourseGradeService {
                     });
 
                     if (!enrollment) {
-                        results.push({
-                            studentId: entry.studentId,
-                            success: false,
-                            error: "Enrollment not found",
-                        });
-                        continue;
+                        try {
+                            const studentData = await userServiceClient.getStudentById(entry.studentId);
+                            const student = studentData?.data || studentData;
+                            const studentBatchId = typeof student?.batchId === 'object' ? (student.batchId.id || student.batchId._id) : student?.batchId;
+                            if (!student || studentBatchId !== batchId) {
+                                results.push({
+                                    studentId: entry.studentId,
+                                    success: false,
+                                    error: "Student does not belong to this batch",
+                                });
+                                continue;
+                            }
+                        } catch (err) {
+                            results.push({
+                                studentId: entry.studentId,
+                                success: false,
+                                error: "Failed to verify student",
+                            });
+                            continue;
+                        }
                     }
 
                     // Validate marks based on course type
@@ -771,11 +717,10 @@ class CourseGradeService {
                         semester,
                         deletedAt: null,
                     });
-
                     if (!grade) {
                         grade = new CourseGrade({
                             studentId: entry.studentId,
-                            enrollmentId: enrollment._id,
+                            enrollmentId: enrollment?._id,
                             courseId,
                             batchId,
                             semester,
@@ -816,7 +761,6 @@ class CourseGradeService {
                     // Calculate final grade
                     grade.calculateGrade();
                     await grade.save();
-
                     results.push({
                         studentId: entry.studentId,
                         success: true,

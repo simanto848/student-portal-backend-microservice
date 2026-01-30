@@ -9,7 +9,7 @@ const attendanceSchema = new mongoose.Schema(
         },
         enrollmentId: {
             type: String,
-            required: [true, "Enrollment ID is required"],
+            required: false,
             ref: "CourseEnrollment",
             index: true,
         },

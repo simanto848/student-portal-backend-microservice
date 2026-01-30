@@ -3,13 +3,14 @@ import Attendance from "../models/Attendance.js";
 import CourseEnrollment from "../models/CourseEnrollment.js";
 import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
 import batchCourseInstructorService from "./batchCourseInstructorService.js";
+import userServiceClient from "../client/userServiceClient.js";
 import { ApiError } from "shared";
 
 class AttendanceService {
   validateAttendanceDate(date) {
     const attendanceDate = new Date(date);
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // Set to end of today to allow marking attendance for earlier today
+    today.setHours(23, 59, 59, 999);
 
     if (attendanceDate > today) {
       throw new ApiError(400, "Cannot mark attendance for future dates.");
@@ -82,18 +83,36 @@ class AttendanceService {
 
       for (const record of attendances) {
         try {
+          // Check if student has enrollment (optional)
           const enrollment = await CourseEnrollment.findOne({
             studentId: record.studentId,
             courseId,
             batchId,
           });
 
+          // If no enrollment, verify student belongs to the batch
           if (!enrollment) {
-            errors.push({
-              studentId: record.studentId,
-              error: "Enrollment not found",
-            });
-            continue;
+            try {
+              const studentData = await userServiceClient.getStudentById(record.studentId);
+              const student = studentData?.data || studentData;
+              const studentBatchId = typeof student?.batchId === 'object'
+                ? (student.batchId.id || student.batchId._id)
+                : student?.batchId;
+
+              if (!student || studentBatchId !== batchId) {
+                errors.push({
+                  studentId: record.studentId,
+                  error: "Student does not belong to this batch",
+                });
+                continue;
+              }
+            } catch (err) {
+              errors.push({
+                studentId: record.studentId,
+                error: "Failed to verify student",
+              });
+              continue;
+            }
           }
 
           const existing = await Attendance.findOne({
@@ -113,7 +132,7 @@ class AttendanceService {
             results.push(existing);
           } else {
             const attendance = await Attendance.create({
-              enrollmentId: enrollment._id,
+              enrollmentId: enrollment?._id,
               studentId: record.studentId,
               courseId,
               batchId,
