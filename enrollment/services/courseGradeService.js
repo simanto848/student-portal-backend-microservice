@@ -2,6 +2,7 @@ import CourseGrade from "../models/CourseGrade.js";
 import CourseEnrollment from "../models/CourseEnrollment.js";
 import AssessmentSubmission from "../models/AssessmentSubmission.js";
 import Assessment from "../models/Assessment.js";
+import AssessmentType from "../models/AssessmentType.js";
 import BatchCourseInstructor from "../models/BatchCourseInstructor.js";
 import { ApiError } from "shared";
 import { Course } from "../models/external/Academic.js";
@@ -195,6 +196,45 @@ class CourseGradeService {
 
         const grades = await CourseGrade.find(query).sort({ createdAt: -1 }).lean();
 
+        // Always populate course details for all grades
+        if (grades.length > 0) {
+            try {
+                // Get unique course IDs (convert to strings for consistent comparison)
+                const courseIds = [...new Set(grades.map(g => g.courseId?.toString()).filter(Boolean))];
+
+                // Fetch all courses
+                const courses = await Course.find({ _id: { $in: courseIds } }).lean();
+                const courseMap = courses.reduce((acc, course) => {
+                    acc[course._id.toString()] = {
+                        id: course._id,
+                        name: course.name,
+                        code: course.code,
+                        credit: course.credit,
+                        creditHour: course.creditHour || course.credit,
+                        type: course.type
+                    };
+                    return acc;
+                }, {});
+
+                // Map course details to grades (use string comparison for IDs)
+                grades.forEach(grade => {
+                    const courseIdStr = grade.courseId?.toString();
+                    grade.course = courseIdStr ? (courseMap[courseIdStr] || null) : null;
+                });
+            } catch (error) {
+                console.error("Failed to populate course details:", error.message);
+            }
+
+            // Populate marks breakdown (in-course vs final) for student queries
+            if (filters.studentId && filters.includeMarksBreakdown === 'true') {
+                try {
+                    await this._populateMarksBreakdown(grades);
+                } catch (error) {
+                    console.error("Failed to populate marks breakdown:", error.message);
+                }
+            }
+        }
+
         // Populate student details if batchId is present (common use case)
         if (filters.batchId && grades.length > 0) {
             try {
@@ -227,6 +267,105 @@ class CourseGradeService {
         }
 
         return grades;
+    }
+
+    /**
+     * Helper method to populate marks breakdown (in-course vs final) for grades
+     * Theory: Final = 50, In-course = 50 (midterm 20 + attendance 10 + assessment 20)
+     * Lab: Final = 30, In-course = 20 (lab reports 10 + attendance 10)
+     */
+    async _populateMarksBreakdown(grades) {
+        for (const grade of grades) {
+            let finalMarks = { obtained: 0, total: 0 };
+            let inCourseMarks = { obtained: 0, total: 0 };
+
+            // First, try to use theoryMarks and labMarks from the grade itself
+            const theory = grade.theoryMarks;
+            const lab = grade.labMarks;
+            const courseType = grade.courseType || 'theory';
+
+            // Check if we have theory marks breakdown
+            if (theory && (theory.finalExam > 0 || theory.midterm > 0 || theory.attendance > 0 || theory.continuousAssessment > 0)) {
+                // Final = 50 marks (finalExam)
+                finalMarks.obtained += theory.finalExam || 0;
+                finalMarks.total += 50;
+
+                // In-course = 50 marks (midterm 20 + attendance 10 + continuousAssessment 20)
+                inCourseMarks.obtained += (theory.midterm || 0) + (theory.attendance || 0) + (theory.continuousAssessment || 0);
+                inCourseMarks.total += 50;
+            }
+
+            // Check if we have lab marks breakdown
+            if (lab && (lab.finalLab > 0 || lab.labReports > 0 || lab.attendance > 0)) {
+                // Lab Final = 30 marks
+                finalMarks.obtained += lab.finalLab || 0;
+                finalMarks.total += 30;
+
+                // Lab In-course = 20 marks (labReports 10 + attendance 10)
+                inCourseMarks.obtained += (lab.labReports || 0) + (lab.attendance || 0);
+                inCourseMarks.total += 20;
+            }
+
+            // If no breakdown from theoryMarks/labMarks, try assessmentScores
+            if (finalMarks.total === 0 && inCourseMarks.total === 0) {
+                if (grade.assessmentScores && grade.assessmentScores.length > 0) {
+                    // Get all assessment types to identify final exams
+                    const assessmentTypes = await AssessmentType.find({}).lean();
+                    const finalTypeIds = assessmentTypes
+                        .filter(t => t.code?.toUpperCase() === 'FINAL' || t.name?.toLowerCase().includes('final'))
+                        .map(t => t._id.toString());
+
+                    const assessmentIds = grade.assessmentScores.map(s => s.assessmentId).filter(Boolean);
+                    const assessments = await Assessment.find({ _id: { $in: assessmentIds } }).lean();
+                    const assessmentMap = assessments.reduce((acc, a) => {
+                        acc[a._id.toString()] = a;
+                        return acc;
+                    }, {});
+
+                    for (const score of grade.assessmentScores) {
+                        const assessment = assessmentMap[score.assessmentId?.toString()];
+                        const isFinal = assessment && finalTypeIds.includes(assessment.assessmentTypeId?.toString());
+
+                        if (isFinal) {
+                            finalMarks.obtained += score.marksObtained || 0;
+                            finalMarks.total += score.totalMarks || 0;
+                        } else {
+                            inCourseMarks.obtained += score.marksObtained || 0;
+                            inCourseMarks.total += score.totalMarks || 0;
+                        }
+                    }
+                }
+            }
+
+            // If still no breakdown, use course type to set default totals
+            if (finalMarks.total === 0 && inCourseMarks.total === 0 && grade.totalMarks > 0) {
+                if (courseType === 'lab') {
+                    // Lab course: Final 30, In-course 20
+                    finalMarks.total = 30;
+                    inCourseMarks.total = 20;
+                    // Distribute totalMarksObtained proportionally
+                    const ratio = grade.totalMarksObtained / grade.totalMarks;
+                    finalMarks.obtained = Math.round(30 * ratio * 10) / 10;
+                    inCourseMarks.obtained = Math.round(20 * ratio * 10) / 10;
+                } else {
+                    // Theory course: Final 50, In-course 50
+                    finalMarks.total = 50;
+                    inCourseMarks.total = 50;
+                    // Distribute totalMarksObtained proportionally
+                    const ratio = grade.totalMarksObtained / grade.totalMarks;
+                    finalMarks.obtained = Math.round(50 * ratio * 10) / 10;
+                    inCourseMarks.obtained = Math.round(50 * ratio * 10) / 10;
+                }
+            }
+
+            // Add breakdown to grade
+            grade.marksBreakdown = {
+                final: finalMarks,
+                inCourse: inCourseMarks,
+                totalObtained: finalMarks.obtained + inCourseMarks.obtained,
+                totalMarks: finalMarks.total + inCourseMarks.total
+            };
+        }
     }
 
     async updateGrade(id, data, instructorId) {
