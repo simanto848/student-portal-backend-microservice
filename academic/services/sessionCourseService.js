@@ -127,7 +127,12 @@ class SessionCourseService {
 		const { page = 1, limit = 10 } = pagination;
 		const skip = (page - 1) * limit;
 
-		const query = { sessionId: batch.sessionId, departmentId: batch.departmentId };
+		// Filter by sessionId, departmentId, AND the batch's current semester
+		const query = {
+			sessionId: batch.sessionId,
+			departmentId: batch.departmentId,
+			semester: batch.currentSemester || 1
+		};
 		const [items, total] = await Promise.all([
 			SessionCourse.find(query)
 				.populate('courseId', 'name code')
