@@ -122,6 +122,46 @@ class ResultWorkflowController {
             next(error);
         }
     }
+
+    /**
+     * Bulk publish all approved results for a batch and semester
+     */
+    async bulkPublishResults(req, res, next) {
+        try {
+            const { batchId, semester, otp } = req.body;
+
+            if (!batchId || !semester) {
+                throw new ApiError(400, "Batch ID and semester are required");
+            }
+
+            await this.verifyOTP(req.user.sub, otp, 'result_publication', req.cookies.accessToken || req.headers.authorization?.split(' ')[1]);
+
+            const result = await resultWorkflowService.publishBatchSemesterResults(
+                batchId,
+                semester,
+                req.user.sub,
+                req.user.role,
+                req.user.isExamCommitteeMember ? req.user.sub : null
+            );
+
+            return ApiResponse.success(res, result, `Published ${result.publishedCount} results for semester ${semester}`);
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Get summary of approved workflows for bulk publishing
+     */
+    async getApprovedSummary(req, res, next) {
+        try {
+            const summary = await resultWorkflowService.getApprovedWorkflowsSummary(req.user);
+            return ApiResponse.success(res, summary);
+        } catch (error) {
+            next(error);
+        }
+    }
+
     constructor() {
         this.verifyOTP = this.verifyOTP.bind(this);
         this.getWorkflow = this.getWorkflow.bind(this);
@@ -131,6 +171,8 @@ class ResultWorkflowController {
         this.publishResult = this.publishResult.bind(this);
         this.requestReturn = this.requestReturn.bind(this);
         this.approveReturnRequest = this.approveReturnRequest.bind(this);
+        this.bulkPublishResults = this.bulkPublishResults.bind(this);
+        this.getApprovedSummary = this.getApprovedSummary.bind(this);
     }
 }
 

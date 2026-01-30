@@ -484,6 +484,155 @@ class ResultWorkflowService {
 
         return workflow.save();
     }
+
+    /**
+     * Bulk publish all approved workflows for a batch and semester
+     * @param {string} batchId - The batch ID
+     * @param {number} semester - The semester number
+     * @param {string} userId - The user performing the action
+     * @param {string} userRole - The user's role
+     * @param {string} committeeMemberId - Optional committee member ID for authorization
+     */
+    async publishBatchSemesterResults(batchId, semester, userId, userRole, committeeMemberId = null) {
+        // Find all approved workflows for this batch and semester
+        const workflows = await ResultWorkflow.find({
+            batchId,
+            semester: parseInt(semester),
+            status: "COMMITTEE_APPROVED"
+        });
+
+        if (workflows.length === 0) {
+            throw new ApiError(400, "No approved results found for this batch and semester");
+        }
+
+        // Check authorization
+        let isAuthorized = false;
+        if (userRole === 'exam_controller') isAuthorized = true;
+
+        if (!isAuthorized && committeeMemberId) {
+            const batch = await Batch.findById(batchId);
+            if (batch) {
+                const { isMember } = await academicClient.checkExamCommitteeMembership(
+                    batch.departmentId,
+                    committeeMemberId,
+                    batch.shift,
+                    batchId
+                );
+                if (isMember) isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            throw new ApiError(403, "Not authorized to publish results");
+        }
+
+        const publishedWorkflows = [];
+        const errors = [];
+
+        // Publish each workflow
+        for (const workflow of workflows) {
+            try {
+                workflow.status = "PUBLISHED";
+                workflow.history.push({
+                    status: "PUBLISHED",
+                    changedBy: userId,
+                    comment: "Result Published (Bulk)",
+                });
+                await workflow.save();
+
+                // Update course grades to published
+                await CourseGrade.updateMany(
+                    {
+                        batchId: workflow.batchId,
+                        courseId: workflow.courseId,
+                        semester: workflow.semester,
+                    },
+                    { isPublished: true, publishedAt: new Date() }
+                );
+
+                publishedWorkflows.push(workflow);
+            } catch (error) {
+                logger.error(`Failed to publish workflow ${workflow._id}: ${error.message}`);
+                errors.push({ workflowId: workflow._id, error: error.message });
+            }
+        }
+
+        // Get batch info for response
+        const batch = await Batch.findById(batchId).lean();
+
+        return {
+            batchId,
+            batchName: batch?.name,
+            semester,
+            totalApproved: workflows.length,
+            publishedCount: publishedWorkflows.length,
+            failedCount: errors.length,
+            errors: errors.length > 0 ? errors : undefined
+        };
+    }
+
+    /**
+     * Get summary of approved workflows grouped by batch and semester for bulk publishing
+     */
+    async getApprovedWorkflowsSummary(user) {
+        const teacherId = user.id || user.sub;
+        const committees = await academicClient.getTeacherCommittees(teacherId);
+
+        if (!committees || committees.length === 0) {
+            return [];
+        }
+
+        // Get batch IDs from committees
+        const shiftDepartmentPairs = committees.map(c => ({
+            shift: c.shift,
+            departmentId: typeof c.departmentId === 'object' ? c.departmentId.id : c.departmentId,
+            batchId: c.batchId
+        }));
+
+        const batchQueries = shiftDepartmentPairs.map(criteria => {
+            const query = {
+                shift: criteria.shift,
+                departmentId: criteria.departmentId
+            };
+            if (criteria.batchId) {
+                query._id = criteria.batchId;
+            }
+            return query;
+        });
+
+        const batches = await Batch.find({ $or: batchQueries }).lean();
+        const batchIds = batches.map(b => b._id.toString());
+
+        if (batchIds.length === 0) return [];
+
+        // Get all approved workflows grouped by batch and semester
+        const approvedWorkflows = await ResultWorkflow.aggregate([
+            {
+                $match: {
+                    batchId: { $in: batchIds },
+                    status: "COMMITTEE_APPROVED"
+                }
+            },
+            {
+                $group: {
+                    _id: { batchId: "$batchId", semester: "$semester" },
+                    count: { $sum: 1 },
+                    workflows: { $push: "$$ROOT" }
+                }
+            }
+        ]);
+
+        // Enrich with batch info
+        const batchMap = batches.reduce((acc, b) => ({ ...acc, [b._id.toString()]: b }), {});
+
+        return approvedWorkflows.map(group => ({
+            batchId: group._id.batchId,
+            batch: batchMap[group._id.batchId],
+            semester: group._id.semester,
+            approvedCount: group.count,
+            workflows: group.workflows
+        }));
+    }
 }
 
 export default new ResultWorkflowService();
