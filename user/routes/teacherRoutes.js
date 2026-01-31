@@ -20,6 +20,7 @@ router.use(authenticate);
 import { transformBody } from "../middlewares/transformBody.js";
 
 router.get("/", teacherController.getAll);
+router.post("/bulk", teacherController.getByIds);
 router.get("/deleted", teacherController.getDeletedTeachers);
 router.get("/:id", teacherController.getById);
 router.post("/", upload.single('profilePicture'), transformBody, validate(createTeacherSchema), teacherController.create);

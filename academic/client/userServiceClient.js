@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 
 class UserServiceClient {
     constructor() {
-        this.client = createServiceClient('user'); // Use central factory
+        this.client = createServiceClient('user');
     }
 
     generateServiceToken() {
@@ -25,14 +25,48 @@ class UserServiceClient {
             const response = await this.client.get(`/students/${studentId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            // Result is probably in response.data.data if using ApiResponse
-            // But let's check assumptions or keep consistent with previous implementation returning response.data
             return response.data;
         } catch (error) {
             if (error.response?.status === 404) {
                 throw new Error('Student not found');
             }
             throw new Error('Failed to fetch student details');
+        }
+    }
+
+    async getTeacherById(teacherId) {
+        try {
+            const token = this.generateServiceToken();
+            const response = await this.client.get(`/teachers/${teacherId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            return response.data?.data || response.data;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async getTeachersByIds(teacherIds) {
+        try {
+            if (!teacherIds || teacherIds.length === 0) return [];
+
+            const token = this.generateServiceToken();
+            try {
+                const response = await this.client.post(`/teachers/bulk`,
+                    { ids: teacherIds },
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                return response.data?.data || response.data || [];
+            } catch (bulkError) {
+                console.log('[UserServiceClient] Bulk fetch not available, fetching individually');
+                const results = await Promise.all(
+                    teacherIds.map(id => this.getTeacherById(id))
+                );
+                return results.filter(Boolean);
+            }
+        } catch (error) {
+            console.error('[UserServiceClient] Failed to get teachers:', error.message);
+            return [];
         }
     }
 }

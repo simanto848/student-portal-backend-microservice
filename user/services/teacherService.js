@@ -80,6 +80,34 @@ class TeacherService {
         }
     }
 
+    async getByIds(ids) {
+        try {
+            if (!ids || ids.length === 0) return [];
+
+            const teachers = await Teacher.find({
+                _id: { $in: ids },
+                deletedAt: null
+            }).select('-password').populate('profile').lean();
+
+            // Fetch departments for all teachers
+            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
+                if (teacher.departmentId) {
+                    try {
+                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
+                        teacher.department = dept.data || dept;
+                    } catch (e) {
+                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
+                    }
+                }
+                return teacher;
+            }));
+
+            return teachersWithDept;
+        } catch (error) {
+            throw new ApiError(500, 'Error fetching teachers by IDs: ' + error.message);
+        }
+    }
+
     async create(data) {
         try {
             const dept = await academicServiceClient.getDepartmentById(data.departmentId);

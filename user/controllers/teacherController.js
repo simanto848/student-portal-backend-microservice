@@ -19,6 +19,17 @@ class TeacherController {
         catch (error) { next(error); }
     }
 
+    async getByIds(req, res, next) {
+        try {
+            const { ids } = req.body;
+            if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                return ApiResponse.success(res, [], 'No IDs provided');
+            }
+            const teachers = await teacherService.getByIds(ids);
+            return ApiResponse.success(res, teachers, 'Teachers retrieved successfully');
+        } catch (error) { next(error); }
+    }
+
     async create(req, res, next) {
         try { const t = await teacherService.create(req.validatedData || req.body); return ApiResponse.created(res, t, 'Teacher created successfully'); }
         catch (error) { next(error); }
