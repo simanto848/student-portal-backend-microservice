@@ -140,7 +140,7 @@ scheduleSchema.methods.reopen = function () {
 // Static method to close all schedules for a session
 scheduleSchema.statics.closeSessionSchedules = async function (sessionId) {
     return this.updateMany(
-        { sessionId, status: 'active' },
+        { sessionId, status: 'active', deletedAt: null },
         { $set: { status: 'closed', closedAt: new Date() } }
     );
 };
@@ -148,7 +148,7 @@ scheduleSchema.statics.closeSessionSchedules = async function (sessionId) {
 // Static method to close all schedules for specific batches
 scheduleSchema.statics.closeBatchSchedules = async function (batchIds) {
     return this.updateMany(
-        { batchId: { $in: batchIds }, status: 'active' },
+        { batchId: { $in: batchIds }, status: 'active', deletedAt: null },
         { $set: { status: 'closed', closedAt: new Date() } }
     );
 };

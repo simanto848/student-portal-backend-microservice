@@ -1226,7 +1226,7 @@ class AutoSchedulerService {
      */
     async reopenSchedulesForBatches(batchIds) {
         const result = await CourseSchedule.updateMany(
-            { batchId: { $in: batchIds }, status: 'closed' },
+            { batchId: { $in: batchIds }, status: 'closed', deletedAt: null },
             { $set: { status: 'active', closedAt: null } }
         );
         return {
@@ -1242,7 +1242,7 @@ class AutoSchedulerService {
      * @returns {Object} Summary of schedule counts by status
      */
     async getScheduleStatusSummary(batchIds = null) {
-        const matchQuery = { isActive: true };
+        const matchQuery = { isActive: true, deletedAt: null };
         if (batchIds && batchIds.length > 0) {
             matchQuery.batchId = { $in: batchIds };
         }
@@ -1269,7 +1269,7 @@ class AutoSchedulerService {
      * @returns {Array} Active schedules
      */
     async getActiveSchedules(batchIds = null) {
-        const query = { status: 'active', isActive: true };
+        const query = { status: 'active', isActive: true, deletedAt: null };
         if (batchIds && batchIds.length > 0) {
             query.batchId = { $in: batchIds };
         }

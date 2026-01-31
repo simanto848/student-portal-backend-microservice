@@ -140,7 +140,7 @@ class CourseScheduleService {
 		if (overlap) throw new ApiError(409, 'Schedule overlaps with an existing class for this batch');
 
 		const schedule = await CourseSchedule.create(payload);
-		return await CourseSchedule.findById(schedule._id)
+		return CourseSchedule.findById(schedule._id)
 			.populate({
 				path: 'batchId',
 				select: 'name year programId departmentId shift',
@@ -182,9 +182,15 @@ class CourseScheduleService {
 			if (endM <= startM) throw new ApiError(400, 'endTime must be greater than startTime');
 		}
 
+		// Remove empty sessionId from payload to preserve existing value
+		// sessionId is required in the model but shouldn't change on updates
+		if (payload.sessionId === '' || payload.sessionId === undefined || payload.sessionId === null) {
+			delete payload.sessionId;
+		}
+
 		Object.assign(schedule, payload);
 		await schedule.save();
-		return await CourseSchedule.findById(id)
+		return CourseSchedule.findById(id)
 			.populate({
 				path: 'batchId',
 				select: 'name year programId departmentId shift',
