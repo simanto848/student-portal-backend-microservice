@@ -14,6 +14,9 @@ import { authenticate, authorize } from 'shared';
 const router = express.Router();
 
 router.use(authenticate);
+
+router.get('/my-batch/:batchId', validate(getBatchSessionCoursesSchema), sessionCourseController.getBatchSessionCourses);
+
 router.use(authorize('super_admin', 'admin', 'exam_controller', 'program_controller', 'teacher'));
 
 router.get('/', validate(getSessionCoursesSchema), sessionCourseController.getAll);
