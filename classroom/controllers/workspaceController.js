@@ -58,21 +58,6 @@ class WorkspaceController {
     }
   }
 
-  async update(req, res, next) {
-    try {
-      const ws = await WorkspaceService.updateWorkspace(
-        req.params.id,
-        req.body,
-        req.user.id,
-        req.user.role,
-        req.headers.authorization
-      );
-      return ApiResponse.success(res, ws, "Workspace updated");
-    } catch (e) {
-      next(e);
-    }
-  }
-
   async delete(req, res, next) {
     try {
       await WorkspaceService.deleteWorkspace(
@@ -99,10 +84,6 @@ class WorkspaceController {
     } catch (e) {
       next(e);
     }
-  }
-
-  async syncRoster(req, res, next) {
-    return ApiResponse.success(res, null, "Roster sync is automatic now");
   }
 }
 

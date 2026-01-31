@@ -3,6 +3,7 @@ import {
   CourseEnrollment,
 } from "../models/external/Enrollment.js";
 import { Course, Batch } from "../models/external/Academic.js";
+import { config } from 'shared';
 
 const extractApiArray = (payload) => {
   if (!payload) return [];
@@ -43,8 +44,7 @@ const extractApiArray = (payload) => {
 const getWorkspace = async (courseId, batchId, userId, role, token) => {
   const checkTeacherAssignment = async () => {
     try {
-      const enrollmentServiceUrl =
-        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
+      const enrollmentServiceUrl = config.services.enrollment;
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/batch-course-instructors?instructorId=${userId}&courseId=${courseId}&batchId=${batchId}&status=active`;
 
@@ -76,7 +76,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   } else if (role === "student") {
     let hasAccess = false;
     try {
-      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
+      const enrollmentServiceUrl = config.services.enrollment;
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/enrollments`;
 
@@ -92,7 +92,6 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
         hasAccess = enrollments.some(e => e.batchId === batchId);
       }
     } catch (e) {
-      console.error("[Classroom] Failed to check student enrollment via API", e.message);
       const localEnrollment = await CourseEnrollment.findOne({
         batchId,
         studentId: userId,
@@ -123,8 +122,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   let course = await Course.findById(courseId);
   let batch = await Batch.findById(batchId);
 
-  const academicUrl =
-    process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+  const academicUrl = config.services.academic;
   const base = academicUrl.replace(/\/$/, "");
 
   if (!course) {
@@ -140,10 +138,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
         course = data.data;
       }
     } catch (e) {
-      console.error(
-        `Failed to fetch course ${courseId} from Academic Service`,
-        e.message
-      );
+      //
     }
   }
 
@@ -160,10 +155,7 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
         batch = data.data;
       }
     } catch (e) {
-      console.error(
-        `Failed to fetch batch ${batchId} from Academic Service`,
-        e.message
-      );
+      //
     }
   }
 
@@ -208,15 +200,10 @@ const getWorkspaceById = async (workspaceId, userId, role, token) => {
 };
 
 const listWorkspaces = async (userId, role, token) => {
-  if (["super_admin", "admin", "program_controller"].includes(role)) {
-    return Workspace.find({ deletedAt: null }).sort({ createdAt: -1 });
-  }
-
   if (role === "teacher") {
     let assignments = [];
     try {
-      const enrollmentServiceUrl =
-        process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
+      const enrollmentServiceUrl = config.services.enrollment;
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
 
@@ -232,10 +219,6 @@ const listWorkspaces = async (userId, role, token) => {
       }
     } catch (e) {
       throw e;
-    }
-
-    if (assignments.length === 0) {
-      console.log("[Classroom] No assignments found for teacher via API.");
     }
 
     const pairs = assignments.map((a) => ({
@@ -254,7 +237,7 @@ const listWorkspaces = async (userId, role, token) => {
   } else if (role === "student") {
     let enrollments = [];
     try {
-      const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
+      const enrollmentServiceUrl = config.services.enrollment;
       const base = enrollmentServiceUrl.replace(/\/$/, "");
       const url = `${base}/enrollments`;
 
@@ -295,7 +278,7 @@ const listWorkspaces = async (userId, role, token) => {
 };
 
 const enrichWorkspaces = async (workspaces, token) => {
-  const academicUrl = process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+  const academicUrl = config.services.academic;
   const base = academicUrl.replace(/\/$/, "");
 
   const enriched = await Promise.all(
@@ -314,10 +297,7 @@ const enrichWorkspaces = async (workspaces, token) => {
         const data = await res.json();
         if (data.success) course = data.data;
       } catch (e) {
-        console.error(
-          `[Classroom] Failed to fetch course ${ws.courseId}`,
-          e.message
-        );
+        //
       }
 
       try {
@@ -330,10 +310,7 @@ const enrichWorkspaces = async (workspaces, token) => {
         const data = await res.json();
         if (data.success) batch = data.data;
       } catch (e) {
-        console.error(
-          `[Classroom] Failed to fetch batch ${ws.batchId}`,
-          e.message
-        );
+        //
       }
 
       if (course) {
@@ -348,7 +325,7 @@ const enrichWorkspaces = async (workspaces, token) => {
       }
 
       try {
-        const userServiceUrl = process.env.USER_SERVICE_URL || "http://localhost:8007";
+        const userServiceUrl = config.services.user;
         const baseUser = userServiceUrl.replace(/\/$/, "");
         const defaultUserBase = "http://user:8007";
         const userUrl = `${baseUser}/students?batchId=${ws.batchId}&limit=1`;
@@ -385,7 +362,7 @@ const enrichWorkspaces = async (workspaces, token) => {
       }
 
       if (ws.teacherIds && ws.teacherIds.length > 0) {
-        const userServiceUrl = process.env.USER_SERVICE_URL || "http://localhost:8007";
+        const userServiceUrl = config.services.user;
         const baseUser = userServiceUrl.replace(/\/$/, "");
 
         workspaceObj.teachers = await Promise.all(
@@ -410,7 +387,7 @@ const enrichWorkspaces = async (workspaces, token) => {
                 }
               }
             } catch (e) {
-              console.error(`[Classroom] Failed to fetch teacher ${teacherId}`, e.message);
+              //
             }
             return { id: teacherId, fullName: "Unknown Teacher" };
           })
@@ -431,7 +408,6 @@ const enrichWorkspaces = async (workspaces, token) => {
 
 const fetchWithFallback = async (url, options, serviceName, fallbackHost) => {
   try {
-    console.log(`[Classroom] Fetching from: ${url}`);
     const res = await fetch(url, options);
     return res;
   } catch (e) {
@@ -453,8 +429,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
 
   let assignments = [];
   try {
-    const enrollmentServiceUrl =
-      process.env.ENROLLMENT_SERVICE_URL || "http://localhost:8005";
+    const enrollmentServiceUrl = config.services.enrollment;
     const base = enrollmentServiceUrl.replace(/\/$/, "");
     const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
 
@@ -503,7 +478,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
       let course = await Course.findById(a.courseId);
       let batch = await Batch.findById(a.batchId);
 
-      const academicUrl = process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+      const academicUrl = config.services.academic;
       const base = academicUrl.replace(/\/$/, "");
 
       if (!course) {
@@ -517,10 +492,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
           const data = await res.json();
           if (data.success) course = data.data;
         } catch (e) {
-          console.error(
-            `[Classroom] Failed to fetch course ${a.courseId}`,
-            e.message
-          );
+          //
         }
       }
 
@@ -535,10 +507,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
           const data = await res.json();
           if (data.success) batch = data.data;
         } catch (e) {
-          console.error(
-            `[Classroom] Failed to fetch batch ${a.batchId}`,
-            e.message
-          );
+          //
         }
       }
 
@@ -559,13 +528,6 @@ const listPendingWorkspaces = async (userId, role, token) => {
   );
 
   return enriched.filter((e) => e !== null);
-};
-
-const updateWorkspace = async (workspaceId, updates, userId, role, token) => {
-  const workspace = await getWorkspaceById(workspaceId, userId, role, token);
-  Object.assign(workspace, updates);
-  await workspace.save();
-  return workspace;
 };
 
 const deleteWorkspace = async (workspaceId, userId, role, token) => {
@@ -590,7 +552,6 @@ export default {
   getWorkspace,
   getWorkspaceById,
   listWorkspaces,
-  updateWorkspace,
   deleteWorkspace,
   listPendingWorkspaces,
   archiveWorkspace,
