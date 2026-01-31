@@ -76,33 +76,51 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
   } else if (role === "student") {
     let hasAccess = false;
     try {
-      const enrollmentServiceUrl = config.services.enrollment;
-      const base = enrollmentServiceUrl.replace(/\/$/, "");
-      const url = `${base}/enrollments`;
+      const userServiceUrl = config.services.user;
+      const base = userServiceUrl.replace(/\/$/, "");
+      const url = `${base}/students/${userId}`;
 
       const res = await fetchWithFallback(
         url,
         { headers: { Authorization: token } },
-        "enrollment",
-        "enrollment"
+        "user",
+        "user"
       );
       if (res.ok) {
         const data = await res.json();
-        const enrollments = extractApiArray(data);
-        hasAccess = enrollments.some(e => e.batchId === batchId);
+        const student = data.data || data;
+        hasAccess = student.batchId === batchId;
       }
     } catch (e) {
-      const localEnrollment = await CourseEnrollment.findOne({
-        batchId,
-        studentId: userId,
-        status: "active",
-        deletedAt: null,
-      });
-      hasAccess = !!localEnrollment;
+      try {
+        const enrollmentServiceUrl = config.services.enrollment;
+        const enrollBase = enrollmentServiceUrl.replace(/\/$/, "");
+        const enrollUrl = `${enrollBase}/enrollments`;
+
+        const res = await fetchWithFallback(
+          enrollUrl,
+          { headers: { Authorization: token } },
+          "enrollment",
+          "enrollment"
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const enrollments = extractApiArray(data);
+          hasAccess = enrollments.some(e => e.batchId === batchId);
+        }
+      } catch (enrollError) {
+        const localEnrollment = await CourseEnrollment.findOne({
+          batchId,
+          studentId: userId,
+          status: "active",
+          deletedAt: null,
+        });
+        hasAccess = !!localEnrollment;
+      }
     }
 
     if (!hasAccess) {
-      throw new Error("You are not enrolled in this batch.");
+      throw new Error("You do not belong to this batch.");
     }
   }
 
@@ -235,40 +253,58 @@ const listWorkspaces = async (userId, role, token) => {
 
     return await enrichWorkspaces(workspaces, token);
   } else if (role === "student") {
-    let enrollments = [];
+    let studentBatchId = null;
     try {
-      const enrollmentServiceUrl = config.services.enrollment;
-      const base = enrollmentServiceUrl.replace(/\/$/, "");
-      const url = `${base}/enrollments`;
+      const userServiceUrl = config.services.user;
+      const base = userServiceUrl.replace(/\/$/, "");
+      const url = `${base}/students/${userId}`;
 
       const res = await fetchWithFallback(
         url,
         { headers: { Authorization: token } },
-        "enrollment",
-        "enrollment"
+        "user",
+        "user"
       );
       if (res.ok) {
         const data = await res.json();
-        enrollments = extractApiArray(data);
+        const student = data.data || data;
+        studentBatchId = student.batchId;
       }
     } catch (e) {
-      const localEnrollments = await CourseEnrollment.find({
-        studentId: userId,
-        status: "active",
-        deletedAt: null,
-      });
-      enrollments = localEnrollments.map(e => ({
-        courseId: e.courseId,
-        batchId: e.batchId,
-      }));
+      try {
+        const enrollmentServiceUrl = config.services.enrollment;
+        const enrollBase = enrollmentServiceUrl.replace(/\/$/, "");
+        const enrollUrl = `${enrollBase}/enrollments`;
+
+        const res = await fetchWithFallback(
+          enrollUrl,
+          { headers: { Authorization: token } },
+          "enrollment",
+          "enrollment"
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const enrollments = extractApiArray(data);
+          if (enrollments.length > 0) {
+            studentBatchId = enrollments[0].batchId;
+          }
+        }
+      } catch (enrollError) {
+        const localEnrollments = await CourseEnrollment.find({
+          studentId: userId,
+          status: "active",
+          deletedAt: null,
+        });
+        if (localEnrollments.length > 0) {
+          studentBatchId = localEnrollments[0].batchId;
+        }
+      }
     }
 
-    const batchIds = [...new Set(enrollments.map(e => e.batchId).filter(Boolean))];
-
-    if (batchIds.length === 0) return [];
+    if (!studentBatchId) return [];
 
     const workspaces = await Workspace.find({
-      batchId: { $in: batchIds },
+      batchId: studentBatchId,
       deletedAt: null,
     }).sort({ createdAt: -1 });
 
