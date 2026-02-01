@@ -3,10 +3,11 @@ import expressProxy from "express-http-proxy";
 import morgan from "morgan";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { createLogger, requestLoggerMiddleware } from "shared";
+import { createLogger, requestLoggerMiddleware, MongoTransport, systemLogSchemaDef, systemLogOptions } from "shared";
+import mongoose from "mongoose";
 
-// Configuration
 import { config, getAvailableServices } from "./config/config.js";
+import { config as sharedConfig } from "shared";
 
 // Services
 import { serviceRegistry } from "./services/serviceRegistry.js";
@@ -21,14 +22,10 @@ const logger = createLogger("GATEWAY");
 
 const app = express();
 
-// ========== Core Middleware ========== 
-
 // Request timing (must be early)
 app.use(responseTimingMiddleware);
-
 // Request Logger Middleware
 app.use(requestLoggerMiddleware("GATEWAY"));
-
 // Skip morgan logging for health checks
 app.use(morgan("dev", {
   skip: (req) => req.url === "/health"
@@ -41,16 +38,26 @@ app.use(cors({
 
 // Cookie parser for rate limiting by user
 app.use(cookieParser());
-
 // Global rate limiting (fallback)
 app.use(globalRateLimiter);
-
 // Request transformation (adds request ID, timestamps)
 app.use(transformerMiddleware);
 
-// ========== Health & Monitoring Endpoints ========== 
+// LOGGING SETUP
+try {
+  const userDbUri = sharedConfig.db.user;
 
-// Basic health check (for Docker/load balancer)
+  const logConnection = mongoose.createConnection(userDbUri);
+  const localSchema = new mongoose.Schema(systemLogSchemaDef, systemLogOptions);
+  const SystemLog = logConnection.model("SystemLog", localSchema);
+
+  logger.add(new MongoTransport({ model: SystemLog, level: 'info' }));
+  logger.info(`Connected to centralized log database at ${userDbUri}`);
+} catch (err) {
+  logger.error("Failed to setup centralized logging:", err);
+}
+
+// health check
 app.get("/health", (req, res) => {
   res.status(200).json({
     message: "Gateway Service is running",
@@ -59,20 +66,15 @@ app.get("/health", (req, res) => {
   });
 });
 
-// System health (aggregated service status)
 app.get("/api/system-health", async (req, res) => {
   try {
     const authorizationHeader = req.headers.authorization;
     const services = getAvailableServices();
-
-    // Check all services
     const checks = await Promise.all(
       services.map((service) => checkServiceHealth(service, authorizationHeader))
     );
 
     const checkedAt = new Date().toISOString();
-
-    // Update registry and check for alerts
     for (const check of checks) {
       const result = serviceRegistry.updateHealth(check.key, check);
       if (config.alerting.enabled && result) {
@@ -98,7 +100,6 @@ app.get("/api/system-health", async (req, res) => {
   }
 });
 
-// Service-specific health inspection
 app.get("/api/system-health/:key/inspect", async (req, res) => {
   try {
     const { key } = req.params;
@@ -146,7 +147,6 @@ app.get("/api/system-health/:key/inspect", async (req, res) => {
   }
 });
 
-// Service health logs
 app.get("/api/system-health/:key/logs", (req, res) => {
   try {
     const { key } = req.params;
@@ -181,7 +181,6 @@ app.get("/api/system-health/:key/logs", (req, res) => {
   }
 });
 
-// Metrics endpoint
 app.get("/api/metrics", (req, res) => {
   try {
     const metrics = metricsService.getMetrics();
@@ -198,7 +197,6 @@ app.get("/api/metrics", (req, res) => {
   }
 });
 
-// Metrics summary (lightweight)
 app.get("/api/metrics/summary", (req, res) => {
   try {
     const summary = metricsService.getSummary();
@@ -214,7 +212,6 @@ app.get("/api/metrics/summary", (req, res) => {
   }
 });
 
-// Alerts endpoint
 app.get("/api/alerts", (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit || 20), 100);
@@ -237,7 +234,6 @@ app.get("/api/alerts", (req, res) => {
   }
 });
 
-// Acknowledge alert
 app.post("/api/alerts/:id/acknowledge", express.json(), (req, res) => {
   try {
     const { id } = req.params;
@@ -264,8 +260,6 @@ app.post("/api/alerts/:id/acknowledge", express.json(), (req, res) => {
 
 
 
-// ========== Service Proxies with Rate Limiting ========== 
-
 // Helper to create proxy with rate limiting
 const createServiceProxy = (serviceKey, targetUrl, pathPrefix = null) => {
   const proxyOptions = {
@@ -284,7 +278,6 @@ const createMetricsProxy = (serviceKey, proxy) => {
   return (req, res, next) => {
     const startTime = Date.now();
 
-    // Intercept response to record metrics
     const originalEnd = res.end;
     res.end = function (...args) {
       const responseTime = Date.now() - startTime;
@@ -309,18 +302,18 @@ const createMetricsProxy = (serviceKey, proxy) => {
 };
 
 // Service routes with per-service rate limiting
-app.use("/api/academic", ...createServiceProxy("academic", process.env.ACADEMIC_SERVICE_URL));
-app.use("/api/user", ...createServiceProxy("user", process.env.USER_SERVICE_URL));
-app.use("/api/library", ...createServiceProxy("library", process.env.LIBRARY_SERVICE_URL));
-app.use("/api/enrollment", ...createServiceProxy("enrollment", process.env.ENROLLMENT_SERVICE_URL));
-app.use("/api/notification", ...createServiceProxy("notification", process.env.NOTIFICATION_SERVICE_URL));
-app.use("/api/communication", ...createServiceProxy("communication", process.env.COMMUNICATION_SERVICE_URL));
-app.use("/api/classroom", ...createServiceProxy("classroom", process.env.CLASSROOM_SERVICE_URL));
+app.use("/api/academic", ...createServiceProxy("academic", sharedConfig.services.academic));
+app.use("/api/user", ...createServiceProxy("user", sharedConfig.services.user));
+app.use("/api/library", ...createServiceProxy("library", sharedConfig.services.library));
+app.use("/api/enrollment", ...createServiceProxy("enrollment", sharedConfig.services.enrollment));
+app.use("/api/notification", ...createServiceProxy("notification", sharedConfig.services.notification));
+app.use("/api/communication", ...createServiceProxy("communication", sharedConfig.services.communication));
+app.use("/api/classroom", ...createServiceProxy("classroom", sharedConfig.services.classroom));
 
 // Public assets proxy (no rate limiting)
 app.use(
   "/public",
-  expressProxy(process.env.USER_SERVICE_URL, {
+  expressProxy(sharedConfig.services.user, {
     proxyReqPathResolver: (req) => "/public" + req.url,
   })
 );
@@ -381,7 +374,6 @@ const checkServiceHealth = async (service, authorizationHeader) => {
 };
 
 // ========== Background Health Probe ========== 
-
 const runBackgroundProbe = async () => {
   const services = getAvailableServices();
 
@@ -402,7 +394,6 @@ app.listen(config.port, () => {
   logger.info(`Gateway server started on http://localhost:${config.port}`);
   logger.info(`Registered ${serviceRegistry.getAll().length} services`);
 
-  // Background health probing
   if (config.health.probeIntervalMs > 0) {
     setInterval(() => {
       runBackgroundProbe().catch(() => { });

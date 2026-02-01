@@ -1,4 +1,6 @@
 import { ApiResponse, ApiError } from "shared";
+import SystemLog from "../models/SystemLog.js";
+import ApiMetric from "../models/ApiMetric.js";
 import mongoose from "mongoose";
 import os from "os";
 import Student from "../models/Student.js";
@@ -40,87 +42,98 @@ class SystemController {
     // Database Stats
     async getDatabaseStats(req, res, next) {
         try {
-            const db = mongoose.connection.db;
-            const stats = await db.stats();
+            const adminDb = mongoose.connection.db.admin();
+            const serverStatus = await adminDb.serverStatus();
+            const opcounters = serverStatus.opcounters;
 
-            // Count total users across all types from the 'users' collection or separate collections
-            // Assuming discriminated models in same 'users' collection or separate.
-            // Based on models, they seem to be separate or discriminated. 
-            // Checking models: Student, Teacher, Admin, Staff.
-            // Let's count individually.
+            // List all databases
+            const dbsList = await adminDb.listDatabases();
+            const allDatabases = [];
 
-            const [studentCount, teacherCount, adminCount, staffCount, orgCount] = await Promise.all([
-                mongoose.model('Student').countDocuments(),
-                mongoose.model('Teacher').countDocuments(),
-                mongoose.model('Admin').countDocuments(),
-                mongoose.model('Staff').countDocuments(),
-                // Using Department as Organization proxy.
-                // Assuming 'Department' model is registered in Mongoose from academic service or we need to define/import it.
-                // If not registered, this will fail. Let's assume we can rely on what we saw earlier or count distinct department IDs.
-                // Safest approach without cross-service model import issues is to count unique departmentIds in Students if Department model isn't available.
-                // But we saw Department.js in academic/models.
-                // Let's try to query 'departments' collection directly if model isn't handy, or use mongoose.connection.db.collection('departments').countDocuments()
-                mongoose.connection.db.collection('departments').countDocuments()
-            ]);
+            for (const dbInfo of dbsList.databases) {
+                const client = mongoose.connection.getClient();
+                const targetDb = client.db(dbInfo.name);
+                const dbStatsResult = await targetDb.stats();
+                const cols = await targetDb.listCollections().toArray();
+                const collectionsDetails = await Promise.all(cols.map(async (col) => {
+                    const colStats = await targetDb.command({ collStats: col.name });
+                    return {
+                        name: col.name,
+                        count: colStats.count,
+                        size: (colStats.size / 1024).toFixed(2) + ' KB',
+                        storageSize: (colStats.storageSize / 1024).toFixed(2) + ' KB'
+                    };
+                }));
 
-            const totalUsers = studentCount + teacherCount + adminCount + staffCount;
+                collectionsDetails.sort((a, b) => b.count - a.count);
 
-            // Get real collection stats
-            const collectionList = await db.listCollections().toArray();
-            const topCollections = await Promise.all(
-                collectionList.slice(0, 6).map(async (col) => {
-                    const count = await db.collection(col.name).countDocuments();
-                    return { name: col.name, count: count, size: 'N/A' };
-                })
-            );
-            topCollections.sort((a, b) => b.count - a.count);
+                allDatabases.push({
+                    name: dbInfo.name,
+                    sizeOnDisk: (dbInfo.sizeOnDisk / (1024 * 1024)).toFixed(2) + ' MB',
+                    empty: dbInfo.empty,
+                    collections: collectionsDetails.length,
+                    objects: dbStatsResult.objects,
+                    avgObjSize: dbStatsResult.avgObjSize,
+                    dataSize: (dbStatsResult.dataSize / (1024 * 1024)).toFixed(2) + ' MB',
+                    storageSize: (dbStatsResult.storageSize / (1024 * 1024)).toFixed(2) + ' MB',
+                    indexes: dbStatsResult.indexes,
+                    indexSize: (dbStatsResult.indexSize / (1024 * 1024)).toFixed(2) + ' MB',
+                    collectionDetails: collectionsDetails
+                });
+            }
 
             const dbStats = {
                 status: mongoose.connection.readyState === 1 ? "active" : "inactive",
-                collections: stats.collections,
-                documents: stats.objects,
-                size: (stats.dataSize / (1024 * 1024)).toFixed(2) + " MB",
-                connections: (await db.admin().serverStatus()).connections.current,
+                host: mongoose.connection.host,
+                connections: serverStatus.connections.current,
                 operations: {
-                    reads: "N/A",
-                    writes: "N/A",
-                    updates: "N/A",
-                    deletes: "N/A"
+                    reads: opcounters.query + opcounters.getmore,
+                    writes: opcounters.insert,
+                    updates: opcounters.update,
+                    deletes: opcounters.delete
                 },
-                counts: {
-                    totalUsers,
-                    students: studentCount,
-                    teachers: teacherCount,
-                    admins: adminCount,
-                    staff: staffCount,
-                    organizations: orgCount
-                },
-                breakdown: [
-                    { name: 'Students', count: studentCount, color: '#4f46e5' },
-                    { name: 'Teachers', count: teacherCount, color: '#0ea5e9' },
-                    { name: 'Admins', count: adminCount, color: '#f59e0b' },
-                    { name: 'Staff', count: staffCount, color: '#10b981' }
-                ],
-                topCollections
+                databases: allDatabases,
             };
+
+            const currentDbName = mongoose.connection.name;
+            const currentDbData = allDatabases.find(d => d.name === currentDbName) || allDatabases[0];
+            if (currentDbData) {
+                dbStats.size = currentDbData.storageSize;
+                dbStats.collections = currentDbData.collections;
+                dbStats.documents = currentDbData.objects;
+                dbStats.topCollections = currentDbData.collectionDetails.slice(0, 6);
+            }
+
             return ApiResponse.success(res, dbStats, "Database stats retrieved successfully");
         } catch (error) {
             next(error);
         }
     }
 
-    // Activity Logs
     async getLogs(req, res, next) {
         try {
-            // Mock logs
-            const logs = Array.from({ length: 20 }).map((_, i) => ({
-                id: `log-${i}`,
-                level: i % 5 === 0 ? "error" : (i % 3 === 0 ? "warn" : "info"),
-                message: i % 5 === 0 ? "Database connection timeout" : "User logged in successfully",
-                timestamp: new Date(Date.now() - i * 1000 * 60 * 5),
-                service: "user-service",
-                user: "system"
-            }));
+            const { service, level, search, limit = 50, page = 1 } = req.query;
+            const query = {};
+            if (service && service !== 'all') {
+                query.service = service.toUpperCase();
+            }
+
+            if (level && level !== 'all') {
+                query.level = level.toLowerCase();
+            }
+
+            if (search) {
+                query.$or = [
+                    { message: { $regex: search, $options: 'i' } },
+                    { user: { $regex: search, $options: 'i' } }
+                ];
+            }
+
+            const logs = await SystemLog.find(query)
+                .sort({ timestamp: -1 })
+                .limit(parseInt(limit))
+                .lean();
+
             return ApiResponse.success(res, logs, "System logs retrieved successfully");
         } catch (error) {
             next(error);
@@ -142,13 +155,28 @@ class SystemController {
                 alerts.push({ id: Date.now() + 1, type: "warning", message: `Elevated Memory Usage: ${memUsage.toFixed(1)}%`, time: "Just now" });
             }
 
-            if (loadAvg > 2) { // Assuming 2 is high for this context, adjustable
+            if (loadAvg > 2) {
                 alerts.push({ id: Date.now() + 2, type: "warning", message: `High System Load: ${loadAvg.toFixed(2)}`, time: "Just now" });
             }
 
             if (mongoose.connection.readyState !== 1) {
                 alerts.push({ id: Date.now() + 3, type: "critical", message: "Database connection unstable", time: "Just now" });
             }
+
+            // Check for recent error logs as alerts
+            const recentErrors = await SystemLog.find({
+                level: "error",
+                timestamp: { $gte: new Date(Date.now() - 15 * 60 * 1000) } // Last 15 mins
+            }).limit(5);
+
+            recentErrors.forEach((error, idx) => {
+                alerts.push({
+                    id: Date.now() + 10 + idx,
+                    type: "critical",
+                    message: `System Error: ${error.message}`,
+                    time: new Date(error.timestamp).toLocaleTimeString()
+                });
+            });
 
             if (alerts.length === 0) {
                 alerts.push({ id: Date.now(), type: "success", message: "System operating normally", time: "Just now" });
@@ -163,89 +191,71 @@ class SystemController {
     // API Stats
     async getApiStats(req, res, next) {
         try {
-            // Define all backend service endpoints
-            const endpoints = [
-                // User Service endpoints
-                { method: "POST", path: "/api/user/auth/login", service: "User", description: "User authentication" },
-                { method: "POST", path: "/api/user/auth/register", service: "User", description: "User registration" },
-                { method: "GET", path: "/api/user/auth/me", service: "User", description: "Get current user" },
-                { method: "POST", path: "/api/user/auth/logout", service: "User", description: "User logout" },
-                { method: "GET", path: "/api/user/system/health", service: "User", description: "System health check" },
-                { method: "GET", path: "/api/user/system/database-stats", service: "User", description: "Database statistics" },
+            const totalCalls = await ApiMetric.countDocuments();
+            const latencyResult = await ApiMetric.aggregate([
+                {
+                    $group: {
+                        _id: null,
+                        avgLatency: { $avg: "$duration" }
+                    }
+                }
+            ]);
+            const avgLatency = latencyResult.length > 0 ? Math.round(latencyResult[0].avgLatency) : 0;
 
-                // Academic Service endpoints
-                { method: "GET", path: "/api/academic/courses", service: "Academic", description: "List courses" },
-                { method: "GET", path: "/api/academic/departments", service: "Academic", description: "List departments" },
-                { method: "GET", path: "/api/academic/faculties", service: "Academic", description: "List faculties" },
-                { method: "GET", path: "/api/academic/programs", service: "Academic", description: "List programs" },
-                { method: "GET", path: "/api/academic/batches", service: "Academic", description: "List batches" },
+            // Calculate error rate
+            const errorCalls = await ApiMetric.countDocuments({ statusCode: { $gte: 400 } });
+            const errorRate = totalCalls > 0 ? (errorCalls / totalCalls).toFixed(2) : 0;
 
-                // Enrollment Service endpoints
-                { method: "GET", path: "/api/enrollment/enrollments", service: "Enrollment", description: "List enrollments" },
-                { method: "POST", path: "/api/enrollment/enroll", service: "Enrollment", description: "Create enrollment" },
-                { method: "GET", path: "/api/enrollment/grades", service: "Enrollment", description: "Get grades" },
-                { method: "GET", path: "/api/enrollment/attendance", service: "Enrollment", description: "Get attendance" },
-
-                // Classroom Service endpoints
-                { method: "GET", path: "/api/classroom/workspaces", service: "Classroom", description: "List workspaces" },
-                { method: "GET", path: "/api/classroom/assignments", service: "Classroom", description: "List assignments" },
-                { method: "POST", path: "/api/classroom/submissions", service: "Classroom", description: "Submit assignment" },
-                { method: "GET", path: "/api/classroom/materials", service: "Classroom", description: "List materials" },
-
-                // Library Service endpoints
-                { method: "GET", path: "/api/library/books", service: "Library", description: "List books" },
-                { method: "GET", path: "/api/library/borrowings", service: "Library", description: "List borrowings" },
-                { method: "POST", path: "/api/library/reserve", service: "Library", description: "Reserve book" },
-
-                // Notification Service endpoints
-                { method: "GET", path: "/api/notification/notifications", service: "Notification", description: "List notifications" },
-                { method: "POST", path: "/api/notification/send", service: "Notification", description: "Send notification" },
-
-                // Communication Service endpoints
-                { method: "GET", path: "/api/communication/messages", service: "Communication", description: "List messages" },
-                { method: "POST", path: "/api/communication/send", service: "Communication", description: "Send message" },
-            ];
-
-            // Generate dynamic-looking metrics (in production, this would come from a metrics store)
-            const timestamp = Date.now();
-            const endpointsWithStats = endpoints.map((ep, index) => {
-                // Create quasi-random but consistent stats based on endpoint characteristics
-                const baseHash = ep.path.length + ep.method.length + index;
-                const calls = Math.floor(1000 + (baseHash * 137) % 10000);
-                const avgLatency = Math.floor(30 + (baseHash * 23) % 200);
-                const errorRate = parseFloat((((baseHash * 7) % 100) / 100).toFixed(2));
-
-                return {
-                    ...ep,
-                    calls,
-                    avgLatency,
-                    errorRate: errorRate > 2 ? 0.1 : errorRate, // Cap error rate
-                    lastCalled: new Date(timestamp - (baseHash * 60000) % 3600000).toISOString()
-                };
-            });
-
-            // Sort by calls descending
-            endpointsWithStats.sort((a, b) => b.calls - a.calls);
-
-            const totalCalls = endpointsWithStats.reduce((sum, ep) => sum + ep.calls, 0);
-            const avgLatency = Math.round(endpointsWithStats.reduce((sum, ep) => sum + ep.avgLatency, 0) / endpointsWithStats.length);
-            const avgErrorRate = (endpointsWithStats.reduce((sum, ep) => sum + ep.errorRate, 0) / endpointsWithStats.length).toFixed(2);
+            // Top endpoints
+            const topEndpoints = await ApiMetric.aggregate([
+                {
+                    $group: {
+                        _id: { path: "$path", method: "$method", service: "$service" },
+                        calls: { $sum: 1 },
+                        avgLatency: { $avg: "$duration" },
+                        errorCount: {
+                            $sum: { $cond: [{ $gte: ["$statusCode", 400] }, 1, 0] }
+                        },
+                        lastCalled: { $max: "$timestamp" }
+                    }
+                },
+                { $sort: { calls: -1 } },
+                { $limit: 15 },
+                {
+                    $project: {
+                        _id: 0,
+                        path: "$_id.path",
+                        method: "$_id.method",
+                        service: "$_id.service",
+                        calls: 1,
+                        avgLatency: { $round: ["$avgLatency", 0] },
+                        errorRate: {
+                            $cond: [
+                                { $eq: ["$calls", 0] },
+                                0,
+                                { $divide: ["$errorCount", "$calls"] }
+                            ]
+                        },
+                        lastCalled: 1
+                    }
+                }
+            ]);
 
             const stats = {
                 requests: {
                     total: totalCalls,
-                    success: Math.floor(totalCalls * 0.992),
-                    error: Math.floor(totalCalls * 0.008)
+                    success: totalCalls - errorCalls,
+                    error: errorCalls
                 },
                 latency: {
                     avg: avgLatency,
-                    p95: Math.round(avgLatency * 2.5),
-                    p99: Math.round(avgLatency * 3.5)
+                    p95: Math.round(avgLatency * 2.5), // Approximation
+                    p99: Math.round(avgLatency * 3.5)  // Approximation
                 },
-                errorRate: parseFloat(avgErrorRate),
-                activeServices: 8,
+                errorRate: parseFloat(errorRate),
+                activeServices: 8, // Still hardcoded as we don't have service registry
                 totalServices: 8,
-                endpoints: endpointsWithStats.slice(0, 15), // Return top 15 most called
+                endpoints: topEndpoints,
                 updatedAt: new Date().toISOString()
             };
 
@@ -261,15 +271,40 @@ class SystemController {
             // Fetch real departments from the 'departments' collection
             const departments = await mongoose.connection.db.collection('departments')
                 .find({ deletedAt: null })
-                .limit(5)
+                .limit(10) // Increased limit
                 .toArray();
 
-            const orgs = departments.map(dept => ({
-                name: dept.name,
-                users: 0, // We would need to count users in this department to be accurate, but for performance let's default or simple estimate
-                status: dept.status ? "active" : "inactive",
-                growth: 0 // Mock growth for now as we don't have historical data easily
+            // Calculate user distribution per department
+            // This assumes students have a 'department' field or similar linkage
+            // For now, we'll try to aggregate this from students collection if possible,
+            // or return 0 if that's too expensive/complex for this view without a dedicated counter.
+
+            /* 
+               Optimization: Ideally, Organization/Department models should have a 'userCount' field 
+               maintained by hooks. Since we might not have that, we'll do a quick aggregation 
+               if the dataset isn't huge, or default to 0. 
+            */
+
+            const orgs = await Promise.all(departments.map(async (dept) => {
+                // Count students in this department
+                // Assuming 'departmentId' is the foreign key in students collection
+                // We need to check the actual Student model schema, but usually it's `department` or `departmentId`
+                // Let's try to count based on department ID string matching.
+
+                const studentCount = await Student.countDocuments({
+                    department: dept._id
+                });
+
+                return {
+                    name: dept.name,
+                    users: studentCount,
+                    status: dept.status ? "active" : "inactive",
+                    growth: 0 // Placeholder
+                };
             }));
+
+            // Sort by user count
+            orgs.sort((a, b) => b.users - a.users);
 
             return ApiResponse.success(res, orgs, "Organizations retrieved successfully");
         } catch (error) {

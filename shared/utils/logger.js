@@ -43,7 +43,7 @@ const customFormat = (serviceName) =>
   );
 
 // Create logger factory function
-export const createLogger = (serviceName = "APP") => {
+export const createLogger = (serviceName = "APP", customTransports = []) => {
   const isDevelopment = process.env.NODE_ENV !== "production";
 
   const transports = [
@@ -87,6 +87,9 @@ export const createLogger = (serviceName = "APP") => {
         customFormat(serviceName)
       ),
     }),
+
+    // Add custom transports (like MongoDB)
+    ...customTransports
   ];
 
   // Development-only detailed logging
