@@ -146,17 +146,17 @@ class SystemController {
             const loadAvg = os.loadavg()[0]; // 1 min load average
 
             if (memUsage > 85) {
-                alerts.push({ id: Date.now(), type: "critical", message: `High Memory Usage: ${memUsage.toFixed(1)}%`, time: "Just now" });
+                alerts.push({ id: "sys-mem-critical", type: "critical", message: `High Memory Usage: ${memUsage.toFixed(1)}%`, time: "Just now" });
             } else if (memUsage > 70) {
-                alerts.push({ id: Date.now() + 1, type: "warning", message: `Elevated Memory Usage: ${memUsage.toFixed(1)}%`, time: "Just now" });
+                alerts.push({ id: "sys-mem-warning", type: "warning", message: `Elevated Memory Usage: ${memUsage.toFixed(1)}%`, time: "Just now" });
             }
 
             if (loadAvg > 2) {
-                alerts.push({ id: Date.now() + 2, type: "warning", message: `High System Load: ${loadAvg.toFixed(2)}`, time: "Just now" });
+                alerts.push({ id: "sys-load-high", type: "warning", message: `High System Load: ${loadAvg.toFixed(2)}`, time: "Just now" });
             }
 
             if (mongoose.connection.readyState !== 1) {
-                alerts.push({ id: Date.now() + 3, type: "critical", message: "Database connection unstable", time: "Just now" });
+                alerts.push({ id: "sys-db-unstable", type: "critical", message: "Database connection unstable", time: "Just now" });
             }
 
             // Check for recent error logs as alerts
@@ -165,9 +165,9 @@ class SystemController {
                 timestamp: { $gte: new Date(Date.now() - 15 * 60 * 1000) } // Last 15 mins
             }).limit(5);
 
-            recentErrors.forEach((error, idx) => {
+            recentErrors.forEach((error) => {
                 alerts.push({
-                    id: Date.now() + 10 + idx,
+                    id: `log-${error._id}`,
                     type: "critical",
                     message: `System Error: ${error.message}`,
                     time: new Date(error.timestamp).toLocaleTimeString()
@@ -175,7 +175,7 @@ class SystemController {
             });
 
             if (alerts.length === 0) {
-                alerts.push({ id: Date.now(), type: "success", message: "System operating normally", time: "Just now" });
+                alerts.push({ id: "sys-normal", type: "success", message: "System operating normally", time: "Just now" });
             }
 
             return ApiResponse.success(res, alerts, "System alerts retrieved successfully");
