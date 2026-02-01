@@ -3,10 +3,6 @@ import SystemLog from "../models/SystemLog.js";
 import ApiMetric from "../models/ApiMetric.js";
 import mongoose from "mongoose";
 import os from "os";
-import Student from "../models/Student.js";
-import Teacher from "../models/Teacher.js";
-import Admin from "../models/Admin.js";
-import Staff from "../models/Staff.js";
 
 class SystemController {
     // System Health
@@ -260,53 +256,6 @@ class SystemController {
             };
 
             return ApiResponse.success(res, stats, "API stats retrieved successfully");
-        } catch (error) {
-            next(error);
-        }
-    }
-
-    // Organizations (Departments acting as Orgs)
-    async getOrganizations(req, res, next) {
-        try {
-            // Fetch real departments from the 'departments' collection
-            const departments = await mongoose.connection.db.collection('departments')
-                .find({ deletedAt: null })
-                .limit(10) // Increased limit
-                .toArray();
-
-            // Calculate user distribution per department
-            // This assumes students have a 'department' field or similar linkage
-            // For now, we'll try to aggregate this from students collection if possible,
-            // or return 0 if that's too expensive/complex for this view without a dedicated counter.
-
-            /* 
-               Optimization: Ideally, Organization/Department models should have a 'userCount' field 
-               maintained by hooks. Since we might not have that, we'll do a quick aggregation 
-               if the dataset isn't huge, or default to 0. 
-            */
-
-            const orgs = await Promise.all(departments.map(async (dept) => {
-                // Count students in this department
-                // Assuming 'departmentId' is the foreign key in students collection
-                // We need to check the actual Student model schema, but usually it's `department` or `departmentId`
-                // Let's try to count based on department ID string matching.
-
-                const studentCount = await Student.countDocuments({
-                    department: dept._id
-                });
-
-                return {
-                    name: dept.name,
-                    users: studentCount,
-                    status: dept.status ? "active" : "inactive",
-                    growth: 0 // Placeholder
-                };
-            }));
-
-            // Sort by user count
-            orgs.sort((a, b) => b.users - a.users);
-
-            return ApiResponse.success(res, orgs, "Organizations retrieved successfully");
         } catch (error) {
             next(error);
         }

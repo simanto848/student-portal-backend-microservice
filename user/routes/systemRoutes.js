@@ -11,6 +11,6 @@ router.get("/database", systemController.getDatabaseStats);
 router.get("/logs", systemController.getLogs);
 router.get("/alerts", systemController.getAlerts);
 router.get("/api-stats", systemController.getApiStats);
-router.get("/organizations", systemController.getOrganizations);
+
 
 export default router;

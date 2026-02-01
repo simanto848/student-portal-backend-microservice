@@ -12,35 +12,21 @@ import mongoose from "mongoose";
 dotenv.config();
 
 const logger = createLogger("NOTIFICATION");
-const PORT = process.env.NOTIFICATION_SERVICE_PORT || 8007;
+const PORT = config.ports.notification;
 
 function checkEmailConfig() {
-  const requiredEmailVars = ["MAIL_USER", "MAIL_PASS"];
-  const missingVars = requiredEmailVars.filter((v) => !process.env[v]);
+  const missingKeys = [];
+  if (!config.email.user) missingKeys.push("MAIL_USER");
+  if (!config.email.pass) missingKeys.push("MAIL_PASS");
 
-  if (missingVars.length > 0) {
-    logger.warn("WARNING: Email sending is NOT configured!", {
-      missingVars: missingVars.join(", "),
-    });
-    logger.info("Notifications will be delivered via socket only.");
-    logger.info("To enable email notifications, set the following:", {
-      required: [
-        "MAIL_HOST",
-        "MAIL_PORT",
-        "MAIL_USER",
-        "MAIL_PASS",
-        "MAIL_FROM",
-      ],
+  if (missingKeys.length > 0) {
+    logger.warn("WARNING: Email sending configuration is NOT configured!", {
+      missingVars: missingKeys.join(", "),
     });
     return false;
   }
 
-  logger.info("Email configuration found", {
-    host: config.email.host || "smtp.gmail.com",
-    port: config.email.port || "587",
-    from: config.email.from || "EDUCATION HUB",
-    gateway: config.services.gateway || "http://localhost:8000",
-  });
+  logger.info("Email configuration found");
   return true;
 }
 
@@ -48,15 +34,12 @@ async function start() {
   try {
     logger.info("Starting Notification Service...");
     const emailConfigured = checkEmailConfig();
-
-    logger.info("Connecting to MongoDB...");
     await connectDB();
-    logger.info("Connected to MongoDB");
 
     try {
-      let userDbUri = (config.services.notification || "").replace("notification_service", "user_service");
-      if (!userDbUri || userDbUri === config.db.user) {
-        userDbUri = config.db.user;
+      let userDbUri = config.db.user;
+      if (!userDbUri) {
+        userDbUri = "mongodb://localhost:27017/student_portal_user_service";
       }
 
       const logConnection = mongoose.createConnection(userDbUri);
