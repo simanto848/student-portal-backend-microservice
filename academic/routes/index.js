@@ -23,7 +23,7 @@ router.use('/session-courses', sessionCourseRoutes);
 router.use('/batches', batchRoutes);
 router.use('/classrooms', classroomRoutes);
 router.use('/schedules', courseScheduleRoutes);
-router.use('/syllabus', courseSyllabusRoutes);
+// router.use('/syllabus', courseSyllabusRoutes); // Moved to courseRoutes
 router.use('/exam-committees', examCommitteeRoutes);
 router.use('/ai-schedules', scheduleRoutes);
 
