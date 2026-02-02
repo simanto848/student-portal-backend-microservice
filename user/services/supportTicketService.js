@@ -109,6 +109,14 @@ class SupportTicketService {
 
     async create(ticketData) {
         try {
+            // Auto-assign to a moderator
+            const assignment = await this.autoAssignTicket();
+            if (assignment) {
+                ticketData.assignedTo = assignment.id;
+                ticketData.assignedToName = assignment.fullName;
+                ticketData.status = 'in_progress';
+            }
+
             const ticket = await SupportTicket.create({
                 ...ticketData,
                 messages: [{
@@ -124,6 +132,36 @@ class SupportTicketService {
                 .lean();
         } catch (error) {
             throw new ApiError(500, 'Error creating ticket: ' + error.message);
+        }
+    }
+
+    async autoAssignTicket() {
+        try {
+            // Find all moderators and admins
+            const staff = await Admin.find({
+                role: { $in: ['admin', 'moderator'] },
+                deletedAt: null,
+                isBlocked: false,
+                isActive: true
+            }).lean();
+
+            if (staff.length === 0) return null;
+
+            // Count open tickets for each staff member
+            const ticketCounts = await Promise.all(staff.map(async (s) => {
+                const count = await SupportTicket.countDocuments({
+                    assignedTo: s._id,
+                    status: { $in: ['open', 'in_progress'] }
+                });
+                return { id: s._id, fullName: s.fullName, count };
+            }));
+
+            // Sort by count ascending and pick the first one
+            ticketCounts.sort((a, b) => a.count - b.count);
+            return ticketCounts[0];
+        } catch (error) {
+            console.error('Auto-assignment failed:', error);
+            return null;
         }
     }
 
@@ -232,33 +270,36 @@ class SupportTicketService {
         }
     }
 
-    async resolve(ticketId, resolvedBy, resolvedByName) {
+    async resolve(ticketId, resolvedBy, resolvedByName, resolvedByRole) {
         try {
-            const ticket = await SupportTicket.findByIdAndUpdate(
-                ticketId,
-                {
-                    $set: {
-                        status: 'resolved',
-                        resolvedAt: new Date(),
-                        resolvedBy: resolvedBy,
-                    },
-                    $push: {
-                        messages: {
-                            sender: resolvedBy,
-                            senderType: 'system',
-                            senderName: 'System',
-                            content: `Ticket resolved by ${resolvedByName}`,
-                        },
-                    },
-                },
-                { new: true }
-            ).populate('assignedTo', 'fullName email role');
-
+            const ticket = await SupportTicket.findById(ticketId);
             if (!ticket) {
                 throw new ApiError(404, 'Ticket not found');
             }
 
-            return ticket;
+            // Check if user has permission to resolve
+            const isSuperAdmin = resolvedByRole === 'super_admin' || resolvedByRole === 'admin';
+            const isAssignedModerator = ticket.assignedTo === resolvedBy;
+
+            if (!isSuperAdmin && !isAssignedModerator) {
+                throw new ApiError(403, 'You can only resolve tickets assigned to you');
+            }
+
+            ticket.status = 'resolved';
+            ticket.resolvedAt = new Date();
+            ticket.resolvedBy = resolvedBy;
+            ticket.messages.push({
+                sender: resolvedBy,
+                senderType: 'system',
+                senderName: 'System',
+                content: `Ticket resolved by ${resolvedByName}`,
+            });
+
+            await ticket.save();
+
+            return await SupportTicket.findById(ticket._id)
+                .populate('assignedTo', 'fullName email role')
+                .lean();
         } catch (error) {
             if (error instanceof ApiError) throw error;
             throw new ApiError(500, 'Error resolving ticket: ' + error.message);

@@ -140,11 +140,11 @@ class AdminController {
         }
     }
 
-    // Super Admin only methods
+    // Admin manage user methods
     async blockUser(req, res, next) {
         try {
             const { userType, userId, reason } = req.body;
-            const result = await adminService.blockUser(userType, userId, req.user.id, reason);
+            const result = await adminService.blockUser(userType, userId, req.user.id, reason, req.user.role);
             return ApiResponse.success(res, result, 'User blocked successfully');
         } catch (error) {
             next(error);
@@ -154,7 +154,7 @@ class AdminController {
     async unblockUser(req, res, next) {
         try {
             const { userType, userId } = req.body;
-            const result = await adminService.unblockUser(userType, userId);
+            const result = await adminService.unblockUser(userType, userId, req.user.role);
             return ApiResponse.success(res, result, 'User unblocked successfully');
         } catch (error) {
             next(error);

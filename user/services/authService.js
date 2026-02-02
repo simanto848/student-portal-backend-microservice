@@ -113,6 +113,13 @@ class AuthService {
         throw new ApiError(401, `${roleKey} credentials are invalid`);
       }
 
+      if (user.isBlocked) {
+        throw new ApiError(
+          403,
+          `Your account has been blocked. Reason: ${user.blockReason || "No reason provided"}. Please contact support.`
+        );
+      }
+
       const clientIp = this.getClientIp(req);
       this.validateRegisteredIp(user, clientIp, roleKey);
 

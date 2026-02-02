@@ -326,9 +326,9 @@ class AdminService {
     }
 
     /**
-     * Block a user (super_admin only)
+     * Block a user
      */
-    async blockUser(userType, userId, blockedBy, reason) {
+    async blockUser(userType, userId, blockedBy, reason, currentUserRole) {
         try {
             const modelMap = {
                 student: mongoose.model('Student'),
@@ -351,7 +351,22 @@ class AdminService {
                 throw new ApiError(400, 'User is already blocked');
             }
 
-            // Prevent blocking super_admin
+            // Privilege Checks
+            if (currentUserRole !== 'super_admin') {
+                if (userType === 'admin') {
+                    // Admin can block moderators, but not other admins or super admins
+                    if (currentUserRole === 'admin') {
+                        if (user.role === 'admin' || user.role === 'super_admin') {
+                            throw new ApiError(403, 'Admins can only block moderators and regular users');
+                        }
+                    } else if (currentUserRole === 'moderator') {
+                        // Moderators cannot block anyone in the Admin model (including moderators)
+                        throw new ApiError(403, 'Moderators can only block regular users');
+                    }
+                }
+            }
+
+            // Prevent blocking super_admin (safety check)
             if (userType === 'admin' && user.role === 'super_admin') {
                 throw new ApiError(403, 'Cannot block a super admin');
             }
@@ -379,9 +394,9 @@ class AdminService {
     }
 
     /**
-     * Unblock a user (super_admin only)
+     * Unblock a user
      */
-    async unblockUser(userType, userId) {
+    async unblockUser(userType, userId, currentUserRole) {
         try {
             const modelMap = {
                 student: mongoose.model('Student'),
@@ -402,6 +417,19 @@ class AdminService {
 
             if (!user.isBlocked) {
                 throw new ApiError(400, 'User is not blocked');
+            }
+
+            // Privilege Checks (Mirroring block logic)
+            if (currentUserRole !== 'super_admin') {
+                if (userType === 'admin') {
+                    if (currentUserRole === 'admin') {
+                        if (user.role === 'admin' || user.role === 'super_admin') {
+                            throw new ApiError(403, 'Admins can only unblock moderators and regular users');
+                        }
+                    } else if (currentUserRole === 'moderator') {
+                        throw new ApiError(403, 'Moderators can only unblock regular users');
+                    }
+                }
             }
 
             user.isBlocked = false;

@@ -125,7 +125,8 @@ class SupportTicketController {
             const ticket = await supportTicketService.resolve(
                 req.params.id,
                 req.user.id,
-                req.user.fullName
+                req.user.fullName,
+                req.user.role
             );
             return ApiResponse.success(res, ticket, 'Ticket resolved successfully');
         } catch (error) {

@@ -14,7 +14,7 @@ import {
 import { authenticate } from "shared";
 import upload from "../middlewares/uploadMiddleware.js";
 import { transformBody } from "../middlewares/transformBody.js";
-import { requireSuperAdmin, requireAdmin, canManageAdmin } from "../middlewares/roleMiddleware.js";
+import { requireSuperAdmin, requireAdmin, requireAnyAdmin, canManageAdmin } from "../middlewares/roleMiddleware.js";
 
 const router = express.Router();
 
@@ -46,10 +46,10 @@ router.delete("/:id", adminController.delete);
 router.delete("/:id/permanently", requireSuperAdmin, adminController.deletePermanently);
 router.post("/:id/restore", adminController.restore);
 
-// Super Admin only routes - User Management
-router.get("/users/all", requireSuperAdmin, adminController.getAllUsers);
-router.get("/users/:id/details", requireSuperAdmin, adminController.getUserDetails);
-router.post("/users/block", requireSuperAdmin, adminController.blockUser);
-router.post("/users/unblock", requireSuperAdmin, adminController.unblockUser);
+// Admin/Moderator Manage User routes
+router.get("/users/all", requireAnyAdmin, adminController.getAllUsers);
+router.get("/users/:id/details", requireAnyAdmin, adminController.getUserDetails);
+router.post("/users/block", requireAnyAdmin, adminController.blockUser);
+router.post("/users/unblock", requireAnyAdmin, adminController.unblockUser);
 
 export default router;
