@@ -87,12 +87,33 @@ class AdminService {
 
             const temporaryPassword = PasswordGenerator.generate(12);
             adminData.password = temporaryPassword;
-
-            // Email sending moved to after admin creation
+            let profileData = null;
+            if (adminData.profile && typeof adminData.profile === 'object') {
+                profileData = adminData.profile;
+                delete adminData.profile;
+            }
 
             const admin = await Admin.create(adminData);
+            if (profileData) {
+                try {
+                    const Profile = mongoose.model('Profile');
+                    const nameParts = adminData.fullName ? adminData.fullName.split(' ') : ['Unknown'];
+                    const firstName = profileData.firstName || nameParts[0];
+                    const lastName = profileData.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
 
-            // Send welcome email non-blockingly
+                    const profile = await Profile.create({
+                        firstName,
+                        lastName,
+                        ...profileData,
+                        user: admin._id
+                    });
+
+                    await Admin.findByIdAndUpdate(admin._id, { $set: { profile: profile._id } });
+                } catch (profileError) {
+                    console.error('Failed to create admin profile:', profileError.message);
+                }
+            }
+
             emailService.sendWelcomeEmailWithCredentials(adminData.email, {
                 fullName: adminData.fullName,
                 email: adminData.email,
@@ -100,7 +121,8 @@ class AdminService {
             }).catch(emailError => {
                 console.error('Failed to send welcome email:', emailError.message);
             });
-            const createdAdmin = await Admin.findById(admin._id).select('-password').lean();
+
+            const createdAdmin = await Admin.findById(admin._id).select('-password').populate('profile').lean();
             return createdAdmin;
         } catch (error) {
             if (error instanceof ApiError) throw error;
@@ -118,7 +140,6 @@ class AdminService {
             delete updateData.email;
             delete updateData.registrationNumber;
 
-            // Remove undefined or null fields
             Object.keys(updateData).forEach(key => {
                 if (updateData[key] === undefined || updateData[key] === null || updateData[key] === '') {
                     delete updateData[key];
@@ -131,11 +152,15 @@ class AdminService {
             }
 
             if (updateData.profile && typeof updateData.profile === 'object') {
+                const Profile = mongoose.model('Profile');
                 if (existing.profile) {
-                    await mongoose.model('Profile').findByIdAndUpdate(existing.profile, { $set: updateData.profile }, { new: true, runValidators: true });
+                    await Profile.findByIdAndUpdate(
+                        typeof existing.profile === 'string' ? existing.profile : existing.profile._id,
+                        { $set: updateData.profile },
+                        { new: true, runValidators: true }
+                    );
                     delete updateData.profile;
                 } else {
-                    const Profile = mongoose.model('Profile');
                     let pf = await Profile.findOne({ user: adminId });
 
                     if (pf) {
@@ -325,9 +350,7 @@ class AdminService {
         }
     }
 
-    /**
-     * Block a user
-     */
+
     async blockUser(userType, userId, blockedBy, reason, currentUserRole) {
         try {
             const modelMap = {
@@ -351,22 +374,18 @@ class AdminService {
                 throw new ApiError(400, 'User is already blocked');
             }
 
-            // Privilege Checks
             if (currentUserRole !== 'super_admin') {
                 if (userType === 'admin') {
-                    // Admin can block moderators, but not other admins or super admins
                     if (currentUserRole === 'admin') {
                         if (user.role === 'admin' || user.role === 'super_admin') {
                             throw new ApiError(403, 'Admins can only block moderators and regular users');
                         }
                     } else if (currentUserRole === 'moderator') {
-                        // Moderators cannot block anyone in the Admin model (including moderators)
                         throw new ApiError(403, 'Moderators can only block regular users');
                     }
                 }
             }
 
-            // Prevent blocking super_admin (safety check)
             if (userType === 'admin' && user.role === 'super_admin') {
                 throw new ApiError(403, 'Cannot block a super admin');
             }
@@ -393,9 +412,6 @@ class AdminService {
         }
     }
 
-    /**
-     * Unblock a user
-     */
     async unblockUser(userType, userId, currentUserRole) {
         try {
             const modelMap = {
@@ -419,7 +435,6 @@ class AdminService {
                 throw new ApiError(400, 'User is not blocked');
             }
 
-            // Privilege Checks (Mirroring block logic)
             if (currentUserRole !== 'super_admin') {
                 if (userType === 'admin') {
                     if (currentUserRole === 'admin') {
@@ -452,9 +467,6 @@ class AdminService {
         }
     }
 
-    /**
-     * Get detailed user information (super_admin only)
-     */
     async getUserDetails(userType, userId) {
         try {
             const modelMap = {
@@ -478,20 +490,17 @@ class AdminService {
                 throw new ApiError(404, 'User not found');
             }
 
-            // Get additional details based on user type
             const details = {
                 ...user,
                 userType,
             };
 
-            // Add login history summary
             details.loginSummary = {
                 lastLoginAt: user.lastLoginAt,
                 lastLoginIp: user.lastLoginIp,
                 registeredIps: user.registeredIpAddress || [],
             };
 
-            // Add account status
             details.accountStatus = {
                 isActive: user.isActive,
                 isBlocked: user.isBlocked || false,
@@ -509,21 +518,14 @@ class AdminService {
         }
     }
 
-    /**
-     * Get all users across all types (super_admin only)
-     */
     async getAllUsers(options = {}) {
         try {
             const { search, userType, isBlocked, page = 1, limit = 20 } = options;
             const skip = (page - 1) * limit;
 
-            const userTypes = userType
-                ? [userType]
-                : ['student', 'teacher', 'staff', 'admin'];
-
+            const userTypes = userType ? [userType] : ['student', 'teacher', 'staff', 'admin'];
             const results = [];
             let totalCount = 0;
-
             for (const type of userTypes) {
                 const modelMap = {
                     student: mongoose.model('Student'),
@@ -536,7 +538,6 @@ class AdminService {
                 if (!Model) continue;
 
                 const query = { deletedAt: null };
-
                 if (search) {
                     query.$or = [
                         { fullName: { $regex: search, $options: 'i' } },
@@ -562,7 +563,6 @@ class AdminService {
                 totalCount += count;
             }
 
-            // Sort combined results
             results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
             return {

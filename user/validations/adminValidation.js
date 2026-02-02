@@ -8,8 +8,8 @@ export const adminCreateValidation = (data) => {
         fullName: z.string({
             required_error: 'Full name is required',
         })
-        .trim()
-        .min(1, { message: 'Full name cannot be empty' }),
+            .trim()
+            .min(1, { message: 'Full name cannot be empty' }),
         role: z.enum(['super_admin', 'admin', 'moderator'], {
             errorMap: () => ({ message: 'Role must be one of: super_admin, admin, moderator' }),
         }).optional(),
@@ -17,6 +17,13 @@ export const adminCreateValidation = (data) => {
             invalid_type_error: 'Joining date must be a valid date',
         }).optional(),
         registeredIpAddress: z.array(z.string()).optional(),
+        profile: z.object({
+            firstName: z.string().optional(),
+            lastName: z.string().optional(),
+            middleName: z.string().optional(),
+            phoneNumber: z.string().optional(),
+            profilePicture: z.string().optional(),
+        }).optional(),
     });
 
     return schema.safeParse(data);
@@ -35,6 +42,13 @@ export const adminUpdateValidation = (data) => {
             invalid_type_error: 'Joining date must be a valid date',
         }).optional(),
         registeredIpAddress: z.array(z.string()).optional(),
+        profile: z.object({
+            firstName: z.string().optional(),
+            lastName: z.string().optional(),
+            middleName: z.string().optional(),
+            phoneNumber: z.string().optional(),
+            profilePicture: z.string().optional(),
+        }).optional(),
     }).refine(obj => Object.keys(obj).length > 0, {
         message: 'At least one field must be provided',
     });
