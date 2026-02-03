@@ -244,6 +244,12 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
         };
       }
 
+      // Add download URLs to files
+      submission.files = (submission.files || []).map((f) => ({
+        ...f,
+        url: `/submissions/item/${submission.id}/files/${f.id}/download`,
+      }));
+
       // Optimization: Use pre-fetched details
       if (studentDetailsMap.has(studentId)) {
         submission.studentId = studentDetailsMap.get(studentId);
@@ -304,6 +310,13 @@ const getSubmission = async (submissionId, userId, role, token) => {
     role,
     token
   );
+
+  // Add download URLs to files
+  submission.files = (submission.files || []).map((f) => ({
+    ...f,
+    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
+  }));
+
   return submission;
 };
 
@@ -423,7 +436,7 @@ const gradeSubmission = async (submissionId, data, userId, token) => {
   }
 
   submission.grade = data.grade;
-  submission.rubricScores = data.rubricScores || []; c
+  submission.rubricScores = data.rubricScores || [];
   submission.status = "graded";
   submission.gradedAt = new Date();
   submission.gradedById = userId;
