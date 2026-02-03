@@ -116,6 +116,15 @@ class AutoSchedulerService {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
 
+    /**
+     * Convert total minutes to HH:MM string
+     */
+    minutesToTime(totalMinutes) {
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        return this.formatTime(h, m);
+    }
+
     // Parse user-provided time configuration into internal format
     parseTimeConfig(config) {
         const parseTime = (timeStr) => {
@@ -414,6 +423,74 @@ class AutoSchedulerService {
         return this.generateTimeSlots(shift, durationMinutes);
     }
 
+    /**
+     * Get dynamic time slots ensuring sequential scheduling without gaps.
+     * Calculates valid slots based on existing classes for the batch on the specific day.
+     */
+    getDynamicTimeSlots(shiftName, batchId, day, durationMinutes, currentSchedule) {
+        const config = this.shiftConfig[shiftName] || this.shiftConfig.day;
+        const shiftStart = config.startHour * 60 + config.startMinute;
+        const shiftEnd = config.endHour * 60 + config.endMinute;
+        const breakStart = config.breakStart ? this.timeToMinutes(config.breakStart) : null;
+        const breakEnd = config.breakEnd ? this.timeToMinutes(config.breakEnd) : null;
+
+        // Get existing intervals for this batch on this day
+        const batchIdStr = batchId.toString();
+        const existingIntervals = currentSchedule
+            .filter(s => s.batchId.toString() === batchIdStr && s.daysOfWeek.includes(day))
+            .map(s => ({ start: this.timeToMinutes(s.startTime), end: this.timeToMinutes(s.endTime) }))
+            .sort((a, b) => a.start - b.start);
+
+        const possibleSlots = [];
+
+        // Candidates: Shift start, and end of each existing interval (to create back-to-back sequence)
+        let candidates = [shiftStart, ...existingIntervals.map(i => i.end)];
+
+        // Also consider break end as a candidate start (if shift allows)
+        if (breakEnd) candidates.push(breakEnd);
+
+        // Remove duplicates and sort
+        candidates = [...new Set(candidates)].sort((a, b) => a - b);
+
+        for (const start of candidates) {
+            let actualStart = start;
+
+            // Adjust for break logic: If start falls inside break, move to break end
+            if (breakStart && breakEnd) {
+                if (actualStart >= breakStart && actualStart < breakEnd) {
+                    actualStart = breakEnd;
+                }
+            }
+
+            const end = actualStart + durationMinutes;
+
+            // Check shift bounds
+            if (end > shiftEnd) continue;
+
+            // Check overlap with existing batch classes
+            const overlaps = existingIntervals.some(i =>
+                !(end <= i.start || actualStart >= i.end)
+            );
+
+            if (overlaps) continue;
+
+            // Check break overlap (strict: cannot overlap break period at all)
+            if (breakStart && breakEnd) {
+                // strict check: if the class interval overlaps with the break interval
+                if (actualStart < breakEnd && breakStart < end) {
+                    continue;
+                }
+            }
+
+            possibleSlots.push({
+                start: this.minutesToTime(actualStart),
+                end: this.minutesToTime(end)
+            });
+        }
+
+        return possibleSlots;
+    }
+
     // Check if a room is suitable for a course
     isRoomSuitable(room, course, batch) {
         // Check capacity
@@ -471,14 +548,12 @@ class AutoSchedulerService {
 
     // Calculate sessions per week based on credits
     getSessionsPerWeek(credits, courseType) {
-        // Theory: 1 session per credit (but limited by working days to spread across days)
-        // Lab: Usually 1 session of 1.40-2 hours
+        // Theory: 2 sessions per week (User Requirement)
+        // Lab/Project: 1 session per week (User Requirement)
         if (courseType === 'lab' || courseType === 'project') {
             return 1;
         }
-        // Limit sessions to number of working days to avoid scheduling same course multiple times per day
-        const maxSessionsForDays = this.workingDays.length;
-        return Math.min(credits, 3, maxSessionsForDays); // Max 3 sessions per week for theory, but also limited by working days
+        return 2;
     }
 
     // Main scheduling algorithm using constraint satisfaction with backtracking
@@ -491,7 +566,8 @@ class AutoSchedulerService {
             classDurations = null,
             workingDays = null,
             offDays = null,
-            customTimeSlots = null
+            customTimeSlots = null,
+            preferredRooms = null
         } = options;
 
         // Set class durations for this generation
@@ -594,7 +670,8 @@ class AutoSchedulerService {
                         teacherId: assignment.teacherId,
                         teacherName: assignment.teacherName,
                         sessionNumber: session + 1,
-                        durationMinutes: course.durationMinutes
+                        durationMinutes: course.durationMinutes,
+                        preferredRoomId: preferredRooms ? (preferredRooms[course.type] || (course.type === 'project' ? preferredRooms.lab : null)) : null
                     });
                 }
             }
@@ -755,15 +832,21 @@ class AutoSchedulerService {
             return null;
         }
 
-        // Sort rooms by preference (closest capacity match first)
+        // Sort rooms by preference
         suitableRooms.sort((a, b) => {
+            // First priority: Preferred Room
+            if (task.preferredRoomId) {
+                if (a.id.toString() === task.preferredRoomId) return -1;
+                if (b.id.toString() === task.preferredRoomId) return 1;
+            }
+
+            // Second priority: Capacity (closest fit)
             const aDiff = a.capacity - batch.studentCount;
             const bDiff = b.capacity - batch.studentCount;
             return aDiff - bDiff;
         });
 
-        // Get time slots based on batch shift and class duration
-        const timeSlots = this.getTimeSlotsForShift(batch.shift, durationMinutes);
+        // Time slots are now calculated dynamically inside the loop per day
         // Get days where this specific course is already scheduled for this batch, NOT schedule the same course on the same day twice
         const courseScheduledDays = this.getCourseScheduledDays(batch.id, course.id, currentSchedule);
         // Get days already used by the batch (for spreading classes)
@@ -781,6 +864,9 @@ class AutoSchedulerService {
         const dayOrder = [...preferredDays, ...otherAvailableDays];
 
         for (const day of dayOrder) {
+            // Get dynamic slots for this specific day to ensure sequential scheduling
+            const timeSlots = this.getDynamicTimeSlots(batch.shift, batch.id, day, durationMinutes, currentSchedule);
+
             for (const slot of timeSlots) {
                 for (const room of suitableRooms) {
                     const availability = this.isSlotAvailable(
@@ -826,8 +912,7 @@ class AutoSchedulerService {
         const anyRooms = classrooms.filter(r => r.capacity >= batch.studentCount);
         if (anyRooms.length === 0) return null;
 
-        // Get time slots for this duration
-        const timeSlots = this.getTimeSlotsForShift(batch.shift, durationMinutes);
+        // Time slots calculated dynamically per day
         // Get days where this specific course is already scheduled
         const courseScheduledDays = this.getCourseScheduledDays(batch.id, course.id, currentSchedule);
         // Filter working days: exclude days where this course is already scheduled
@@ -838,6 +923,7 @@ class AutoSchedulerService {
 
         // Try all combinations on available days only
         for (const day of availableDays) {
+            const timeSlots = this.getDynamicTimeSlots(batch.shift, batch.id, day, durationMinutes, currentSchedule);
             for (const slot of timeSlots) {
                 for (const room of anyRooms) {
                     const availability = this.isSlotAvailable(
@@ -883,10 +969,10 @@ class AutoSchedulerService {
         const anyRooms = classrooms.filter(r => r.capacity >= batch.studentCount);
         if (anyRooms.length === 0) return null;
 
-        // Get time slots for this duration
-        const timeSlots = this.getTimeSlotsForShift(batch.shift, durationMinutes);
+        // Time slots calculated dynamically per day
         // Try all working days (including days where this course is already scheduled)
         for (const day of this.workingDays) {
+            const timeSlots = this.getDynamicTimeSlots(batch.shift, batch.id, day, durationMinutes, currentSchedule);
             for (const slot of timeSlots) {
                 for (const room of anyRooms) {
                     const availability = this.isSlotAvailable(
@@ -931,10 +1017,10 @@ class AutoSchedulerService {
         const anyRooms = classrooms.filter(r => r.capacity >= batch.studentCount);
         if (anyRooms.length === 0) return null;
 
-        // Get time slots for the ALTERNATE shift
-        const timeSlots = this.getTimeSlotsForShift(alternateShift, durationMinutes);
+        // Time slots calculated dynamically per day
         // Try all working days
         for (const day of this.workingDays) {
+            const timeSlots = this.getDynamicTimeSlots(alternateShift, batch.id, day, durationMinutes, currentSchedule);
             for (const slot of timeSlots) {
                 for (const room of anyRooms) {
                     const availability = this.isSlotAvailable(

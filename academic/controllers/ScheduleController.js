@@ -16,7 +16,8 @@ class ScheduleController {
                 classDurations,         // { theory: 75, lab: 150, project: 150 }
                 workingDays,            // ['Saturday', 'Sunday', 'Wednesday', 'Thursday']
                 offDays,                // ['Monday', 'Tuesday', 'Friday']
-                customTimeSlots         // { day: { startTime, endTime, breakStart, breakEnd }, evening: {...} }
+                customTimeSlots,        // { day: { startTime, endTime, breakStart, breakEnd }, evening: {...} }
+                preferredRooms          // { theory: "roomId", lab: "roomId" }
             } = req.body;
 
             const generatedBy = req.user.id;
@@ -38,7 +39,8 @@ class ScheduleController {
                     classDurations,
                     workingDays,
                     offDays,
-                    customTimeSlots
+                    customTimeSlots,
+                    preferredRooms
                 }
             );
 
