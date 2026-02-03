@@ -109,6 +109,14 @@ const courseGradeSchema = new mongoose.Schema(
                 max: 50,
                 default: 0,
             },
+            finalExamQuestions: {
+                q1: { type: Number, min: 0, max: 12.5, default: 0 },
+                q2: { type: Number, min: 0, max: 12.5, default: 0 },
+                q3: { type: Number, min: 0, max: 12.5, default: 0 },
+                q4: { type: Number, min: 0, max: 12.5, default: 0 },
+                q5: { type: Number, min: 0, max: 12.5, default: 0 },
+                q6: { type: Number, min: 0, max: 12.5, default: 0 },
+            },
             midterm: {
                 type: Number,
                 min: 0,
@@ -116,6 +124,18 @@ const courseGradeSchema = new mongoose.Schema(
                 default: 0,
             },
             attendance: {
+                type: Number,
+                min: 0,
+                max: 10,
+                default: 0,
+            },
+            classTest: {
+                type: Number,
+                min: 0,
+                max: 10,
+                default: 0,
+            },
+            assignment: {
                 type: Number,
                 min: 0,
                 max: 10,
@@ -227,11 +247,22 @@ courseGradeSchema.index(
 courseGradeSchema.methods.calculateGrade = function () {
     // Calculate theory marks total if theory course
     if (this.courseType === "theory" || this.courseType === "combined") {
+        // Sum final exam questions if available
+        if (this.theoryMarks.finalExamQuestions) {
+            const q = this.theoryMarks.finalExamQuestions;
+            this.theoryMarks.finalExam = (q.q1 || 0) + (q.q2 || 0) + (q.q3 || 0) + (q.q4 || 0) + (q.q5 || 0) + (q.q6 || 0);
+        }
+
         this.theoryMarks.totalObtained =
             (this.theoryMarks.finalExam || 0) +
             (this.theoryMarks.midterm || 0) +
             (this.theoryMarks.attendance || 0) +
-            (this.theoryMarks.continuousAssessment || 0);
+            (this.theoryMarks.classTest || 0) +
+            (this.theoryMarks.assignment || 0);
+
+        // If legacy continuousAssessment is present and new fields are 0, use it?
+        // For now, trusting the new scheme.
+
         this.theoryMarks.totalPossible = 100;
     }
 

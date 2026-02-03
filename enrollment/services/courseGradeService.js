@@ -242,47 +242,33 @@ class CourseGradeService {
         return grades;
     }
 
-    /**
-     * Helper method to populate marks breakdown (in-course vs final) for grades
-     * Theory: Final = 50, In-course = 50 (midterm 20 + attendance 10 + assessment 20)
-     * Lab: Final = 30, In-course = 20 (lab reports 10 + attendance 10)
-     */
     async _populateMarksBreakdown(grades) {
         for (const grade of grades) {
             let finalMarks = { obtained: 0, total: 0 };
             let inCourseMarks = { obtained: 0, total: 0 };
 
-            // First, try to use theoryMarks and labMarks from the grade itself
             const theory = grade.theoryMarks;
             const lab = grade.labMarks;
             const courseType = grade.courseType || 'theory';
 
-            // Check if we have theory marks breakdown
-            if (theory && (theory.finalExam > 0 || theory.midterm > 0 || theory.attendance > 0 || theory.continuousAssessment > 0)) {
-                // Final = 50 marks (finalExam)
+            if (theory && (theory.finalExam > 0 || theory.midterm > 0 || theory.attendance > 0 || theory.continuousAssessment > 0 || theory.classTest > 0 || theory.assignment > 0)) {
                 finalMarks.obtained += theory.finalExam || 0;
                 finalMarks.total += 50;
 
-                // In-course = 50 marks (midterm 20 + attendance 10 + continuousAssessment 20)
-                inCourseMarks.obtained += (theory.midterm || 0) + (theory.attendance || 0) + (theory.continuousAssessment || 0);
+                inCourseMarks.obtained += (theory.midterm || 0) + (theory.attendance || 0) + (theory.continuousAssessment || 0) + (theory.classTest || 0) + (theory.assignment || 0);
                 inCourseMarks.total += 50;
             }
 
-            // Check if we have lab marks breakdown
             if (lab && (lab.finalLab > 0 || lab.labReports > 0 || lab.attendance > 0)) {
-                // Lab Final = 30 marks
                 finalMarks.obtained += lab.finalLab || 0;
                 finalMarks.total += 30;
 
-                // Lab In-course = 20 marks (labReports 10 + attendance 10)
                 inCourseMarks.obtained += (lab.labReports || 0) + (lab.attendance || 0);
                 inCourseMarks.total += 20;
             }
 
-            // If no breakdown from theoryMarks/labMarks, try assessmentScores
             if (finalMarks.total === 0 && inCourseMarks.total === 0) {
                 if (grade.assessmentScores && grade.assessmentScores.length > 0) {
-                    // Get all assessment types to identify final exams
                     const assessmentTypes = await AssessmentType.find({}).lean();
                     const finalTypeIds = assessmentTypes
                         .filter(t => t.code?.toUpperCase() === 'FINAL' || t.name?.toLowerCase().includes('final'))
@@ -309,28 +295,22 @@ class CourseGradeService {
                 }
             }
 
-            // If still no breakdown, use course type to set default totals
             if (finalMarks.total === 0 && inCourseMarks.total === 0 && grade.totalMarks > 0) {
                 if (courseType === 'lab') {
-                    // Lab course: Final 30, In-course 20
                     finalMarks.total = 30;
                     inCourseMarks.total = 20;
-                    // Distribute totalMarksObtained proportionally
                     const ratio = grade.totalMarksObtained / grade.totalMarks;
                     finalMarks.obtained = Math.round(30 * ratio * 10) / 10;
                     inCourseMarks.obtained = Math.round(20 * ratio * 10) / 10;
                 } else {
-                    // Theory course: Final 50, In-course 50
                     finalMarks.total = 50;
                     inCourseMarks.total = 50;
-                    // Distribute totalMarksObtained proportionally
                     const ratio = grade.totalMarksObtained / grade.totalMarks;
                     finalMarks.obtained = Math.round(50 * ratio * 10) / 10;
                     inCourseMarks.obtained = Math.round(50 * ratio * 10) / 10;
                 }
             }
 
-            // Add breakdown to grade
             grade.marksBreakdown = {
                 final: finalMarks,
                 inCourse: inCourseMarks,
@@ -473,7 +453,7 @@ class CourseGradeService {
     }
 
     async calculateCGPA(studentId) {
-        const grades = await CourseGrade.find({ studentId, isPublished: true,});
+        const grades = await CourseGrade.find({ studentId, isPublished: true, });
         if (grades.length === 0) {
             return {
                 cgpa: 0,
@@ -592,11 +572,8 @@ class CourseGradeService {
                     finalExam: { label: "Final Exam", maxMarks: 50, weight: 50 },
                     midterm: { label: "Midterm", maxMarks: 20, weight: 20 },
                     attendance: { label: "Attendance", maxMarks: 10, weight: 10 },
-                    continuousAssessment: {
-                        label: "Continuous Assessment",
-                        maxMarks: 20,
-                        weight: 20,
-                    },
+                    classTest: { label: "Class Test", maxMarks: 10, weight: 10 },
+                    assignment: { label: "Assignment", maxMarks: 10, weight: 10 },
                 };
             } else if (courseType === "lab") {
                 config.totalMarks = 50;
@@ -698,7 +675,6 @@ class CourseGradeService {
                         }
                     }
 
-                    // Validate marks based on course type
                     const validationError = this.validateMarks(entry, courseType);
                     if (validationError) {
                         results.push({
@@ -800,11 +776,26 @@ class CourseGradeService {
                     return "Midterm marks cannot exceed 20";
                 if (theory.attendance !== undefined && theory.attendance > 10)
                     return "Attendance marks cannot exceed 10";
-                if (
-                    theory.continuousAssessment !== undefined &&
-                    theory.continuousAssessment > 20
-                )
-                    return "Continuous Assessment marks cannot exceed 20";
+                if (theory.classTest !== undefined && theory.classTest > 10)
+                    return "Class Test marks cannot exceed 10";
+                if (theory.assignment !== undefined && theory.assignment > 10)
+                    return "Assignment marks cannot exceed 10";
+                if (theory.finalExamQuestions) {
+                    const q = theory.finalExamQuestions;
+                    const groupA = ['q1', 'q2', 'q3'];
+                    const groupB = ['q4', 'q5'];
+                    const groupC = ['q6'];
+
+                    for (const k of [...groupA, ...groupB, ...groupC]) {
+                        if (q[k] !== undefined && q[k] > 12.5) return `Question ${k} marks cannot exceed 12.5`;
+                    }
+
+                    const countA = groupA.filter(k => q[k] !== undefined && q[k] !== null && String(q[k]) !== '').length;
+                    if (countA > 2) return "You can only mark 2 questions from Group A (Q1-Q3)";
+
+                    const countB = groupB.filter(k => q[k] !== undefined && q[k] !== null && String(q[k]) !== '').length;
+                    if (countB > 1) return "You can only mark 1 question from Group B (Q4-Q5)";
+                }
             }
         }
 
