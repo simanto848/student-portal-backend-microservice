@@ -645,6 +645,35 @@ class AutoSchedulerService {
             sessionCourseId: s.sessionCourseId
         }));
 
+        // Include Pending Proposals to avoid overlap with unapproved schedules
+        const pendingProposals = await ScheduleProposal.find({
+            sessionId,
+            status: 'pending'
+        }).lean();
+
+        const schedulingBatchIdSet = new Set(schedulingBatchIds.map(id => id.toString()));
+
+        for (const p of pendingProposals) {
+            if (p.scheduleData && Array.isArray(p.scheduleData)) {
+                // Filter out entries that belong to the batches we are currently rescheduling
+                const relevantSchedules = p.scheduleData.filter(s =>
+                    !schedulingBatchIdSet.has(s.batchId?.toString()) &&
+                    !schedulingBatchIdSet.has(s.batchId?._id?.toString())
+                );
+
+                existingScheduleEntries.push(...relevantSchedules.map(s => ({
+                    batchId: s.batchId?._id || s.batchId,
+                    teacherId: s.teacherId?._id || s.teacherId,
+                    classroomId: s.classroomId?._id || s.classroomId,
+                    daysOfWeek: s.daysOfWeek,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
+                    sessionCourseId: s.sessionCourseId,
+                    isPending: true
+                })));
+            }
+        }
+
         const tasks = [];
         for (const batch of data.batches) {
             const batchCourses = data.courses.filter(c =>

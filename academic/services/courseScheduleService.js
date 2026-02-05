@@ -11,6 +11,50 @@ const timeToMinutes = (t) => {
 };
 
 class CourseScheduleService {
+	async checkOverlap({ batchId, teacherId, classroomId, daysOfWeek, startTime, endTime, excludeScheduleId = null }) {
+		const query = {
+			daysOfWeek: { $in: daysOfWeek },
+			deletedAt: null,
+			$or: [
+				{ startTime: startTime },
+				{ endTime: endTime },
+				{
+					$and: [
+						{ startTime: { $lt: endTime } },
+						{ endTime: { $gt: startTime } },
+					],
+				},
+			],
+		};
+
+		if (excludeScheduleId) {
+			query._id = { $ne: excludeScheduleId };
+		}
+
+		// Check for conflicts
+		const conflicts = await CourseSchedule.find({
+			...query,
+			$or: [
+				{ batchId: batchId },
+				{ teacherId: teacherId },
+				{ classroomId: classroomId }
+			]
+		}).populate('batchId classroomId teacherId');
+
+
+		for (const conflict of conflicts) {
+			if (conflict.batchId._id.toString() === batchId.toString()) {
+				throw new ApiError(409, `Schedule overlaps with an existing class for batch ${conflict.batchId.name}`);
+			}
+			if (teacherId && conflict.teacherId && conflict.teacherId._id.toString() === teacherId.toString()) {
+				throw new ApiError(409, `Teacher ${conflict.teacherId.fullName} is already booked at this time`);
+			}
+			if (classroomId && conflict.classroomId && conflict.classroomId._id.toString() === classroomId.toString()) {
+				throw new ApiError(409, `Room ${conflict.classroomId.roomNumber} is already occupied at this time`);
+			}
+		}
+	}
+
 	async getAll(options = {}) {
 		const { filters = {}, pagination, search } = options;
 		const query = { ...filters };
@@ -123,22 +167,14 @@ class CourseScheduleService {
 			throw new ApiError(400, 'endTime must be greater than startTime');
 		}
 
-		const overlap = await CourseSchedule.findOne({
+		await this.checkOverlap({
 			batchId: payload.batchId,
-			daysOfWeek: { $in: payload.daysOfWeek },
-			deletedAt: null,
-			$or: [
-				{ startTime: payload.startTime },
-				{ endTime: payload.endTime },
-				{
-					$and: [
-						{ startTime: { $lt: payload.endTime } },
-						{ endTime: { $gt: payload.startTime } },
-					],
-				},
-			],
+			teacherId: payload.teacherId,
+			classroomId: payload.classroomId,
+			daysOfWeek: payload.daysOfWeek,
+			startTime: payload.startTime,
+			endTime: payload.endTime
 		});
-		if (overlap) throw new ApiError(409, 'Schedule overlaps with an existing class for this batch');
 
 		const schedule = await CourseSchedule.create(payload);
 		return CourseSchedule.findById(schedule._id)
@@ -182,6 +218,25 @@ class CourseScheduleService {
 			}
 			if (endM <= startM) throw new ApiError(400, 'endTime must be greater than startTime');
 		}
+
+		// Perform overlap check if relevant fields are changing or strict validation needed
+		// We use the new values or fallback to existing ones
+		const checkBatchId = payload.batchId || schedule.batchId;
+		const checkTeacherId = payload.teacherId === undefined ? schedule.teacherId : payload.teacherId; // undefined means no update, null means remove
+		const checkClassroomId = payload.classroomId === undefined ? schedule.classroomId : payload.classroomId;
+		const checkDays = payload.daysOfWeek || schedule.daysOfWeek;
+		const checkStart = payload.startTime || schedule.startTime;
+		const checkEnd = payload.endTime || schedule.endTime;
+
+		await this.checkOverlap({
+			batchId: checkBatchId,
+			teacherId: checkTeacherId,
+			classroomId: checkClassroomId,
+			daysOfWeek: checkDays,
+			startTime: checkStart,
+			endTime: checkEnd,
+			excludeScheduleId: id
+		});
 
 		// Remove empty sessionId from payload to preserve existing value
 		// sessionId is required in the model but shouldn't change on updates
