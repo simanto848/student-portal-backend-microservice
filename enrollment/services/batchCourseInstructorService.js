@@ -1,4 +1,5 @@
 import BatchCourseInstructor from '../models/BatchCourseInstructor.js';
+import ResultWorkflow from '../models/ResultWorkflow.js';
 import { ApiError } from 'shared';
 import userServiceClient from '../client/userServiceClient.js';
 import academicServiceClient from '../client/academicServiceClient.js';
@@ -131,7 +132,24 @@ class BatchCourseInstructorService {
 
         const assignments = await BatchCourseInstructor.find(query).sort({ semester: -1, createdAt: -1 });
 
-        return assignments;
+        // Filter out courses where grades are submitted or published
+        const activeAssignments = [];
+        const completedStatuses = ['SUBMITTED_TO_COMMITTEE', 'COMMITTEE_APPROVED', 'PUBLISHED'];
+
+        for (const assignment of assignments) {
+            const workflow = await ResultWorkflow.findOne({
+                batchId: assignment.batchId,
+                courseId: assignment.courseId,
+                semester: assignment.semester,
+                deletedAt: null
+            });
+
+            if (!workflow || !completedStatuses.includes(workflow.status)) {
+                activeAssignments.push(assignment);
+            }
+        }
+
+        return activeAssignments;
     }
 
     async getCourseInstructors(batchId, courseId, semester) {

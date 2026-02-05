@@ -1,6 +1,7 @@
 import CourseSchedule from '../models/CourseSchedule.js';
 import Batch from '../models/Batch.js';
 import SessionCourse from '../models/SessionCourse.js';
+import enrollmentServiceClient from '../client/enrollmentServiceClient.js';
 import { ApiError } from 'shared';
 
 const timeToMinutes = (t) => {
@@ -250,30 +251,55 @@ class CourseScheduleService {
 		const { page = 1, limit = 10 } = pagination;
 		const skip = (page - 1) * limit;
 		const query = { teacherId };
-		const [schedules, total] = await Promise.all([
-			CourseSchedule.find(query)
-				.populate({
-					path: 'batchId',
-					select: 'name year programId departmentId shift',
-					populate: { path: 'departmentId', select: 'name shortName' }
-				})
-				.populate({
-					path: 'sessionCourseId',
-					select: 'sessionId courseId semester departmentId',
-					populate: [
-						{ path: 'courseId', select: 'name code credits' },
-						{ path: 'sessionId', select: 'name' },
-						{ path: 'departmentId', select: 'name shortName' }
-					]
-				})
-				.populate('classroomId', 'roomNumber buildingName floor capacity')
-				.sort({ startTime: 1 })
-				.skip(skip)
-				.limit(parseInt(limit)),
-			CourseSchedule.countDocuments(query),
-		]);
+
+		// Fetch active courses for this teacher from enrollment service
+		// This will exclude courses where grades are submitted/published
+		const activeAssignments = await enrollmentServiceClient.getInstructorCourses(teacherId);
+		const activeCourseKeys = new Set(
+			activeAssignments.map(a => `${a.batchId}_${a.courseId?._id || a.courseId}`)
+		);
+
+		// If no active courses, return empty result early
+		if (activeAssignments.length === 0) {
+			return {
+				data: [],
+				pagination: { page: parseInt(page), limit: parseInt(limit), total: 0, pages: 0 },
+			};
+		}
+
+		// We fetch ALL matching schedules first, then filter in memory
+		// This is because filtering by populated fields + external service logic in MongoDB query is complex
+		// If performance becomes an issue, we can optimize by extracting filtered IDs first
+		const allSchedules = await CourseSchedule.find(query)
+			.populate({
+				path: 'batchId',
+				select: 'name year programId departmentId shift',
+				populate: { path: 'departmentId', select: 'name shortName' }
+			})
+			.populate({
+				path: 'sessionCourseId',
+				select: 'sessionId courseId semester departmentId',
+				populate: [
+					{ path: 'courseId', select: 'name code credits' },
+					{ path: 'sessionId', select: 'name' },
+					{ path: 'departmentId', select: 'name shortName' }
+				]
+			})
+			.populate('classroomId', 'roomNumber buildingName floor capacity')
+			.sort({ startTime: 1 });
+
+		const filteredSchedules = allSchedules.filter(schedule => {
+			const batchId = schedule.batchId?._id || schedule.batchId;
+			const courseId = schedule.sessionCourseId?.courseId?._id || schedule.sessionCourseId?.courseId;
+			const key = `${batchId}_${courseId}`;
+			return activeCourseKeys.has(key);
+		});
+
+		const total = filteredSchedules.length;
+		const paginatedSchedules = filteredSchedules.slice(skip, skip + parseInt(limit));
+
 		return {
-			data: schedules,
+			data: paginatedSchedules,
 			pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) },
 		};
 	}
