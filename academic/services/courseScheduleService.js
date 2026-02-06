@@ -15,6 +15,8 @@ class CourseScheduleService {
 		const query = {
 			daysOfWeek: { $in: daysOfWeek },
 			deletedAt: null,
+			status: 'active',
+			isActive: true,
 			$or: [
 				{ startTime: startTime },
 				{ endTime: endTime },
@@ -31,14 +33,18 @@ class CourseScheduleService {
 			query._id = { $ne: excludeScheduleId };
 		}
 
-		// Check for conflicts
+		const conflictConditions = [
+			{ batchId: batchId },
+			{ classroomId: classroomId }
+		];
+
+		if (teacherId) {
+			conflictConditions.push({ teacherId: teacherId });
+		}
+
 		const conflicts = await CourseSchedule.find({
 			...query,
-			$or: [
-				{ batchId: batchId },
-				{ teacherId: teacherId },
-				{ classroomId: classroomId }
-			]
+			$or: conflictConditions
 		}).populate('batchId classroomId teacherId');
 
 
@@ -219,8 +225,7 @@ class CourseScheduleService {
 			if (endM <= startM) throw new ApiError(400, 'endTime must be greater than startTime');
 		}
 
-		// Perform overlap check if relevant fields are changing or strict validation needed
-		// We use the new values or fallback to existing ones
+		// overlap check
 		const checkBatchId = payload.batchId || schedule.batchId;
 		const checkTeacherId = payload.teacherId === undefined ? schedule.teacherId : payload.teacherId; // undefined means no update, null means remove
 		const checkClassroomId = payload.classroomId === undefined ? schedule.classroomId : payload.classroomId;
@@ -238,8 +243,6 @@ class CourseScheduleService {
 			excludeScheduleId: id
 		});
 
-		// Remove empty sessionId from payload to preserve existing value
-		// sessionId is required in the model but shouldn't change on updates
 		if (payload.sessionId === '' || payload.sessionId === undefined || payload.sessionId === null) {
 			delete payload.sessionId;
 		}
@@ -307,14 +310,11 @@ class CourseScheduleService {
 		const skip = (page - 1) * limit;
 		const query = { teacherId };
 
-		// Fetch active courses for this teacher from enrollment service
-		// This will exclude courses where grades are submitted/published
 		const activeAssignments = await enrollmentServiceClient.getInstructorCourses(teacherId);
 		const activeCourseKeys = new Set(
 			activeAssignments.map(a => `${a.batchId}_${a.courseId?._id || a.courseId}`)
 		);
 
-		// If no active courses, return empty result early
 		if (activeAssignments.length === 0) {
 			return {
 				data: [],
@@ -322,9 +322,6 @@ class CourseScheduleService {
 			};
 		}
 
-		// We fetch ALL matching schedules first, then filter in memory
-		// This is because filtering by populated fields + external service logic in MongoDB query is complex
-		// If performance becomes an issue, we can optimize by extracting filtered IDs first
 		const allSchedules = await CourseSchedule.find(query)
 			.populate({
 				path: 'batchId',
