@@ -20,7 +20,6 @@ class StudentService {
         ];
       }
 
-      // Special filters that are not Student fields
       const normalizedFilters = { ...filters };
       const shiftRaw = normalizedFilters.shift;
       delete normalizedFilters.shift;
@@ -31,7 +30,6 @@ class StudentService {
           throw new ApiError(400, "Invalid shift. Allowed: day, evening");
         }
 
-        // Narrow batchIds by shift (and optionally department/program/session when available)
         const batchQuery = { shift };
         if (normalizedFilters.departmentId)
           batchQuery.departmentId = normalizedFilters.departmentId;
@@ -54,11 +52,9 @@ class StudentService {
           .map((b) => b?.id || b?._id)
           .filter(Boolean);
 
-        // If UI already provided a batchId, ensure it matches the shift
         if (normalizedFilters.batchId) {
           const requested = String(normalizedFilters.batchId);
           if (!batchIds.includes(requested)) {
-            // force empty result
             query.batchId = "__no_such_batch_for_shift__";
           }
         } else {
@@ -170,6 +166,11 @@ class StudentService {
 
       const batch = batchResp.data || batchResp;
       const session = sessionResp.data || sessionResp;
+
+      // Check if batch is full
+      if (batch.currentStudents >= batch.maxStudents) {
+        throw new ApiError(400, "Batch is full. Cannot add more students.");
+      }
 
       const deptShort = (
         dept.data?.shortName ||
@@ -290,6 +291,17 @@ class StudentService {
       if (!existing) throw new ApiError(404, "Student not found");
 
       if (payload.batchId && payload.batchId !== existing.batchId) {
+        // Check if new batch is full
+        const newBatchResp = await academicServiceClient.getBatchById(
+          payload.batchId,
+          token
+        );
+        const newBatch = newBatchResp.data || newBatchResp;
+
+        if (newBatch.currentStudents >= newBatch.maxStudents) {
+          throw new ApiError(400, "Target batch is full. Cannot transfer student.");
+        }
+
         await academicServiceClient.updateBatchCurrentStudents(
           existing.batchId,
           -1,
