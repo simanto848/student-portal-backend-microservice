@@ -3,8 +3,9 @@ import {
   ensureUploadsSubdir,
   buildStoredFileName,
 } from "../utils/fileStorage.js";
+import { config } from "shared";
 
-const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 15);
+const maxUploadMb = Number(config.app.maxUploadMb);
 
 const normalizeAllowedMimeTypes = (allowedMimeTypes) => {
   if (!allowedMimeTypes) return null;

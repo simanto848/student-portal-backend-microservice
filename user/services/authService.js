@@ -8,28 +8,28 @@ import Session from "../models/Session.js";
 import otpService from "./otpService.js";
 import UserOTP from "../models/OTP.js";
 import OTP_PURPOSES from "../constants/OTP_PURPOSE.js";
-import { ApiError } from "shared";
+import { ApiError, config } from "shared";
 
 const TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  secure: process.env.NODE_ENV === "production",
+  sameSite: config.env === "production" ? "none" : "lax",
+  secure: config.env === "production",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  secure: process.env.NODE_ENV === "production",
+  sameSite: config.env === "production" ? "none" : "lax",
+  secure: config.env === "production",
   maxAge: 30 * 24 * 60 * 60 * 1000,
   path: "/api/user/auth",
 };
 
 class AuthService {
   constructor() {
-    this.jwtSecret = process.env.JWT_SECRET;
-    this.jwtExpiresIn = process.env.JWT_EXPIRES_IN || "7d";
-    this.refreshTokenExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || "30d";
+    this.jwtSecret = config.jwt.secret;
+    this.jwtExpiresIn = config.jwt.expiresIn;
+    this.refreshTokenExpiresIn = config.jwt.refreshExpiresIn;
   }
 
   signToken(payload = {}) {

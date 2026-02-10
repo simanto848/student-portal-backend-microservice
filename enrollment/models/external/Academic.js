@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
+import { config } from "shared";
 import { v4 as uuidv4 } from "uuid";
 
-const academicDbUri = process.env.ACADEMIC_MONGO_URI || 'mongodb://localhost:27017/student_portal_academic_service';
+const academicDbUri = config.db.academic || 'mongodb://localhost:27017/student_portal_academic_service';
 const academicConn = mongoose.createConnection(academicDbUri);
 
 academicConn.on('connected', () => {

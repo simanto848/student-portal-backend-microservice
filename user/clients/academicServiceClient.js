@@ -1,8 +1,9 @@
 import axios from "axios";
+import { config } from "shared";
 
 class AcademicServiceClient {
   constructor() {
-    this.baseURL = process.env.ACADEMIC_SERVICE_URL || "http://localhost:8001";
+    this.baseURL = config.services.academic;
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 5000,

@@ -1,5 +1,6 @@
 import axios from "axios";
 import fs from "fs";
+import { config } from "shared";
 
 class AcademicServiceClient {
   constructor() {
@@ -8,7 +9,7 @@ class AcademicServiceClient {
       ? "http://academic:8002"
       : "http://localhost:8002";
 
-    this.baseURL = process.env.ACADEMIC_SERVICE_URL || defaultUrl;
+    this.baseURL = config.services.academic || defaultUrl;
 
     this.client = axios.create({
       baseURL: this.baseURL,

@@ -13,6 +13,7 @@ import {
   resolveStoredPath,
   deleteStoredFileIfExists,
 } from "../utils/fileStorage.js";
+import { config } from "shared";
 
 const submitAssignment = async (assignmentId, data, userId, token) => {
   const assignment = await Assignment.findById(assignmentId);
@@ -196,11 +197,11 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
   if (
     allStudentIds.length === 0 &&
     workspace.batchId &&
-    process.env.USER_SERVICE_URL
+    config.services.user
   ) {
     try {
       const batchResponse = await axios.get(
-        `${process.env.USER_SERVICE_URL}/students`,
+        `${config.services.user}/students`,
         {
           params: { batchId: workspace.batchId, limit: 1000 },
           headers: { Authorization: token },
@@ -257,11 +258,11 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
       }
 
       try {
-        if (!process.env.USER_SERVICE_URL) {
+        if (!config.services.user) {
           return submission;
         }
         const response = await axios.get(
-          `${process.env.USER_SERVICE_URL}/students/${submission.studentId}`,
+          `${config.services.user}/students/${submission.studentId}`,
           {
             headers: {
               Authorization: token,

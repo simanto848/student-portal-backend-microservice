@@ -1,25 +1,16 @@
+import { config } from 'shared';
 import transporter from './mailTransporter.js';
 
 class EmailService {
     constructor() {
-        this.from = process.env.MAIL_FROM || 'EDUCATION HUB';
-        this.companyName = process.env.COMPANY_NAME || 'EDUCATION HUB';
-        this.supportEmail = process.env.MAIL_USER || 'support@educationhub.com';
-        this.loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000/login';
-        this.helpCenterUrl = process.env.HELP_CENTER_URL || 'http://localhost:3000/help';
-        this.companyLogoUrl = process.env.COMPANY_LOGO_URL || '';
+        this.from = config.email.from;
+        this.companyName = config.app.companyName;
+        this.supportEmail = config.email.user;
+        this.loginUrl = config.client.frontendUrl;
+        this.helpCenterUrl = config.app.helpCenterUrl;
+        this.companyLogoUrl = config.app.companyLogoUrl;
     }
 
-    /**
-     * Send a notification email
-     * @param {string} to - Recipient email address
-     * @param {object} data - Notification data
-     * @param {string} data.title - Notification title
-     * @param {string} data.content - Notification content
-     * @param {string} data.summary - Notification summary (optional)
-     * @param {string} data.priority - Notification priority (low, medium, high, urgent)
-     * @param {Date} data.publishedAt - Publication date
-     */
     async sendNotificationEmail(to, data) {
         try {
             const { title, content, summary, priority = 'medium', publishedAt } = data;
@@ -64,7 +55,7 @@ class EmailService {
             const subject = `[${priorityLabel}] ${title}`;
 
             const mailOptions = {
-                from: `"${this.from}" <${process.env.MAIL_USER}>`,
+                from: `"${this.from}" <${config.email.user}>`,
                 to,
                 subject,
                 html,
@@ -265,11 +256,7 @@ If you have any questions, contact us at ${this.supportEmail}
         return text;
     }
 
-    /**
-     * Send bulk notification emails
-     * @param {Array<{email: string, data: object}>} recipients - Array of recipient objects
-     * @param {object} notificationData - Common notification data
-     */
+
     async sendBulkNotificationEmails(recipients, notificationData) {
         const results = {
             successful: [],
@@ -288,7 +275,6 @@ If you have any questions, contact us at ${this.supportEmail}
             }
         }
 
-        console.log(`[EmailService] Bulk send complete: ${results.successful.length} successful, ${results.failed.length} failed`);
         return results;
     }
 }

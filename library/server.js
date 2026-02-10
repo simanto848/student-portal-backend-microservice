@@ -9,7 +9,7 @@ const logger = createLogger("LIBRARY");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8006;
+const PORT = config.ports.library;
 
 server.listen(PORT, async () => {
   // LOGGING SETUP

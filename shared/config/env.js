@@ -22,7 +22,8 @@ export const config = {
     env: getEnv('NODE_ENV', 'development'),
     jwt: {
         secret: getEnv('JWT_SECRET', 'mysupersecrectkey'),
-        expiresIn: getEnv('JWT_EXPIRES_IN', '7d')
+        expiresIn: getEnv('JWT_EXPIRES_IN', '7d'),
+        refreshExpiresIn: getEnv('REFRESH_TOKEN_EXPIRES_IN', '30d')
     },
     ports: {
         gateway: getEnv('GATEWAY_PORT', 8000),
@@ -65,10 +66,19 @@ export const config = {
         user: getEnv('MAIL_USER'),
         pass: getEnv('MAIL_PASS'),
         from: getEnv('MAIL_FROM'),
-        secure: getEnv('MAIL_SECURE') === 'true'
+        secure: getEnv('MAIL_SECURE') === 'true',
+        maxPerNotification: getEnv('MAX_EMAILS_PER_NOTIFICATION', 2000),
+        batchSize: getEnv('EMAIL_BATCH_SIZE', 10),
+        batchDelay: getEnv('EMAIL_BATCH_DELAY_MS', 1000)
     },
     external: {
         geminiApiKey: getEnv('GEMINI_API')
+    },
+    app: {
+        companyName: getEnv('COMPANY_NAME', 'Dhaka International University'),
+        maxUploadMb: getEnv('MAX_UPLOAD_MB', 15),
+        helpCenterUrl: getEnv('HELP_CENTER_URL', 'http://localhost:3000/help'),
+        companyLogoUrl: getEnv('COMPANY_LOGO_URL', '')
     },
     client: {
         frontendUrl: getEnv('FRONTEND_URL', 'http://localhost:3000')

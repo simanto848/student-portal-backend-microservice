@@ -1,10 +1,11 @@
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import { config } from 'shared';
 
 class EnrollmentServiceClient {
     constructor() {
         // Use the gateway URL - all services communicate through gateway
-        this.gatewayURL = process.env.GATEWAY_URL || 'http://localhost:8000';
+        this.gatewayURL = config.services.gateway;
         this.client = axios.create({
             baseURL: this.gatewayURL,
             timeout: 10000
@@ -26,7 +27,7 @@ class EnrollmentServiceClient {
                 sub: 'notification-service',
                 type: 'service'
             },
-            process.env.JWT_SECRET || 'fallback_secret',
+            config.jwt.secret,
             { expiresIn: '1h' }
         );
     }

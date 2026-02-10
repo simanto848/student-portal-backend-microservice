@@ -1,8 +1,8 @@
 import resultWorkflowService from '../services/resultWorkflowService.js';
-import { ApiResponse, ApiError } from 'shared';
+import { ApiResponse, ApiError, config } from 'shared';
 import axios from 'axios';
 
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:8007';
+const USER_SERVICE_URL = config.services.user || 'http://localhost:8007';
 
 class ResultWorkflowController {
     async verifyOTP(userId, otp, purpose, token) {

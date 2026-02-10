@@ -1,3 +1,4 @@
+import { config } from 'shared';
 import NotificationReceipt from '../models/NotificationReceipt.js';
 import { emitNotificationPublished } from '../socket.js';
 import emailService from '../utils/emailService.js';
@@ -55,7 +56,7 @@ class DeliveryService {
       return { successful: 0, failed: 0 };
     }
 
-    const maxEmails = parseInt(process.env.MAX_EMAILS_PER_NOTIFICATION) || 200;
+    const maxEmails = parseInt(config.email.maxPerNotification) || 200;
     const subset = recipientsWithEmail.slice(0, maxEmails);
 
     const notificationData = {
@@ -70,8 +71,8 @@ class DeliveryService {
     let failCount = 0;
     const errors = [];
 
-    const batchSize = parseInt(process.env.EMAIL_BATCH_SIZE) || 10;
-    const delayBetweenBatches = parseInt(process.env.EMAIL_BATCH_DELAY_MS) || 1000;
+    const batchSize = parseInt(config.email.batchSize) || 10;
+    const delayBetweenBatches = parseInt(config.email.batchDelay) || 1000;
 
     for (let i = 0; i < subset.length; i += batchSize) {
       const batch = subset.slice(i, i + batchSize);

@@ -1,12 +1,13 @@
 import nodemailer from 'nodemailer';
+import { config } from 'shared';
 
 const transporter = nodemailer.createTransport({
-    host: process.env.MAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.MAIL_PORT) || 587,
+    host: config.email.host || 'smtp.gmail.com',
+    port: parseInt(config.email.port) || 587,
     secure: false,
     auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
+        user: config.email.user,
+        pass: config.email.pass,
     },
 });
 

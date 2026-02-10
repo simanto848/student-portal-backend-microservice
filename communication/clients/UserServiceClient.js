@@ -1,12 +1,13 @@
 import axios from "axios";
 import fs from "fs";
+import { config } from "shared";
 
 class UserServiceClient {
   constructor() {
     const isDocker = fs.existsSync("/.dockerenv");
     const defaultUrl = isDocker ? "http://user:8001" : "http://localhost:8001";
 
-    this.baseURL = process.env.USER_SERVICE_URL || defaultUrl;
+    this.baseURL = config.services.user || defaultUrl;
 
     this.client = axios.create({
       baseURL: this.baseURL,

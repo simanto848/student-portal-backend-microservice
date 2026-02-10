@@ -2,18 +2,19 @@ import ejs from 'ejs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import transporter from './mailTransporter.js';
+import { config } from 'shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 class EmailService {
     constructor() {
-        this.from = process.env.MAIL_FROM || 'EDUCATION HUB';
-        this.companyName = 'EDUCATION HUB';
-        this.supportEmail = process.env.MAIL_USER || 'support@educationhub.com';
-        this.loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000/login';
-        this.helpCenterUrl = process.env.HELP_CENTER_URL || 'http://localhost:3000/help';
-        this.companyLogoUrl = process.env.COMPANY_LOGO_URL || '';
+        this.from = config.email.from;
+        this.companyName = config.app.companyName;
+        this.supportEmail = config.email.user;
+        this.loginUrl = `${config.client.frontendUrl}/login`;
+        this.helpCenterUrl = config.app.helpCenterUrl;
+        this.companyLogoUrl = config.app.companyLogoUrl;
     }
 
     async sendWelcomeEmailWithCredentials(to, userData) {
@@ -37,7 +38,7 @@ class EmailService {
             });
 
             const mailOptions = {
-                from: `"${this.from}" <${process.env.MAIL_USER}>`,
+                from: `"${this.from}" <${config.email.user}>`,
                 to: to,
                 subject: `Welcome to ${this.companyName} - Your Account Credentials`,
                 html: html,
@@ -72,7 +73,7 @@ class EmailService {
             });
 
             const mailOptions = {
-                from: `"${this.from}" <${process.env.MAIL_USER}>`,
+                from: `"${this.from}" <${config.email.user}>`,
                 to: to,
                 subject: `Two-Factor Authentication Enabled - ${this.companyName}`,
                 html: html,
@@ -107,7 +108,7 @@ class EmailService {
             });
 
             const mailOptions = {
-                from: `"${this.from}" <${process.env.MAIL_USER}>`,
+                from: `"${this.from}" <${config.email.user}>`,
                 to: to,
                 subject: `Two-Factor Authentication Disabled - ${this.companyName}`,
                 html: html,

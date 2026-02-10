@@ -1,14 +1,15 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { config } from 'shared';
 dotenv.config();
 
 const transporter = nodemailer.createTransport({
-    service: process.env.MAIL_HOST,
-    port: process.env.MAIL_PORT,
+    service: config.email.host,
+    port: config.email.port,
     secure: false,
     auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
+        user: config.email.user,
+        pass: config.email.pass,
     },
 });
 

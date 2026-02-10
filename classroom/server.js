@@ -14,7 +14,7 @@ const logger = createLogger("CLASSROOM");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8003;
+const PORT = config.ports.classroom;
 
 server.listen(PORT, async () => {
   await connectDB();

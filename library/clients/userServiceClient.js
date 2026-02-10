@@ -1,10 +1,11 @@
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import { config } from 'shared';
 
 class UserServiceClient {
     constructor() {
-        this.baseURL = process.env.USER_SERVICE_URL || 'http://user:8007';
-        this.jwtSecret = process.env.JWT_SECRET || 'mysupersecrectkey';
+        this.baseURL = config.services.user;
+        this.jwtSecret = config.jwt.secret;
         this.client = axios.create({
             baseURL: this.baseURL,
             timeout: 10000,

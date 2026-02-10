@@ -152,7 +152,7 @@ class OtpService {
             });
 
             const mailOptions = {
-                from: process.env.MAIL_FROM || '"Dhaka International University" <noreply@studentportal.com>',
+                from: config.email.from || '"Dhaka International University" <noreply@studentportal.com>',
                 to: email,
                 subject,
                 html,

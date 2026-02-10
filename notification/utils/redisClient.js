@@ -1,6 +1,7 @@
+import { config } from 'shared';
 import Redis from 'ioredis';
 
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisUrl = config.redis.url;
 const redis = new Redis(redisUrl, { lazyConnect: true });
 
 export async function initRedis() {

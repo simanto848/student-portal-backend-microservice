@@ -1,5 +1,6 @@
 import axios from "axios";
 import fs from "fs";
+import { config } from "shared";
 
 class EnrollmentServiceClient {
   constructor() {
@@ -8,7 +9,7 @@ class EnrollmentServiceClient {
       ? "http://enrollment:8005"
       : "http://localhost:8005";
 
-    this.baseURL = process.env.ENROLLMENT_SERVICE_URL || defaultUrl;
+    this.baseURL = config.services.enrollment || defaultUrl;
 
     console.log(
       `EnrollmentServiceClient: Initialized. Docker=${isDocker}, BaseURL=${this.baseURL}`

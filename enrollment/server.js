@@ -10,7 +10,7 @@ const logger = createLogger("ENROLLMENT");
 
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 8005;
+const PORT = config.ports.enrollment;
 
 server.listen(PORT, async () => {
   // LOGGING SETUP

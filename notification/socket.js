@@ -1,13 +1,14 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import redis from './utils/redisClient.js';
+import { config } from 'shared';
 
 let io;
 
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: [process.env.NEXT_PUBLIC_CLIENT_URL],
+      origin: [config.client.frontendUrl],
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
       credentials: true
     },

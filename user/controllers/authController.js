@@ -1,4 +1,4 @@
-import { ApiResponse, ApiError } from "shared";
+import { ApiResponse, ApiError, config } from "shared";
 import authService from "../services/authService.js";
 import Admin from "../models/Admin.js";
 import Staff from "../models/Staff.js";
@@ -330,7 +330,7 @@ class AuthController {
       sanitizedUser.role = sanitizedUser.role || req.user?.role || roleType;
       if (sanitizedUser.role === 'teacher') {
         try {
-          const academicServiceUrl = process.env.ACADEMIC_SERVICE_URL || 'http://academic:8002';
+          const academicServiceUrl = config.services.academic;
 
           // Headers for internal service calls
           const headers = {

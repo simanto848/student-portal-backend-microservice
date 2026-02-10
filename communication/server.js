@@ -13,7 +13,7 @@ const server = http.createServer(app);
 
 import { initSocket } from "./socket.js";
 
-const PORT = process.env.PORT || 8008;
+const PORT = config.ports.communication;
 
 server.listen(PORT, async () => {
   await connectDB();

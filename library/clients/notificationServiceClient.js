@@ -1,13 +1,13 @@
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
-import { createLogger } from 'shared';
+import { config, createLogger } from 'shared';
 
 const logger = createLogger('LIBRARY_NOTIF_CLIENT');
 
 class NotificationServiceClient {
     constructor() {
-        this.baseUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8007';
-        this.jwtSecret = process.env.JWT_SECRET || 'mysupersecrectkey';
+        this.baseUrl = config.services.notification;
+        this.jwtSecret = config.jwt.secret;
     }
 
     generateSystemToken() {
