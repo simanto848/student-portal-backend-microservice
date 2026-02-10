@@ -58,7 +58,9 @@ export const config = {
         url: getEnv('RABBITMQ_URL', 'amqp://localhost:5672')
     },
     redis: {
-        url: getEnv('REDIS_URL', 'redis://localhost:6379')
+        url: getEnv('REDIS_URL', 'redis://localhost:6379'),
+        eventNameSpace: getEnv('EVENT_NAMESPACE', 'student-portal'),
+        disableEventBus: getEnv('DISABLE_EVENT_BUS', 'false')
     },
     email: {
         host: getEnv('MAIL_HOST'),
@@ -73,6 +75,11 @@ export const config = {
     },
     external: {
         geminiApiKey: getEnv('GEMINI_API')
+    },
+    health: {
+        timeoutMs: Number(getEnv('HEALTH_TIMEOUT_MS', 2500)),
+        logLimit: Number(getEnv('HEALTH_LOG_LIMIT', 50)),
+        probeIntervalMs: Number(getEnv('HEALTH_PROBE_INTERVAL_MS', 5000))
     },
     app: {
         companyName: getEnv('COMPANY_NAME', 'Dhaka International University'),

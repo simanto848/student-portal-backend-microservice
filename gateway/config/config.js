@@ -1,43 +1,42 @@
-import { config as dotenvConfig } from "dotenv";
-dotenvConfig();
+import { config as envConfig } from "shared"
 
 export const config = {
-    port: Number(process.env.PORT || 8000),
+    port: Number(envConfig.ports.gateway),
 
     services: {
         user: {
             name: "User Service",
-            url: process.env.USER_SERVICE_URL,
+            url: envConfig.services.user,
             rateLimit: { windowMs: 60000, max: 100 }, // 100 requests per minute
         },
         academic: {
             name: "Academic Service",
-            url: process.env.ACADEMIC_SERVICE_URL,
+            url: envConfig.services.academic,
             rateLimit: { windowMs: 60000, max: 200 },
         },
         library: {
             name: "Library Service",
-            url: process.env.LIBRARY_SERVICE_URL,
+            url: envConfig.services.academic,
             rateLimit: { windowMs: 60000, max: 150 },
         },
         enrollment: {
             name: "Enrollment Service",
-            url: process.env.ENROLLMENT_SERVICE_URL,
+            url: envConfig.services.enrollment,
             rateLimit: { windowMs: 60000, max: 100 },
         },
         notification: {
             name: "Notification Service",
-            url: process.env.NOTIFICATION_SERVICE_URL,
+            url: envConfig.services.notification,
             rateLimit: { windowMs: 60000, max: 50 },
         },
         communication: {
             name: "Communication Service",
-            url: process.env.COMMUNICATION_SERVICE_URL,
+            url: envConfig.services.communication,
             rateLimit: { windowMs: 60000, max: 200 },
         },
         classroom: {
             name: "Classroom Service",
-            url: process.env.CLASSROOM_SERVICE_URL,
+            url: envConfig.services.classroom,
             rateLimit: { windowMs: 60000, max: 150 },
         },
     },
@@ -50,9 +49,9 @@ export const config = {
     },
 
     health: {
-        timeoutMs: Number(process.env.HEALTH_TIMEOUT_MS || 2500),
-        logLimit: Number(process.env.HEALTH_LOG_LIMIT || 50),
-        probeIntervalMs: Number(process.env.HEALTH_PROBE_INTERVAL_MS || 5000),
+        timeoutMs: Number(envConfig.health.timeoutMs),
+        logLimit: Number(envConfig.health.logLimit),
+        probeIntervalMs: Number(envConfig.health.probeIntervalMs),
     },
 
     alerting: {
