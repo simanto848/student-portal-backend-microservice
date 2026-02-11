@@ -1,112 +1,110 @@
-# Student Portal Backend Microservices
+# Student Portal Backend - Microservices Architecture
 
-This repository contains the backend microservices for the Student Portal application. It is built using **Node.js**, **Express**, and **Docker**.
+A resilient, scalable microservices backend for an Educational Institution Portal. This system manages everything from user authentication and academic planning to real-time communication and AI-powered scheduling.
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
-The backend follows a microservice architecture with the following services:
+The project follows a **Microservices Architecture** with a centralized **API Gateway** managing traffic, security, and service health.
 
-| Service | Port | Description |
+### 🧩 Core Services
+
+| Service | Port | Primary Responsibilities |
 | :--- | :--- | :--- |
-| **Gateway** | `8000` | API Gateway handling requests and routing to other services. |
-| **User** | `8001` | Manages user profiles (Students, Teachers, Admin). |
-| **Academic** | `8002` | Manages courses, schedules, and departments. |
-| **Classroom** | `8003` | Manages physical classrooms and resources. |
-| **Communication**| `8004` | Handles messages and announcements. |
-| **Enrollment** | `8005` | Handles student enrollment and course registration. |
-| **Library** | `8006` | Manages library books and lending. |
-| **Notification** | `8007` | Sends push notifications and emails. |
-| **Shared** | - | Shared utilities and middleware library. |
+| **[Gateway](gateway)** | `8000` | Traffic routing, Health monitoring, Circuit breaking, Rate limiting |
+| **[User](user)** | `8001` | Authentication (JWT/OTP), RBAC, Profiles (Student, Teacher, Admin) |
+| **[Academic](academic)** | `8002` | Courses, Syllabus, Faculty management, **AI Scheduling** |
+| **[Classroom](classroom)** | `8003` | Virtual classrooms, Assignments, Quizzes, AI Question Generation |
+| **[Communication](communication)**| `8004` | Real-time chat (Batch & Course groups), Message persistence |
+| **[Enrollment](enrollment)** | `8005` | Course registration, Attendance, Result workflows, Grading |
+| **[Library](library)** | `8006` | Book catalog, Reservations, Borrowing lifecycle management |
+| **[Notification](notification)** | `8007` | Omnichannel alerts (Email, Socket.io), Recurring reminders |
+| **[Shared](shared)** | - | Common Middleware, Logger, Event Bus, Domain Utilities |
 
-**Infrastructure Services:**
-- **MongoDB**: `27017` (Database)
-- **RabbitMQ**: `5672` (Message Broker)
-- **Redis**: `6379` (Caching/Queues)
+### 🛠️ Technology Stack
 
-## 🚀 Getting Started
+- **Runtime**: Node.js (v18+)
+- **Framework**: Express.js
+- **Database**: MongoDB (Mongoose ODM)
+- **Messaging**: RabbitMQ (Event-driven communication)
+- **Caching**: Redis (Event Bus & Rate Limiting)
+- **AI Integration**: Google Gemini API (for scheduling & content generation)
+- **Real-time**: Socket.io (Communication & Notifications)
+
+## 🚀 Key Features
+
+### 🛡️ Smart Gateway
+- **Service Registry**: Automatically tracks available microservices.
+- **Circuit Breaker**: Prevents cascading failures by monitoring service error rates.
+- **Health Dashboard**: Exposes `/api/system-health` for real-time monitoring.
+- **Request Transformation**: Standardizes headers and injects tracing metadata.
+
+### 🎓 Academic & Enrollment
+- **Auto Schedule Planner**: Generates optimized class schedules using Greedy algorithms.
+- **Result Workflow**: Multi-stage approval process for academic results.
+- **Attendance**: Detailed student attendance stats and reporting.
+
+### 💬 Engagement & Collaboration
+- **Interactive Quizzes**: Support for various question types with AI-assisted generation.
+- **Resource Hub**: Centralized material sharing for classrooms.
+- **Real-time Chat**: Group communications for entire batches or specific courses.
+
+## 🏁 Getting Started
 
 ### Prerequisites
 
-- [Docker](https://www.docker.com/) and Docker Compose
-- [Node.js](https://nodejs.org/) (v18+)
+- **Node.js** v18 or higher
+- **NPM** (configured for Workspaces)
+- **MongoDB** instance
+- **RabbitMQ** & **Redis** servers
 
-### 3. Installation
+### Installation
 
-1.  **Clone the repository** (if not already done).
-2.  **Install Dependencies**:
-    ```bash
-    npm install
-    # or
-    npm run install:all
-    ```
+1. **Clone & Install Dependencies**:
+   ```bash
+   npm install
+   ```
+   *This root-level command installs dependencies for all microservices using npm workspaces.*
 
-### 3. Environment Setup
+2. **Environment Configuration**:
+   Each service requires its own `.env` file. We provide a quick setup script:
+   ```bash
+   # Copy base example to root
+   cp .env.example .env
 
-**Security Note:** This project uses environment variables for sensitive configuration. 
-**Do NOT commit `.env` files.**
+   # Copy examples to all services
+   for dir in user academic gateway library notification enrollment communication classroom shared; do
+     cp $dir/.env.example $dir/.env
+   done
+   ```
 
-1.  **Create `.env` files**:
-    We have provided `.env.example` files for each service. You need to create a `.env` file in each service directory.
+3. **Required Secrets**:
+   Ensure the following variables are set in your root `.env`:
+   - `JWT_SECRET`: Random string for token signing.
+   - `GEMINI_API`: Google AI API key for scheduling features.
+   - `USER_MONGO_URI`: Primary database connection string.
 
-    **Quick Setup (Copy Examples):**
-    ```bash
-    # Root
-    cp .env.example .env
+### Running Locally
 
-    # Services
-    cp academic/.env.example academic/.env
-    cp classroom/.env.example classroom/.env
-    cp communication/.env.example communication/.env
-    cp enrollment/.env.example enrollment/.env
-    cp gateway/.env.example gateway/.env
-    cp library/.env.example library/.env
-    cp notification/.env.example notification/.env
-    cp shared/.env.example shared/.env
-    cp user/.env.example user/.env
-    ```
-
-2.  **Configure Secrets**:
-    Open the root `.env` file and set your secrets:
-    ```env
-    JWT_SECRET=your_secure_random_string
-    GEMINI_API=your_google_gemini_api_key
-    ```
-    *Note: The `docker-compose.yml` is configured to read `JWT_SECRET` and `GEMINI_API` from the root `.env` file and pass them to containers.*
-
-## 🏃‍♂️ Running the Application
-
-### Using Docker Compose (Recommended)
-
-To start the entire system:
+You can launch services individually using NPM workspace scripts:
 
 ```bash
-docker-compose up -d
-```
-
-- **Gateway** will be available at `http://localhost:8000`.
-- **RabbitMQ Management UI**: `http://localhost:15672`.
-
-To stop the services:
-```bash
-docker-compose down
-```
-
-### Running Locally (Dev Mode)
-
-You can run individual services locally for development:
-
-```bash
+# Start all core services in separate terminals or background
+npm run start:gateway
 npm run start:user
 npm run start:academic
-# ... see package.json for all scripts
+npm run start:classroom
+npm run start:enrollment
+npm run start:communication
+npm run start:library
+npm run start:notification
 ```
 
-## 🛠️ Development
+## 📊 Monitoring & Logs
 
-- **Workspaces**: This project uses npm workspaces.
-- **Shared Code**: Common code is located in the `shared` directory.
+The system features a centralized logging architecture:
+- **Shared Logger**: Winston-based logger with a custom MongoDB transport.
+- **System Metrics**: Each service tracks request counts, errors, and latency.
 
-## 📝 API Documentation
+---
 
-API endpoints are exposed via the **Gateway** at port `8000`.
-Refer to individual service routes for specific endpoints.
+© 2026 Dhaka International University. Built with resilience and scalability in mind.
