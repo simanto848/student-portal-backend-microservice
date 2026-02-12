@@ -1,193 +1,37 @@
-import Workspace from "../models/Workspace.js";
-import {
-  CourseEnrollment,
-} from "../models/external/Enrollment.js";
-import { Course, Batch } from "../models/external/Academic.js";
+import Workspace from '../models/Workspace.js';
 import { config } from 'shared';
-
-const extractApiArray = (payload) => {
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
-
-  if (payload.success && Array.isArray(payload.data)) return payload.data;
-
-  if (
-    payload.success &&
-    payload.data &&
-    typeof payload.data === "object" &&
-    Array.isArray(payload.data.data)
-  ) {
-    return payload.data.data;
-  }
-
-  if (
-    payload.success &&
-    payload.data &&
-    typeof payload.data === "object" &&
-    Array.isArray(payload.data.enrollments)
-  ) {
-    return payload.data.enrollments;
-  }
-
-  if (Array.isArray(payload.data)) return payload.data;
-  if (
-    payload.data &&
-    typeof payload.data === "object" &&
-    Array.isArray(payload.data.data)
-  ) {
-    return payload.data.data;
-  }
-
-  return [];
-};
+import { fetchWithFallback, extractApiArray } from '../utils/httpClient.js';
+import { verifyStudentBatchAccess, verifyTeacherAssignment, getStudentBatchId } from '../utils/accessControl.js';
+import { fetchCourse, fetchBatch, fetchCoursesMap, fetchBatchesMap } from '../utils/academicFetcher.js';
 
 const getWorkspace = async (courseId, batchId, userId, role, token) => {
-  const checkTeacherAssignment = async () => {
-    try {
-      const enrollmentServiceUrl = config.services.enrollment;
-      const base = enrollmentServiceUrl.replace(/\/$/, "");
-      const url = `${base}/batch-course-instructors?instructorId=${userId}&courseId=${courseId}&batchId=${batchId}&status=active`;
-
-      const res = await fetchWithFallback(
-        url,
-        { headers: { Authorization: token } },
-        "enrollment",
-        "enrollment"
-      );
-      if (!res.ok) {
-        return false;
-      }
-
-      const data = await res.json();
-      const items = extractApiArray(data);
-
-      if (items.length > 0) return true;
-      return false;
-    } catch (e) {
-      return false;
-    }
-  };
-
-  if (role === "teacher") {
-    const isAssigned = await checkTeacherAssignment();
-    if (!isAssigned) {
-      throw new Error("You are not assigned to this course batch.");
-    }
-  } else if (role === "student") {
-    let hasAccess = false;
-    try {
-      const userServiceUrl = config.services.user;
-      const base = userServiceUrl.replace(/\/$/, "");
-      const url = `${base}/students/${userId}`;
-
-      const res = await fetchWithFallback(
-        url,
-        { headers: { Authorization: token } },
-        "user",
-        "user"
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const student = data.data || data;
-        hasAccess = student.batchId === batchId;
-      }
-    } catch (e) {
-      try {
-        const enrollmentServiceUrl = config.services.enrollment;
-        const enrollBase = enrollmentServiceUrl.replace(/\/$/, "");
-        const enrollUrl = `${enrollBase}/enrollments`;
-
-        const res = await fetchWithFallback(
-          enrollUrl,
-          { headers: { Authorization: token } },
-          "enrollment",
-          "enrollment"
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const enrollments = extractApiArray(data);
-          hasAccess = enrollments.some(e => e.batchId === batchId);
-        }
-      } catch (enrollError) {
-        const localEnrollment = await CourseEnrollment.findOne({
-          batchId,
-          studentId: userId,
-          status: "active",
-          deletedAt: null,
-        });
-        hasAccess = !!localEnrollment;
-      }
-    }
-
-    if (!hasAccess) {
-      throw new Error("You do not belong to this batch.");
-    }
+  if (role === 'teacher') {
+    const isAssigned = await verifyTeacherAssignment(userId, courseId, batchId, token);
+    if (!isAssigned) throw new Error('You are not assigned to this course batch.');
+  } else if (role === 'student') {
+    const hasAccess = await verifyStudentBatchAccess(userId, batchId, token);
+    if (!hasAccess) throw new Error('You do not belong to this batch.');
   }
 
   let workspace = await Workspace.findOne({ courseId, batchId });
   if (workspace) return workspace;
 
-  const allowedRoles = [
-    "teacher",
-    "super_admin",
-    "admin",
-    "program_controller",
-  ];
-  if (!allowedRoles.includes(role)) {
-    throw new Error("Workspace not found.");
-  }
+  const allowedRoles = ['teacher', 'super_admin', 'admin', 'program_controller'];
+  if (!allowedRoles.includes(role)) throw new Error('Workspace not found.');
 
-  let course = await Course.findById(courseId);
-  let batch = await Batch.findById(batchId);
+  const [course, batch] = await Promise.all([
+    fetchCourse(courseId, token),
+    fetchBatch(batchId, token)
+  ]);
 
-  const academicUrl = config.services.academic;
-  const base = academicUrl.replace(/\/$/, "");
-
-  if (!course) {
-    try {
-      const res = await fetchWithFallback(
-        `${base}/courses/${courseId}`,
-        { headers: { Authorization: token } },
-        "academic",
-        "academic"
-      );
-      const data = await res.json();
-      if (data.success && data.data) {
-        course = data.data;
-      }
-    } catch (e) {
-      //
-    }
-  }
-
-  if (!batch) {
-    try {
-      const res = await fetchWithFallback(
-        `${base}/batches/${batchId}`,
-        { headers: { Authorization: token } },
-        "academic",
-        "academic"
-      );
-      const data = await res.json();
-      if (data.success && data.data) {
-        batch = data.data;
-      }
-    } catch (e) {
-      //
-    }
-  }
-
-  if (!course || !batch) {
-    throw new Error("Invalid Course or Batch ID.");
-  }
+  if (!course || !batch) throw new Error('Invalid Course or Batch ID.');
 
   workspace = new Workspace({
     courseId,
     batchId,
-    departmentId:
-      typeof course.departmentId === "object"
-        ? course.departmentId.id || course.departmentId._id
-        : course.departmentId,
+    departmentId: typeof course.departmentId === 'object'
+      ? course.departmentId.id || course.departmentId._id
+      : course.departmentId,
     title: `${course.code} - ${batch.name}`,
     teacherIds: [userId],
     settings: {
@@ -203,34 +47,21 @@ const getWorkspace = async (courseId, batchId, userId, role, token) => {
 
 const getWorkspaceById = async (workspaceId, userId, role, token) => {
   const workspace = await Workspace.findById(workspaceId);
-  if (!workspace) throw new Error("Workspace not found");
+  if (!workspace) throw new Error('Workspace not found');
 
-  await getWorkspace(
-    workspace.courseId,
-    workspace.batchId,
-    userId,
-    role,
-    token
-  );
+  await getWorkspace(workspace.courseId, workspace.batchId, userId, role, token);
 
   const enrichedWorkspaces = await enrichWorkspaces([workspace], token);
   return enrichedWorkspaces[0] || workspace;
 };
 
 const listWorkspaces = async (userId, role, token) => {
-  if (role === "teacher") {
+  if (role === 'teacher') {
     let assignments = [];
     try {
-      const enrollmentServiceUrl = config.services.enrollment;
-      const base = enrollmentServiceUrl.replace(/\/$/, "");
-      const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
-
-      const res = await fetchWithFallback(
-        url,
-        { headers: { Authorization: token } },
-        "enrollment",
-        "enrollment"
-      );
+      const enrollBase = config.services.enrollment.replace(/\/$/, '');
+      const url = `${enrollBase}/batch-course-instructors/instructor/${userId}/courses`;
+      const res = await fetchWithFallback(url, { headers: { Authorization: token } }, 'enrollment');
       if (res.ok) {
         const data = await res.json();
         assignments = extractApiArray(data);
@@ -239,68 +70,18 @@ const listWorkspaces = async (userId, role, token) => {
       throw e;
     }
 
-    const pairs = assignments.map((a) => ({
-      courseId: a.courseId,
-      batchId: a.batchId,
-    }));
+    const pairs = assignments.map((a) => ({ courseId: a.courseId, batchId: a.batchId }));
     if (pairs.length === 0) return [];
 
     const workspaces = await Workspace.find({
       $or: pairs,
-      status: { $ne: "archived" },
+      status: { $ne: 'archived' },
       deletedAt: null,
     }).sort({ createdAt: -1 });
 
     return await enrichWorkspaces(workspaces, token);
-  } else if (role === "student") {
-    let studentBatchId = null;
-    try {
-      const userServiceUrl = config.services.user;
-      const base = userServiceUrl.replace(/\/$/, "");
-      const url = `${base}/students/${userId}`;
-
-      const res = await fetchWithFallback(
-        url,
-        { headers: { Authorization: token } },
-        "user",
-        "user"
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const student = data.data || data;
-        studentBatchId = student.batchId;
-      }
-    } catch (e) {
-      try {
-        const enrollmentServiceUrl = config.services.enrollment;
-        const enrollBase = enrollmentServiceUrl.replace(/\/$/, "");
-        const enrollUrl = `${enrollBase}/enrollments`;
-
-        const res = await fetchWithFallback(
-          enrollUrl,
-          { headers: { Authorization: token } },
-          "enrollment",
-          "enrollment"
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const enrollments = extractApiArray(data);
-          if (enrollments.length > 0) {
-            studentBatchId = enrollments[0].batchId;
-          }
-        }
-      } catch (enrollError) {
-        const localEnrollments = await CourseEnrollment.find({
-          studentId: userId,
-          status: "active",
-          deletedAt: null,
-        });
-        if (localEnrollments.length > 0) {
-          studentBatchId = localEnrollments[0].batchId;
-        }
-      }
-    }
-
+  } else if (role === 'student') {
+    const studentBatchId = await getStudentBatchId(userId, token);
     if (!studentBatchId) return [];
 
     const workspaces = await Workspace.find({
@@ -313,244 +94,151 @@ const listWorkspaces = async (userId, role, token) => {
   return [];
 };
 
+// Enriches workspaces with course/batch/teacher/student-count details
 const enrichWorkspaces = async (workspaces, token) => {
-  const academicUrl = config.services.academic;
-  const base = academicUrl.replace(/\/$/, "");
+  if (workspaces.length === 0) return [];
 
-  const enriched = await Promise.all(
-    workspaces.map(async (ws) => {
-      const workspaceObj = ws.toObject();
-      let course = null;
-      let batch = null;
+  // Collect all unique IDs
+  const courseIds = [...new Set(workspaces.map(ws => ws.courseId).filter(Boolean))];
+  const batchIds = [...new Set(workspaces.map(ws => ws.batchId).filter(Boolean))];
+  const teacherIds = [...new Set(workspaces.flatMap(ws => ws.teacherIds || []).filter(Boolean))];
 
-      try {
-        const res = await fetchWithFallback(
-          `${base}/courses/${ws.courseId}`,
-          { headers: { Authorization: token } },
-          "academic",
-          "academic"
-        );
-        const data = await res.json();
-        if (data.success) course = data.data;
-      } catch (e) {
-        //
-      }
+  const [courseMap, batchMap, teacherMap] = await Promise.all([
+    fetchCoursesMap(courseIds, token),
+    fetchBatchesMap(batchIds, token),
+    fetchTeachersMap(teacherIds, token)
+  ]);
 
-      try {
-        const res = await fetchWithFallback(
-          `${base}/batches/${ws.batchId}`,
-          { headers: { Authorization: token } },
-          "academic",
-          "academic"
-        );
-        const data = await res.json();
-        if (data.success) batch = data.data;
-      } catch (e) {
-        //
-      }
+  // Fetch student counts per batch in parallel
+  const studentCountMap = await fetchStudentCounts(batchIds, token);
 
-      if (course) {
-        workspaceObj.courseName = course.name;
-        workspaceObj.courseCode = course.code;
-        workspaceObj.semester = course.semester || null;
-      }
+  return workspaces.map((ws) => {
+    const workspaceObj = ws.toObject ? ws.toObject() : { ...ws };
+    const course = courseMap.get(String(ws.courseId));
+    const batch = batchMap.get(String(ws.batchId));
 
-      if (batch) {
-        workspaceObj.batchName = batch.name;
-        workspaceObj.programId = batch.programId;
-      }
+    if (course) {
+      workspaceObj.courseName = course.name;
+      workspaceObj.courseCode = course.code;
+      workspaceObj.semester = course.semester || null;
+    }
 
-      try {
-        const userServiceUrl = config.services.user;
-        const baseUser = userServiceUrl.replace(/\/$/, "");
-        const defaultUserBase = "http://user:8007";
-        const userUrl = `${baseUser}/students?batchId=${ws.batchId}&limit=1`;
+    if (batch) {
+      workspaceObj.batchName = batch.name;
+      workspaceObj.programId = batch.programId;
+    }
 
-        let res = await fetchWithFallback(
-          userUrl,
-          { headers: { Authorization: token } },
-          "user",
-          "user"
-        );
+    workspaceObj.totalBatchStudents = studentCountMap.get(String(ws.batchId)) || 0;
 
-        if (!res.ok && baseUser !== defaultUserBase) {
-          const fallbackUrl = `${defaultUserBase}/students?batchId=${ws.batchId}&limit=1`;
-          res = await fetchWithFallback(
-            fallbackUrl,
-            { headers: { Authorization: token } },
-            "user",
-            "user"
-          );
-        }
+    workspaceObj.teachers = (ws.teacherIds || []).map(tid => {
+      const teacher = teacherMap.get(String(tid));
+      return teacher || { id: tid, fullName: 'Unknown Teacher' };
+    });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.data && data.data.pagination) {
-            workspaceObj.totalBatchStudents = data.data.pagination.total;
-          } else if (data.data && data.data.total) {
-            workspaceObj.totalBatchStudents = data.data.total;
-          } else {
-            workspaceObj.totalBatchStudents = 0;
-          }
-        }
-      } catch (e) {
-        workspaceObj.totalBatchStudents = 0;
-      }
+    workspaceObj.studentCount = ws.studentIds ? ws.studentIds.length : 0;
+    workspaceObj.id = ws._id;
 
-      if (ws.teacherIds && ws.teacherIds.length > 0) {
-        const userServiceUrl = config.services.user;
-        const baseUser = userServiceUrl.replace(/\/$/, "");
-
-        workspaceObj.teachers = await Promise.all(
-          ws.teacherIds.map(async (teacherId) => {
-            try {
-              const teacherUrl = `${baseUser}/teachers/${teacherId}`;
-              const res = await fetchWithFallback(
-                teacherUrl,
-                { headers: { Authorization: token } },
-                "user",
-                "user"
-              );
-              if (res.ok) {
-                const data = await res.json();
-                if (data.success && data.data) {
-                  return {
-                    id: teacherId,
-                    fullName: data.data.fullName || data.data.name || "Unknown Teacher",
-                    email: data.data.email || "",
-                    registrationNumber: data.data.registrationNumber || "",
-                  };
-                }
-              }
-            } catch (e) {
-              //
-            }
-            return { id: teacherId, fullName: "Unknown Teacher" };
-          })
-        );
-      } else {
-        workspaceObj.teachers = [];
-      }
-
-      workspaceObj.studentCount = ws.studentIds ? ws.studentIds.length : 0;
-      workspaceObj.id = ws._id;
-
-      return workspaceObj;
-    })
-  );
-
-  return enriched;
+    return workspaceObj;
+  });
 };
 
-const fetchWithFallback = async (url, options, serviceName, fallbackHost) => {
-  try {
-    const res = await fetch(url, options);
-    return res;
-  } catch (e) {
-    if (url.includes("localhost") && fallbackHost) {
-      const newUrl = url.replace("localhost", fallbackHost);
-      try {
-        const resRelay = await fetch(newUrl, options);
-        return resRelay;
-      } catch (e2) {
-        throw e;
+// Batch-fetch teacher details
+const fetchTeachersMap = async (teacherIds, token) => {
+  const map = new Map();
+  if (teacherIds.length === 0) return map;
+
+  const userBase = config.services.user.replace(/\/$/, '');
+  await Promise.all(teacherIds.map(async (tid) => {
+    try {
+      const res = await fetchWithFallback(
+        `${userBase}/teachers/${tid}`,
+        { headers: { Authorization: token } },
+        'user'
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          map.set(String(tid), {
+            id: tid,
+            fullName: data.data.fullName || data.data.name || 'Unknown Teacher',
+            email: data.data.email || '',
+            registrationNumber: data.data.registrationNumber || '',
+          });
+        }
       }
-    }
-    throw e;
-  }
+    } catch (e) { /* skip */ }
+  }));
+  return map;
+};
+
+// Batch-fetch student counts per batch
+const fetchStudentCounts = async (batchIds, token) => {
+  const map = new Map();
+  if (batchIds.length === 0) return map;
+
+  const userBase = config.services.user.replace(/\/$/, '');
+  await Promise.all(batchIds.map(async (bid) => {
+    try {
+      const res = await fetchWithFallback(
+        `${userBase}/students?batchId=${bid}&limit=1`,
+        { headers: { Authorization: token } },
+        'user'
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data?.pagination) {
+          map.set(String(bid), data.data.pagination.total);
+        } else if (data.data?.total) {
+          map.set(String(bid), data.data.total);
+        }
+      }
+    } catch (e) { /* skip */ }
+  }));
+  return map;
 };
 
 const listPendingWorkspaces = async (userId, role, token) => {
-  if (role !== "teacher") return [];
+  if (role !== 'teacher') return [];
 
   let assignments = [];
   try {
-    const enrollmentServiceUrl = config.services.enrollment;
-    const base = enrollmentServiceUrl.replace(/\/$/, "");
-    const url = `${base}/batch-course-instructors/instructor/${userId}/courses`;
-
-    const res = await fetchWithFallback(
-      url,
-      { headers: { Authorization: token } },
-      "enrollment",
-      "enrollment"
-    );
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Enrollment Service returned ${res.status}`);
-    }
-
+    const enrollBase = config.services.enrollment.replace(/\/$/, '');
+    const url = `${enrollBase}/batch-course-instructors/instructor/${userId}/courses`;
+    const res = await fetchWithFallback(url, { headers: { Authorization: token } }, 'enrollment');
+    if (!res.ok) throw new Error(`Enrollment Service returned ${res.status}`);
     const rawData = await res.json();
     assignments = extractApiArray(rawData);
   } catch (e) {
     return [];
   }
 
-  if (assignments.length === 0) {
-    return [];
-  }
+  if (assignments.length === 0) return [];
 
-  const pairs = assignments.map((a) => ({
-    courseId: a.courseId,
-    batchId: a.batchId,
-  }));
-  const existingWorkspaces = await Workspace.find({
-    $or: pairs,
-  });
+  const pairs = assignments.map((a) => ({ courseId: a.courseId, batchId: a.batchId }));
+  const existingWorkspaces = await Workspace.find({ $or: pairs });
+  const activeOrArchived = existingWorkspaces.filter((w) => !w.deletedAt);
 
-  const activeOrArchivedWorkspaces = existingWorkspaces.filter(
-    (w) => !w.deletedAt
-  );
   const pendingAssignments = assignments.filter(
-    (a) =>
-      !activeOrArchivedWorkspaces.some(
-        (w) => w.courseId === a.courseId && w.batchId === a.batchId
-      )
+    (a) => !activeOrArchived.some(
+      (w) => w.courseId === a.courseId && w.batchId === a.batchId
+    )
   );
 
-  const enriched = await Promise.all(
-    pendingAssignments.map(async (a) => {
-      let course = await Course.findById(a.courseId);
-      let batch = await Batch.findById(a.batchId);
+  if (pendingAssignments.length === 0) return [];
 
-      const academicUrl = config.services.academic;
-      const base = academicUrl.replace(/\/$/, "");
+  // Batch-fetch courses and batches for all pending assignments
+  const courseIds = pendingAssignments.map(a => a.courseId);
+  const batchIds = pendingAssignments.map(a => a.batchId);
+  const [courseMap, batchMap] = await Promise.all([
+    fetchCoursesMap(courseIds, token),
+    fetchBatchesMap(batchIds, token)
+  ]);
 
-      if (!course) {
-        try {
-          const res = await fetchWithFallback(
-            `${base}/courses/${a.courseId}`,
-            { headers: { Authorization: token } },
-            "academic",
-            "academic"
-          );
-          const data = await res.json();
-          if (data.success) course = data.data;
-        } catch (e) {
-          //
-        }
-      }
-
-      if (!batch) {
-        try {
-          const res = await fetchWithFallback(
-            `${base}/batches/${a.batchId}`,
-            { headers: { Authorization: token } },
-            "academic",
-            "academic"
-          );
-          const data = await res.json();
-          if (data.success) batch = data.data;
-        } catch (e) {
-          //
-        }
-      }
-
-      if (!course || !batch) {
-        return null;
-      }
-
+  return pendingAssignments
+    .map((a) => {
+      const course = courseMap.get(String(a.courseId));
+      const batch = batchMap.get(String(a.batchId));
+      if (!course || !batch) return null;
       return {
         courseId: a.courseId,
         batchId: a.batchId,
@@ -561,9 +249,7 @@ const listPendingWorkspaces = async (userId, role, token) => {
         semester: a.semester,
       };
     })
-  );
-
-  return enriched.filter((e) => e !== null);
+    .filter(Boolean);
 };
 
 const deleteWorkspace = async (workspaceId, userId, role, token) => {
@@ -575,11 +261,10 @@ const deleteWorkspace = async (workspaceId, userId, role, token) => {
 
 const archiveWorkspace = async (workspaceId, userId, role, token) => {
   const workspace = await getWorkspaceById(workspaceId, userId, role, token);
-  if (role === "teacher" && !workspace.teacherIds.includes(userId)) {
-    throw new Error("Unauthorized to archive this workspace");
+  if (role === 'teacher' && !workspace.teacherIds.includes(userId)) {
+    throw new Error('Unauthorized to archive this workspace');
   }
-
-  workspace.status = "archived";
+  workspace.status = 'archived';
   await workspace.save();
   return workspace;
 };

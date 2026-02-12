@@ -1,187 +1,95 @@
-import axios from "axios";
-import Submission from "../models/Submission.js";
-import Assignment from "../models/Assignment.js";
-import Feedback from "../models/Feedback.js";
-import StreamItem from "../models/StreamItem.js";
-
-import WorkspaceService from "./workspaceService.js";
-import Workspace from "../models/Workspace.js";
-import { emitWorkspace, emitUser } from "../utils/events.js";
-import { v4 as uuidv4 } from "uuid";
+import Submission from '../models/Submission.js';
+import Assignment from '../models/Assignment.js';
+import Feedback from '../models/Feedback.js';
+import StreamItem from '../models/StreamItem.js';
+import WorkspaceService from './workspaceService.js';
+import Workspace from '../models/Workspace.js';
+import { emitWorkspace, emitUser } from '../utils/events.js';
 import {
-  toStoredPath,
-  resolveStoredPath,
-  deleteStoredFileIfExists,
-} from "../utils/fileStorage.js";
-import { config } from "shared";
+  mapFilesToAttachments,
+  addDownloadUrls,
+  deleteAttachmentFiles,
+  resolveStoredPath
+} from '../utils/attachmentHelper.js';
+import { fetchWithFallback } from '../utils/httpClient.js';
+import { config } from 'shared';
 
-const submitAssignment = async (assignmentId, data, userId, token) => {
+// ── Core submission logic ──
+
+const _submitCore = async (assignmentId, files, textAnswer, userId, token) => {
   const assignment = await Assignment.findById(assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  if (!assignment) throw new Error('Assignment not found');
+  if (assignment.status !== 'published') throw new Error('Assignment is not accepting submissions');
 
-  if (assignment.status !== "published") {
-    throw new Error("Assignment is not accepting submissions");
-  }
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, 'student', token);
 
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    "student",
-    token
-  );
-
-  let submission = await Submission.findOne({
-    assignmentId,
-    studentId: userId,
-  });
   const now = new Date();
-  const late =
-    assignment.dueAt && now > assignment.dueAt && !assignment.allowLate;
-
-  if (late && !assignment.allowLate) {
-    throw new Error("Late submissions are not allowed");
+  if (assignment.dueAt && now > assignment.dueAt && !assignment.allowLate) {
+    throw new Error('Late submissions are not allowed');
   }
+
+  let submission = await Submission.findOne({ assignmentId, studentId: userId });
 
   if (!submission) {
     submission = await Submission.create({
       assignmentId,
       workspaceId: assignment.workspaceId,
       studentId: userId,
-      files: data.files,
-      textAnswer: data.textAnswer,
-      status: "submitted",
+      files,
+      textAnswer,
+      status: 'submitted',
       submittedAt: now,
       late: assignment.dueAt && now > assignment.dueAt,
     });
 
     await StreamItem.create({
       workspaceId: assignment.workspaceId,
-      type: "grade_event",
+      type: 'grade_event',
       refId: submission.id,
       actorId: userId,
     });
   } else {
-    if (submission.status === "graded") {
-      throw new Error("Cannot modify graded submission");
+    if (submission.status === 'graded') throw new Error('Cannot modify graded submission');
+
+    // Delete old files if replacing
+    if (files.length > 0) {
+      await deleteAttachmentFiles(submission.files);
     }
-    submission.files = data.files;
-    submission.textAnswer = data.textAnswer;
-    submission.status =
-      submission.status === "submitted" ? "resubmitted" : "submitted";
+
+    submission.files = files.length > 0 ? files : submission.files;
+    submission.textAnswer = textAnswer;
+    submission.status = submission.status === 'submitted' ? 'resubmitted' : 'submitted';
     submission.submittedAt = now;
     submission.late = assignment.dueAt && now > assignment.dueAt;
     await submission.save();
   }
 
-  emitWorkspace(assignment.workspaceId, "submission.updated", submission);
+  emitWorkspace(assignment.workspaceId, 'submission.updated', submission);
   return submission;
+};
+
+const submitAssignment = async (assignmentId, data, userId, token) => {
+  return _submitCore(assignmentId, data.files || [], data.textAnswer, userId, token);
 };
 
 const submitAssignmentWithFiles = async (assignmentId, data, userId, token) => {
-  const assignment = await Assignment.findById(assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  const mappedFiles = mapFilesToAttachments(data?.files, 'submissions');
+  const submission = await _submitCore(assignmentId, mappedFiles, data.textAnswer, userId, token);
 
-  if (assignment.status !== "published") {
-    throw new Error("Assignment is not accepting submissions");
-  }
-
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    "student",
-    token
-  );
-
-  const fileList = Array.isArray(data?.files) ? data.files : [];
-  const mappedFiles = fileList.map((f) => {
-    const storedPath = toStoredPath({
-      subdir: "submissions",
-      filename: f.filename,
-    });
-    return {
-      id: uuidv4(),
-      name: f.originalname,
-      type: f.mimetype,
-      size: f.size,
-      path: storedPath,
-      uploadedAt: new Date().toISOString(),
-    };
-  });
-
-  let submission = await Submission.findOne({
-    assignmentId,
-    studentId: userId,
-  });
-
-  const now = new Date();
-  const late =
-    assignment.dueAt && now > assignment.dueAt && !assignment.allowLate;
-  if (late && !assignment.allowLate) {
-    throw new Error("Late submissions are not allowed");
-  }
-
-  if (!submission) {
-    submission = await Submission.create({
-      assignmentId,
-      workspaceId: assignment.workspaceId,
-      studentId: userId,
-      files: mappedFiles,
-      textAnswer: data.textAnswer,
-      status: "submitted",
-      submittedAt: now,
-      late: assignment.dueAt && now > assignment.dueAt,
-    });
-
-    await StreamItem.create({
-      workspaceId: assignment.workspaceId,
-      type: "grade_event",
-      refId: submission.id,
-      actorId: userId,
-    });
-  } else {
-    if (submission.status === "graded") {
-      throw new Error("Cannot modify graded submission");
-    }
-
-    const existingFiles = Array.isArray(submission.files)
-      ? submission.files
-      : [];
-    await Promise.all(
-      existingFiles
-        .map((f) => f?.path)
-        .filter(Boolean)
-        .map((p) => deleteStoredFileIfExists(p))
-    );
-
-    submission.files = mappedFiles;
-    submission.textAnswer = data.textAnswer;
-    submission.status =
-      submission.status === "submitted" ? "resubmitted" : "submitted";
-    submission.submittedAt = now;
-    submission.late = assignment.dueAt && now > assignment.dueAt;
-    await submission.save();
-  }
-
-  submission.files = (submission.files || []).map((f) => ({
-    ...f,
-    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
-  }));
+  // Add download URLs
+  submission.files = addDownloadUrls(submission.files, `/submissions/item/${submission.id}/files`);
   await submission.save();
 
-  emitWorkspace(assignment.workspaceId, "submission.updated", submission);
   return submission;
 };
 
+// ── List / Read operations ──
+
 const listSubmissions = async (assignmentId, userId, role, token) => {
   const assignment = await Assignment.findById(assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  if (!assignment) throw new Error('Assignment not found');
 
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    "teacher",
-    token
-  );
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, 'teacher', token);
 
   const workspace = await Workspace.findById(assignment.workspaceId);
   const submissions = await Submission.find({ assignmentId }).lean();
@@ -193,24 +101,18 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
   let allStudentIds = [...(workspace?.studentIds || [])];
   const studentDetailsMap = new Map();
 
-  // Fallback: If workspace list is empty, fetch by Batch ID
-  if (
-    allStudentIds.length === 0 &&
-    workspace.batchId &&
-    config.services.user
-  ) {
+  // Batch-fetch all students in one call if workspace list is empty
+  if (allStudentIds.length === 0 && workspace.batchId && config.services.user) {
     try {
-      const batchResponse = await axios.get(
-        `${config.services.user}/students`,
-        {
-          params: { batchId: workspace.batchId, limit: 1000 },
-          headers: { Authorization: token },
-        }
+      const userBase = config.services.user.replace(/\/$/, '');
+      const res = await fetchWithFallback(
+        `${userBase}/students?batchId=${workspace.batchId}&limit=1000`,
+        { headers: { Authorization: token } },
+        'user'
       );
-
-      if (batchResponse.data && batchResponse.data.success) {
-        const students =
-          batchResponse.data.data.students || batchResponse.data.data;
+      if (res.ok) {
+        const data = await res.json();
+        const students = data?.data?.students || (Array.isArray(data?.data) ? data.data : []);
         if (Array.isArray(students)) {
           students.forEach((s) => {
             const sId = s.id || s._id;
@@ -220,262 +122,191 @@ const listSubmissions = async (assignmentId, userId, role, token) => {
         }
       }
     } catch (e) {
-      console.error("Failed to fetch batch students", e.message);
+      console.error('Failed to fetch batch students', e.message);
     }
   }
 
-  // Combine current workspace students and any prior submitters
   allStudentIds = [...new Set([...allStudentIds, ...submissionMap.keys()])];
 
-  const populatedSubmissions = await Promise.all(
-    allStudentIds.map(async (studentId) => {
-      let submission = submissionMap.get(studentId);
-
-      if (!submission) {
-        submission = {
-          _id: `missing:${assignmentId}:${studentId}`,
-          id: `missing:${assignmentId}:${studentId}`,
-          assignmentId: assignmentId,
-          studentId: studentId,
-          status: "missing",
-          files: [],
-          submittedAt: null,
-          grade: null,
-          late: false,
-        };
-      }
-
-      // Add download URLs to files
-      submission.files = (submission.files || []).map((f) => ({
-        ...f,
-        url: `/submissions/item/${submission.id}/files/${f.id}/download`,
-      }));
-
-      // Optimization: Use pre-fetched details
-      if (studentDetailsMap.has(studentId)) {
-        submission.studentId = studentDetailsMap.get(studentId);
-        return submission;
-      }
-
+  // Batch-fetch student details for any not already fetched
+  const missingStudentIds = allStudentIds.filter(id => !studentDetailsMap.has(id));
+  if (missingStudentIds.length > 0 && config.services.user) {
+    const userBase = config.services.user.replace(/\/$/, '');
+    await Promise.all(missingStudentIds.map(async (sid) => {
       try {
-        if (!config.services.user) {
-          return submission;
-        }
-        const response = await axios.get(
-          `${config.services.user}/students/${submission.studentId}`,
-          {
-            headers: {
-              Authorization: token,
-            },
-          }
+        const res = await fetchWithFallback(
+          `${userBase}/students/${sid}`,
+          { headers: { Authorization: token } },
+          'user'
         );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.data) studentDetailsMap.set(sid, data.data);
+        }
+      } catch (e) { /* skip */ }
+    }));
+  }
 
-        if (response.data && response.data.success) {
-          submission.studentId = response.data.data;
-        }
-        return submission;
-      } catch (error) {
-        console.error(
-          `Failed to fetch student details for ${submission.studentId}`,
-          error.message
-        );
-        return submission;
-      }
-    })
-  );
+  const populatedSubmissions = allStudentIds.map((studentId) => {
+    let submission = submissionMap.get(studentId);
+
+    if (!submission) {
+      submission = {
+        _id: `missing:${assignmentId}:${studentId}`,
+        id: `missing:${assignmentId}:${studentId}`,
+        assignmentId,
+        studentId,
+        status: 'missing',
+        files: [],
+        submittedAt: null,
+        grade: null,
+        late: false,
+      };
+    }
+
+    submission.files = addDownloadUrls(submission.files, `/submissions/item/${submission.id}/files`);
+
+    if (studentDetailsMap.has(studentId)) {
+      submission.studentId = studentDetailsMap.get(studentId);
+    }
+
+    return submission;
+  });
 
   return populatedSubmissions.sort((a, b) => {
-    // Show Missing items at the bottom
-    if (a.status === "missing" && b.status !== "missing") return 1;
-    if (a.status !== "missing" && b.status === "missing") return -1;
-    // Sort submitted by date desc
-    if (a.submittedAt && b.submittedAt) {
-      return new Date(b.submittedAt) - new Date(a.submittedAt);
-    }
+    if (a.status === 'missing' && b.status !== 'missing') return 1;
+    if (a.status !== 'missing' && b.status === 'missing') return -1;
+    if (a.submittedAt && b.submittedAt) return new Date(b.submittedAt) - new Date(a.submittedAt);
     return 0;
   });
 };
 
 const getSubmission = async (submissionId, userId, role, token) => {
   const submission = await Submission.findById(submissionId);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new Error('Submission not found');
 
   const assignment = await Assignment.findById(submission.assignmentId);
-  if (role === "student" && submission.studentId !== userId) {
-    throw new Error("Not your submission");
-  }
+  if (role === 'student' && submission.studentId !== userId) throw new Error('Not your submission');
 
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    role,
-    token
-  );
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, role, token);
 
-  // Add download URLs to files
-  submission.files = (submission.files || []).map((f) => ({
-    ...f,
-    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
-  }));
-
+  submission.files = addDownloadUrls(submission.files, `/submissions/item/${submission.id}/files`);
   return submission;
 };
 
 const getMySubmission = async (assignmentId, userId, token) => {
   const assignment = await Assignment.findById(assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  if (!assignment) throw new Error('Assignment not found');
 
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    "student",
-    token
-  );
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, 'student', token);
 
-  const submission = await Submission.findOne({
-    assignmentId,
-    studentId: userId,
-  });
+  const submission = await Submission.findOne({ assignmentId, studentId: userId });
   if (!submission) return null;
 
-  submission.files = (submission.files || []).map((f) => ({
-    ...f,
-    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
-  }));
+  submission.files = addDownloadUrls(submission.files, `/submissions/item/${submission.id}/files`);
   return submission;
 };
 
-const getSubmissionFileForDownload = async (
-  submissionId,
-  fileId,
-  userId,
-  role,
-  token
-) => {
+const getSubmissionFileForDownload = async (submissionId, fileId, userId, role, token) => {
   const submission = await Submission.findById(submissionId);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new Error('Submission not found');
 
   const assignment = await Assignment.findById(submission.assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  if (!assignment) throw new Error('Assignment not found');
+  if (role === 'student' && submission.studentId !== userId) throw new Error('Not your submission');
 
-  if (role === "student" && submission.studentId !== userId) {
-    throw new Error("Not your submission");
-  }
-
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    role,
-    token
-  );
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, role, token);
 
   const files = Array.isArray(submission.files) ? submission.files : [];
   const file = files.find((f) => f && f.id === fileId);
-  if (!file) throw new Error("File not found");
-  if (!file.path) throw new Error("File has no path");
+  if (!file) throw new Error('File not found');
+  if (!file.path) throw new Error('File has no path');
 
   return {
     absolutePath: resolveStoredPath(file.path),
-    downloadName: file.name || "download",
+    downloadName: file.name || 'download',
   };
 };
+
+// ── Grading & Feedback ──
 
 const gradeSubmission = async (submissionId, data, userId, token) => {
   let submission;
 
-  if (submissionId.startsWith("missing:")) {
-    const parts = submissionId.split(":");
-    if (parts.length !== 3) {
-      throw new Error("Invalid missing submission ID");
-    }
+  if (submissionId.startsWith('missing:')) {
+    const parts = submissionId.split(':');
+    if (parts.length !== 3) throw new Error('Invalid missing submission ID');
 
-    const assignmentId = parts[1];
-    const studentId = parts[2];
-
+    const [, assignmentId, studentId] = parts;
     const assignment = await Assignment.findById(assignmentId);
-    if (!assignment) throw new Error("Assignment not found");
+    if (!assignment) throw new Error('Assignment not found');
 
     submission = await Submission.create({
       assignmentId,
       workspaceId: assignment.workspaceId,
       studentId,
-      status: "graded",
+      status: 'graded',
       grade: data.grade,
       rubricScores: data.rubricScores || [],
       gradedAt: new Date(),
       gradedById: userId,
       files: [],
-      textAnswer: "",
+      textAnswer: '',
     });
 
     await StreamItem.create({
       workspaceId: assignment.workspaceId,
-      type: "grade_event",
+      type: 'grade_event',
       refId: submission.id,
       actorId: userId,
     });
 
-    emitWorkspace(assignment.workspaceId, "submission.graded", submission);
-    emitUser(submission.studentId, "submission.graded", submission);
-
+    emitWorkspace(assignment.workspaceId, 'submission.graded', submission);
+    emitUser(submission.studentId, 'submission.graded', submission);
     return submission;
   }
 
   submission = await Submission.findById(submissionId);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new Error('Submission not found');
 
   const assignment = await Assignment.findById(submission.assignmentId);
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    "teacher",
-    token
-  );
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, 'teacher', token);
 
-  if (data.grade > assignment.maxScore) {
-    throw new Error("Grade exceeds maxScore");
-  }
+  if (data.grade > assignment.maxScore) throw new Error('Grade exceeds maxScore');
 
   submission.grade = data.grade;
   submission.rubricScores = data.rubricScores || [];
-  submission.status = "graded";
+  submission.status = 'graded';
   submission.gradedAt = new Date();
   submission.gradedById = userId;
   await submission.save();
 
   await StreamItem.create({
     workspaceId: assignment.workspaceId,
-    type: "grade_event",
+    type: 'grade_event',
     refId: submission.id,
     actorId: userId,
   });
 
-  emitWorkspace(assignment.workspaceId, "submission.graded", submission);
-  emitUser(submission.studentId, "submission.graded", submission);
-
+  emitWorkspace(assignment.workspaceId, 'submission.graded', submission);
+  emitUser(submission.studentId, 'submission.graded', submission);
   return submission;
 };
 
 const addFeedback = async (submissionId, data, userId, role, token) => {
   const submission = await Submission.findById(submissionId);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new Error('Submission not found');
 
   const assignment = await Assignment.findById(submission.assignmentId);
-  if (role === "student" && submission.studentId !== userId) {
-    throw new Error("Not your submission");
-  }
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    role,
-    token
-  );
+  if (role === 'student' && submission.studentId !== userId) throw new Error('Not your submission');
+
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, role, token);
 
   const feedback = await Feedback.create({
     submissionId,
     authorId: userId,
     message: data.message,
-    type: data.type || "comment",
+    type: data.type || 'comment',
   });
 
   submission.feedbackCount += 1;
@@ -483,72 +314,39 @@ const addFeedback = async (submissionId, data, userId, role, token) => {
 
   await StreamItem.create({
     workspaceId: assignment.workspaceId,
-    type: "feedback",
+    type: 'feedback',
     refId: feedback.id,
     actorId: userId,
   });
 
-  emitWorkspace(assignment.workspaceId, "submission.feedback", feedback);
-  emitUser(submission.studentId, "submission.feedback", feedback);
-
+  emitWorkspace(assignment.workspaceId, 'submission.feedback', feedback);
+  emitUser(submission.studentId, 'submission.feedback', feedback);
   return feedback;
 };
 
-const removeFileFromSubmission = async (
-  submissionId,
-  fileId,
-  userId,
-  role,
-  token
-) => {
+const removeFileFromSubmission = async (submissionId, fileId, userId, role, token) => {
   const submission = await Submission.findById(submissionId);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new Error('Submission not found');
 
   const assignment = await Assignment.findById(submission.assignmentId);
-  if (!assignment) throw new Error("Assignment not found");
+  if (!assignment) throw new Error('Assignment not found');
+  if (role === 'student' && submission.studentId !== userId) throw new Error('Not your submission');
 
-  if (role === "student" && submission.studentId !== userId) {
-    throw new Error("Not your submission");
-  }
+  await WorkspaceService.getWorkspaceById(assignment.workspaceId, userId, role, token);
 
-  // Double check workspace access
-  await WorkspaceService.getWorkspaceById(
-    assignment.workspaceId,
-    userId,
-    role,
-    token
-  );
-
-  if (submission.status === "graded") {
-    throw new Error("Cannot modify graded submission");
-  }
+  if (submission.status === 'graded') throw new Error('Cannot modify graded submission');
 
   const fileIndex = submission.files.findIndex((f) => f.id === fileId);
-  if (fileIndex === -1) {
-    throw new Error("File not found in submission");
-  }
+  if (fileIndex === -1) throw new Error('File not found in submission');
 
   const file = submission.files[fileIndex];
+  await deleteAttachmentFiles([file]);
 
-  // Physically delete the file if possible
-  if (file.path) {
-    await deleteStoredFileIfExists(file.path);
-  }
-
-  // Remove from array
   submission.files.splice(fileIndex, 1);
-
-  // Update metadata
   submission.updatedAt = new Date();
-
   await submission.save();
 
-  // Return updated submission with download URLs
-  submission.files = (submission.files || []).map((f) => ({
-    ...f,
-    url: `/submissions/item/${submission.id}/files/${f.id}/download`,
-  }));
-
+  submission.files = addDownloadUrls(submission.files, `/submissions/item/${submission.id}/files`);
   return submission;
 };
 

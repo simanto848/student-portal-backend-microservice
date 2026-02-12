@@ -17,7 +17,6 @@ class UserServiceClient {
     });
   }
 
-  // Generate a service token for internal communication
   generateServiceToken() {
     return jwt.sign(
       {
@@ -30,28 +29,49 @@ class UserServiceClient {
     );
   }
 
-  async getAllStudents() { return this._getList('/api/user/students'); }
-  async getAllTeachers() { return this._getList('/api/user/teachers'); }
-  async getAllStaff() { return this._getList('/api/user/staffs'); }
-  async getStudentsByDepartment(deptId) { return this._getList(`/api/user/students?departmentId=${deptId}`); }
-  async getStudentsByBatch(batchId) { return this._getList(`/api/user/students?batchId=${batchId}`); }
-  async getTeachersByDepartment(deptId) { return this._getList(`/api/user/teachers?departmentId=${deptId}`); }
-  async getStaffByDepartment(deptId) { return this._getList(`/api/user/staffs?departmentId=${deptId}`); }
+  // Updated to support pagination
+  async getAllStudents(params = {}) { return this._getList('/api/user/students', params); }
+  async getAllTeachers(params = {}) { return this._getList('/api/user/teachers', params); }
+  async getAllStaff(params = {}) { return this._getList('/api/user/staffs', params); }
+
+  async getStudentsByDepartment(deptId, params = {}) { return this._getList(`/api/user/students`, { ...params, departmentId: deptId }); }
+  async getStudentsByBatch(batchId, params = {}) { return this._getList(`/api/user/students`, { ...params, batchId: batchId }); }
+  async getTeachersByDepartment(deptId, params = {}) { return this._getList(`/api/user/teachers`, { ...params, departmentId: deptId }); }
+  async getStaffByDepartment(deptId, params = {}) { return this._getList(`/api/user/staffs`, { ...params, departmentId: deptId }); }
+
+  async getStudentsByFaculty(facultyId, params = {}) { return this._getList(`/api/user/students`, { ...params, facultyId: facultyId }); }
+  async getTeachersByFaculty(facultyId, params = {}) { return this._getList(`/api/user/teachers`, { ...params, facultyId: facultyId }); }
+  async getStaffByFaculty(facultyId, params = {}) { return this._getList(`/api/user/staffs`, { ...params, facultyId: facultyId }); }
 
   async getUserById(userId, role) {
-    // If role is known, try the specific endpoint
     if (role) {
       return this._fetchUser(userId, role);
     }
 
-    // If role is unknown, try all possible endpoints
+    // Parallel lookup
     const roles = ['student', 'teacher', 'staff', 'admin'];
-    for (const r of roles) {
-      const user = await this._fetchUser(userId, r);
-      if (user) return user;
+    try {
+      const results = await Promise.allSettled(roles.map(r => this._fetchUser(userId, r)));
+      const found = results.find(r => r.status === 'fulfilled' && r.value !== null);
+      if (found) return found.value;
+    } catch (err) {
+      // ignore
     }
 
     return null;
+  }
+
+  async getUsersByIds(userIds) {
+    const results = [];
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const batch = userIds.slice(i, i + BATCH_SIZE);
+      const promises = batch.map(id => this.getUserById(id));
+      const batchResults = await Promise.all(promises);
+      results.push(...batchResults.filter(u => u !== null));
+    }
+    return results;
   }
 
   async _fetchUser(userId, role) {
@@ -64,10 +84,8 @@ class UserServiceClient {
         endpoint = '/api/user/admins';
       }
 
-      console.log(`[UserServiceClient] Fetching user ${userId} from ${endpoint}/${userId}`);
       const res = await this.client.get(`${endpoint}/${userId}`);
       const data = res.data?.data || res.data;
-      console.log(`[UserServiceClient] Response for ${userId}:`, data ? `email=${data.email}` : 'NO DATA');
 
       if (!data) return null;
 
@@ -94,32 +112,33 @@ class UserServiceClient {
       const decoded = jwt.decode(token);
       const userId = decoded?.sub || decoded?.id;
       const role = decoded?.role || decoded?.type;
-      if (!userId) {
-
-        return null;
-      }
-
+      if (!userId) return null;
       return this.getUserById(userId, role);
     } catch (err) {
       return null;
     }
   }
 
-  async _getList(endpoint) {
+  async _getList(endpoint, params = {}) {
     try {
-      const res = await this.client.get(endpoint);
-      const normalized = this._normalizeList(res);
-      return normalized;
-    } catch (err) {
-      const errorDetails = {
-        message: err.message,
-        code: err.code,
-        status: err.response?.status,
-        data: err.response?.data,
-        gateway: this.gatewayURL
-      };
+      // Pass pagination and filter params
+      const res = await this.client.get(endpoint, { params });
 
-      return [];
+      const normalized = this._normalizeList(res);
+      const meta = res.data?.pagination || res.data?.meta || {};
+
+      return {
+        users: normalized,
+        pagination: {
+          total: meta.totalDocuments || meta.total || normalized.length,
+          page: meta.page || params.page || 1,
+          pages: meta.totalPages || meta.pages || 1,
+          hasMore: (meta.page < meta.totalPages) || false
+        }
+      };
+    } catch (err) {
+      console.error(`[UserServiceClient] Error fetching list from ${endpoint}:`, err.message);
+      return { users: [], pagination: { total: 0, page: 1, pages: 1, hasMore: false } };
     }
   }
 

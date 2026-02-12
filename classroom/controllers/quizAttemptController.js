@@ -1,4 +1,4 @@
-import QuizAttemptService from '../services/quizeAttemptService.js';
+import QuizAttemptService from '../services/quizAttemptService.js';
 import { ApiResponse } from 'shared';
 
 class QuizAttemptController {

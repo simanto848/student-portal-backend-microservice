@@ -2,6 +2,7 @@ import Quiz from '../models/Quiz.js';
 import Question from '../models/Question.js';
 import QuizAttempt from '../models/QuizAttempt.js';
 import { ApiError } from 'shared';
+import { fisherYatesShuffle } from '../utils/shuffle.js';
 
 class QuizAttemptService {
     async startAttempt(quizId, studentId) {
@@ -63,7 +64,7 @@ class QuizAttemptService {
         let questionIds = questions.map(q => q._id);
 
         if (quiz.shuffleQuestions) {
-            questionIds = questionIds.sort(() => Math.random() - 0.5);
+            fisherYatesShuffle(questionIds);
         }
 
         const attempt = await QuizAttempt.create({
@@ -82,7 +83,7 @@ class QuizAttemptService {
         const sanitizedQuestions = orderedQuestions.map(q => {
             let options = q.options.map(o => ({ id: o.id, text: o.text }));
             if (quiz.shuffleOptions && ['mcq_single', 'mcq_multiple'].includes(q.type)) {
-                options = options.sort(() => Math.random() - 0.5);
+                fisherYatesShuffle(options);
             }
             return {
                 id: q._id,

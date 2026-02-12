@@ -2,167 +2,111 @@ import userServiceClient from '../clients/userServiceClient.js';
 
 class RecipientResolverService {
   async resolve(notification) {
+    const allUsers = [];
+    await this.streamRecipients(notification, 1000, async (batch) => {
+      allUsers.push(...batch);
+    });
+    return allUsers;
+  }
+
+  // Stream recipients in batches using pagination from User Service
+  async streamRecipients(notification, batchSize = 100, onBatch) {
     const type = notification.targetType;
+    let batchIndex = 0;
+
+    const processPagedFetcher = async (fetcherFn, ...args) => {
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        // Fetch a page of users
+        const result = await fetcherFn(...args, { page, limit: batchSize });
+        const users = result.users || [];
+
+        if (users.length > 0) {
+          batchIndex++;
+          await onBatch(users, batchIndex);
+        }
+
+        const pagination = result.pagination || {};
+        hasMore = pagination.hasMore && (pagination.page < pagination.pages);
+        page++;
+      }
+    };
+
     switch (type) {
       case 'all':
-      case 'all':
-        const allUsers = await this.getAllUsers();
-        return allUsers;
+        await processPagedFetcher(userServiceClient.getAllStudents.bind(userServiceClient));
+        await processPagedFetcher(userServiceClient.getAllTeachers.bind(userServiceClient));
+        await processPagedFetcher(userServiceClient.getAllStaff.bind(userServiceClient));
+        break;
+
       case 'students':
-        return await this.getAllStudents();
+        await processPagedFetcher(userServiceClient.getAllStudents.bind(userServiceClient));
+        break;
+
       case 'teachers':
-        return await this.getAllTeachers();
+        await processPagedFetcher(userServiceClient.getAllTeachers.bind(userServiceClient));
+        break;
+
       case 'staff':
-        return await this.getAllStaff();
+        await processPagedFetcher(userServiceClient.getAllStaff.bind(userServiceClient));
+        break;
+
       case 'department':
-      case 'department':
-        const deptUsers = await this.getDepartmentsUsers(notification.targetDepartmentIds);
-        return deptUsers;
       case 'department_students':
-        return await this.getDepartmentStudents(notification.targetDepartmentIds);
       case 'department_teachers':
-        return await this.getDepartmentTeachers(notification.targetDepartmentIds);
       case 'department_staff':
-        return await this.getDepartmentStaff(notification.targetDepartmentIds);
+        const deptIds = notification.targetDepartmentIds || [];
+        for (const deptId of deptIds) {
+          if (type.includes('students') || type === 'department')
+            await processPagedFetcher(userServiceClient.getStudentsByDepartment.bind(userServiceClient), deptId);
+          if (type.includes('teachers') || type === 'department')
+            await processPagedFetcher(userServiceClient.getTeachersByDepartment.bind(userServiceClient), deptId);
+          if (type.includes('staff') || type === 'department')
+            await processPagedFetcher(userServiceClient.getStaffByDepartment.bind(userServiceClient), deptId);
+        }
+        break;
+
       case 'batch':
       case 'batch_students':
-      case 'batch':
-      case 'batch_students':
-        const batchUsers = await this.getBatchUsers(notification.targetBatchIds);
-        return batchUsers;
+        const batchIds = notification.targetBatchIds || [];
+        for (const batchId of batchIds) {
+          await processPagedFetcher(userServiceClient.getStudentsByBatch.bind(userServiceClient), batchId);
+        }
+        break;
+
       case 'faculty':
-        return await this.getFacultyUsers(notification.targetFacultyIds);
       case 'faculty_students':
-        return await this.getFacultyStudents(notification.targetFacultyIds);
       case 'faculty_teachers':
-        return await this.getFacultyTeachers(notification.targetFacultyIds);
       case 'faculty_staff':
-        return await this.getFacultyStaff(notification.targetFacultyIds);
+        const facultyIds = notification.targetFacultyIds || [];
+        for (const facultyId of facultyIds) {
+          if (type.includes('students') || type === 'faculty')
+            await processPagedFetcher(userServiceClient.getStudentsByFaculty.bind(userServiceClient), facultyId);
+          if (type.includes('teachers') || type === 'faculty')
+            await processPagedFetcher(userServiceClient.getTeachersByFaculty.bind(userServiceClient), facultyId);
+          if (type.includes('staff') || type === 'faculty')
+            await processPagedFetcher(userServiceClient.getStaffByFaculty.bind(userServiceClient), facultyId);
+        }
+        break;
+
       case 'custom':
-        // Resolve roles for each user ID - include email for email delivery
-        console.log(`[RecipientResolver] Resolving custom recipients: ${notification.targetUserIds?.join(', ')}`);
-        const targetRoles = notification.targetUserRoles || [];
-        const resolvedUsers = await Promise.all(notification.targetUserIds.map(async (id, index) => {
-          try {
-            // Use role hint if provided (helps fetch from correct endpoint)
-            const roleHint = targetRoles[index] || targetRoles[0] || null;
-            const user = await userServiceClient.getUserById(id, roleHint);
-            console.log(`[RecipientResolver] User ${id} resolved:`, user ? `email=${user.email}, role=${user.role}` : 'NOT FOUND');
-            return user ? (user.data || user) : null;
-          } catch (err) {
-            console.error(`Error resolving user ${id} for notification:`, err.message);
-            return null;
+        const userIds = notification.targetUserIds || [];
+        if (userIds.length > 0) {
+          for (let i = 0; i < userIds.length; i += batchSize) {
+            const chunk = userIds.slice(i, i + batchSize);
+            const users = await Promise.all(chunk.map(id => userServiceClient.getUserById(id)));
+            const validUsers = users.filter(u => u !== null);
+            if (validUsers.length > 0) {
+              batchIndex++;
+              await onBatch(validUsers, batchIndex);
+            }
           }
-        }));
-        const mappedUsers = resolvedUsers.filter(u => u !== null).map(u => ({
-          id: u.id || u._id,
-          role: u.role,
-          email: u.email,
-          fullName: u.fullName
-        }));
-        console.log(`[RecipientResolver] Final mapped users:`, JSON.stringify(mappedUsers));
-        return mappedUsers;
-      default:
-        return [];
-    }
-  }
-
-  async getAllUsers() {
-    const [students, teachers, staff] = await Promise.all([
-      this.getAllStudents(),
-      this.getAllTeachers(),
-      this.getAllStaff()
-    ]);
-    return [...students, ...teachers, ...staff];
-  }
-
-  async getAllStudents() {
-    return await userServiceClient.getAllStudents();
-  }
-
-  async getAllTeachers() {
-    return await userServiceClient.getAllTeachers();
-  }
-
-  async getAllStaff() {
-    return await userServiceClient.getAllStaff();
-  }
-
-  // Department-level resolvers
-  async getDepartmentsUsers(departmentIds = []) {
-    const [students, teachers, staff] = await Promise.all([
-      this.getDepartmentStudents(departmentIds),
-      this.getDepartmentTeachers(departmentIds),
-      this.getDepartmentStaff(departmentIds)
-    ]);
-    return [...students, ...teachers, ...staff];
-  }
-
-  async getDepartmentStudents(departmentIds = []) {
-    const results = await Promise.all(departmentIds.map(id => userServiceClient.getStudentsByDepartment(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  async getDepartmentTeachers(departmentIds = []) {
-    const results = await Promise.all(departmentIds.map(id => userServiceClient.getTeachersByDepartment(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  async getDepartmentStaff(departmentIds = []) {
-    const results = await Promise.all(departmentIds.map(id => userServiceClient.getStaffByDepartment(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  // Batch-level resolvers
-  async getBatchUsers(batchIds = []) {
-    const results = await Promise.all(batchIds.map(id => userServiceClient.getStudentsByBatch(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  // Faculty-level resolvers
-  async getFacultyUsers(facultyIds = []) {
-    const [students, teachers, staff] = await Promise.all([
-      this.getFacultyStudents(facultyIds),
-      this.getFacultyTeachers(facultyIds),
-      this.getFacultyStaff(facultyIds)
-    ]);
-    return [...students, ...teachers, ...staff];
-  }
-
-  async getFacultyStudents(facultyIds = []) {
-    const results = await Promise.all(facultyIds.map(id => userServiceClient.getStudentsByFaculty(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  async getFacultyTeachers(facultyIds = []) {
-    const results = await Promise.all(facultyIds.map(id => userServiceClient.getTeachersByFaculty(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  async getFacultyStaff(facultyIds = []) {
-    const results = await Promise.all(facultyIds.map(id => userServiceClient.getStaffByFaculty(id)));
-    return this._uniqueUsers(results.flat());
-  }
-
-  // Helper to remove duplicate users
-  _uniqueUsers(users) {
-    const seen = new Set();
-    return users.filter(u => {
-      const id = u.id || u._id;
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-  }
-
-  async streamRecipients(notification, pageSize = 500, onBatch) {
-    const all = await this.resolve(notification);
-    for (let i = 0; i < all.length; i += pageSize) {
-      const slice = all.slice(i, i + pageSize);
-      await onBatch(slice, i / pageSize + 1);
+        }
+        break;
     }
   }
 }
 
 export default new RecipientResolverService();
-

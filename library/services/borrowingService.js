@@ -5,8 +5,20 @@ import Library from '../models/Library.js';
 import Reservation from '../models/BookReservation.js';
 import libraryService from './libraryService.js';
 import userServiceClient from '../clients/userServiceClient.js';
-import academicServiceClient from '../clients/academicServiceClient.js';
 import { ApiError } from 'shared';
+import { parsePagination, buildPaginationMeta } from '../utils/paginationHelper.js';
+import { calcBorrowingDetails, calcOverdueDetails } from '../utils/fineCalculator.js';
+import { populateUsers } from '../utils/userPopulator.js';
+import { buildSearchFilter } from '../utils/searchHelper.js';
+
+const BORROW_POPULATE = [
+    {
+        path: 'copyId',
+        select: 'copyNumber location condition bookId',
+        populate: { path: 'bookId', select: 'title author isbn category' },
+    },
+    { path: 'libraryId', select: 'name code finePerDay' },
+];
 
 class BorrowingService {
     async borrowBook({ userType, borrowerId, copyId, bookId, libraryId, processedById, notes = '', dueDate: customDueDate }, token) {
@@ -18,7 +30,7 @@ class BorrowingService {
                 const availableCopy = await BookCopy.findOne({
                     bookId,
                     status: 'available',
-                    deletedAt: null
+                    deletedAt: null,
                 });
                 if (!availableCopy) throw new ApiError(404, 'No available copies for this book');
                 finalCopyId = availableCopy._id;
@@ -31,15 +43,13 @@ class BorrowingService {
             if (!finalLibraryId) throw new ApiError(400, 'Library ID is required and could not be determined from copy');
 
             if (copy.status !== 'available') {
-                // Check if it is reserved for this user
                 if (copy.status === 'reserved') {
                     const reservation = await Reservation.findOne({
                         copyId: copy._id,
                         userId: borrowerId,
                         status: { $in: ['pending', 'fulfilled'] },
-                        deletedAt: null
+                        deletedAt: null,
                     });
-
                     if (!reservation) {
                         throw new ApiError(400, 'This book copy is reserved for another user');
                     }
@@ -54,7 +64,7 @@ class BorrowingService {
             const activeBorrowings = await BookTakenHistory.countDocuments({
                 borrowerId,
                 status: { $in: ['borrowed', 'overdue'] },
-                deletedAt: null
+                deletedAt: null,
             });
             if (activeBorrowings >= library.maxBorrowLimit) {
                 throw new ApiError(400, `You have reached the maximum borrow limit of ${library.maxBorrowLimit} books`);
@@ -65,20 +75,16 @@ class BorrowingService {
                 status: 'overdue',
                 finePaid: false,
                 fineAmount: { $gt: 0 },
-                deletedAt: null
+                deletedAt: null,
             });
             if (overdueWithUnpaidFines) {
                 throw new ApiError(400, 'You have unpaid fines. Please clear them before borrowing new books');
             }
 
             const borrowDate = new Date();
-            let dueDate;
-
-            if (customDueDate) {
-                dueDate = new Date(customDueDate);
-            } else {
-                dueDate = await libraryService.calculateDueDate(finalLibraryId, borrowDate, library.borrowDuration);
-            }
+            const dueDate = customDueDate
+                ? new Date(customDueDate)
+                : await libraryService.calculateDueDate(finalLibraryId, borrowDate, library.borrowDuration);
 
             const borrowing = new BookTakenHistory({
                 userType,
@@ -91,14 +97,11 @@ class BorrowingService {
                 fineAmount: 0,
                 finePaid: false,
                 notes,
-                processedById
+                processedById,
             });
 
             await borrowing.save();
-            await BookCopy.updateOne(
-                { _id: copyId },
-                { $set: { status: 'borrowed' } }
-            );
+            await BookCopy.updateOne({ _id: copyId }, { $set: { status: 'borrowed' } });
 
             return borrowing.toJSON();
         } catch (error) {
@@ -156,25 +159,18 @@ class BorrowingService {
                 borrowerId,
                 status: { $in: ['borrowed', 'overdue'] },
                 deletedAt: null,
-                ...filters
+                ...filters,
             };
 
+            const enrichWithDetails = (borrowings) =>
+                borrowings.map((b) => ({ ...b, ...calcBorrowingDetails(b) }));
+
             if (pagination && (pagination.page || pagination.limit)) {
-                const page = parseInt(pagination.page) || 1;
-                const limit = parseInt(pagination.limit) || 10;
-                const skip = (page - 1) * limit;
+                const { page, limit, skip } = parsePagination(pagination);
 
                 const [borrowings, total] = await Promise.all([
                     BookTakenHistory.find(query)
-                        .populate({
-                            path: 'copyId',
-                            select: 'copyNumber location condition bookId',
-                            populate: {
-                                path: 'bookId',
-                                select: 'title author isbn category'
-                            }
-                        })
-                        .populate('libraryId', 'name code finePerDay')
+                        .populate(BORROW_POPULATE)
                         .sort({ borrowDate: -1 })
                         .skip(skip)
                         .limit(limit)
@@ -182,99 +178,40 @@ class BorrowingService {
                     BookTakenHistory.countDocuments(query),
                 ]);
 
-                const borrowingsWithDetails = borrowings.map(b => {
-                    const dueDate = new Date(b.dueDate);
-                    const today = new Date();
-                    const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                    const isOverdue = daysUntilDue < 0;
-                    const potentialFine = isOverdue ? Math.abs(daysUntilDue) * (b.libraryId?.finePerDay || 0) : 0;
-
-                    return {
-                        ...b,
-                        daysUntilDue,
-                        isOverdue,
-                        potentialFine
-                    };
-                });
-
                 return {
-                    borrowings: borrowingsWithDetails,
-                    pagination: {
-                        page,
-                        limit,
-                        total,
-                        pages: Math.ceil(total / limit),
-                    },
+                    borrowings: enrichWithDetails(borrowings),
+                    pagination: buildPaginationMeta(total, page, limit),
                 };
             }
 
             const borrowings = await BookTakenHistory.find(query)
-                .populate({
-                    path: 'copyId',
-                    select: 'copyNumber location condition bookId',
-                    populate: {
-                        path: 'bookId',
-                        select: 'title author isbn category'
-                    }
-                })
-                .populate('libraryId', 'name code finePerDay')
+                .populate(BORROW_POPULATE)
                 .sort({ borrowDate: -1 })
                 .lean();
 
-            const borrowingsWithDetails = borrowings.map(b => {
-                const dueDate = new Date(b.dueDate);
-                const today = new Date();
-                const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
-                const isOverdue = daysUntilDue < 0;
-                const potentialFine = isOverdue ? Math.abs(daysUntilDue) * (b.libraryId?.finePerDay || 0) : 0;
-
-                return {
-                    ...b,
-                    daysUntilDue,
-                    isOverdue,
-                    potentialFine
-                };
-            });
-
-            return { borrowings: borrowingsWithDetails };
+            return { borrowings: enrichWithDetails(borrowings) };
         } catch (error) {
             throw new ApiError(500, 'Error fetching borrowed books: ' + error.message);
         }
     }
 
-    async getOverdueBooksByUser(borrowerId, options = {}) {
+    async getOverdueBooksByUser(borrowerId) {
         try {
             const query = {
                 borrowerId,
                 status: 'overdue',
-                deletedAt: null
+                deletedAt: null,
             };
 
             const borrowings = await BookTakenHistory.find(query)
-                .populate({
-                    path: 'copyId',
-                    select: 'copyNumber location bookId',
-                    populate: {
-                        path: 'bookId',
-                        select: 'title author isbn category'
-                    }
-                })
-                .populate('libraryId', 'name code finePerDay')
+                .populate(BORROW_POPULATE)
                 .sort({ dueDate: 1 })
                 .lean();
 
-            const borrowingsWithFines = borrowings.map(b => {
-                const dueDate = new Date(b.dueDate);
-                const today = new Date();
-                const daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
-                const currentFine = daysOverdue * (b.libraryId?.finePerDay || 0);
-
-                return {
-                    ...b,
-                    daysOverdue,
-                    currentFine
-                };
-            });
+            const borrowingsWithFines = borrowings.map((b) => ({
+                ...b,
+                ...calcOverdueDetails(b),
+            }));
 
             return { borrowings: borrowingsWithFines };
         } catch (error) {
@@ -285,27 +222,19 @@ class BorrowingService {
     async getBorrowingHistory(borrowerId, options = {}) {
         try {
             const { pagination, filters = {} } = options;
-            const query = {
-                borrowerId,
-                deletedAt: null,
-                ...filters
-            };
-
-            const page = parseInt(pagination?.page) || 1;
-            const limit = parseInt(pagination?.limit) || 10;
-            const skip = (page - 1) * limit;
+            const query = { borrowerId, deletedAt: null, ...filters };
+            const { page, limit, skip } = parsePagination(pagination);
 
             const [history, total] = await Promise.all([
                 BookTakenHistory.find(query)
-                    .populate({
-                        path: 'copyId',
-                        select: 'copyNumber bookId',
-                        populate: {
-                            path: 'bookId',
-                            select: 'title author isbn category'
-                        }
-                    })
-                    .populate('libraryId', 'name code')
+                    .populate([
+                        {
+                            path: 'copyId',
+                            select: 'copyNumber bookId',
+                            populate: { path: 'bookId', select: 'title author isbn category' },
+                        },
+                        { path: 'libraryId', select: 'name code' },
+                    ])
                     .sort({ borrowDate: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -315,12 +244,7 @@ class BorrowingService {
 
             return {
                 history,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
+                pagination: buildPaginationMeta(total, page, limit),
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching borrowing history: ' + error.message);
@@ -343,21 +267,13 @@ class BorrowingService {
     async getBorrowingById(id, token) {
         try {
             const borrowing = await BookTakenHistory.findOne({ _id: id, deletedAt: null })
-                .populate({
-                    path: 'copyId',
-                    select: 'copyNumber condition location bookId',
-                    populate: {
-                        path: 'bookId',
-                        select: 'title author isbn category'
-                    }
-                })
-                .populate('libraryId', 'name code finePerDay')
+                .populate(BORROW_POPULATE)
                 .lean();
 
             if (!borrowing) throw new ApiError(404, 'Borrowing record not found');
 
-            const [populated] = await this.populateBorrowerDetails([borrowing], token);
-            return populated;
+            const [populated] = await populateUsers([borrowing], 'borrowerId', token);
+            return { ...populated, borrower: populated.user };
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error fetching borrowing: ' + error.message);
         }
@@ -369,60 +285,24 @@ class BorrowingService {
             const query = { deletedAt: null, ...filters };
 
             if (search) {
-                console.log(`[BorrowingService] Performing search for: "${search}"`);
-                const bookIds = await Book.find({
-                    $or: [
-                        { title: { $regex: search, $options: 'i' } },
-                        { author: { $regex: search, $options: 'i' } },
-                        { isbn: { $regex: search, $options: 'i' } }
-                    ]
-                }).distinct('_id');
-
-                const copyIds = await BookCopy.find({
-                    $or: [
-                        { bookId: { $in: bookIds } },
-                        { copyNumber: { $regex: search, $options: 'i' } }
-                    ]
-                }).distinct('_id');
-
-                // Search Users
-                const [students, teachers, staffs, admins] = await Promise.all([
-                    userServiceClient.searchUsers(search, 'student', token),
-                    userServiceClient.searchUsers(search, 'teacher', token),
-                    userServiceClient.searchUsers(search, 'staff', token),
-                    userServiceClient.searchUsers(search, 'admin', token)
-                ]);
-
-                const userIds = [
-                    ...students.map(u => u.id || u._id),
-                    ...teachers.map(u => u.id || u._id),
-                    ...staffs.map(u => u.id || u._id),
-                    ...admins.map(u => u.id || u._id)
-                ].filter(Boolean);
-
-                console.log(`[BorrowingService] Search results: ${bookIds.length} books, ${copyIds.length} copies, ${userIds.length} users`);
-
-                query.$or = [
-                    { copyId: { $in: copyIds } },
-                    { borrowerId: { $in: userIds } }
-                ];
+                query.$or = await buildSearchFilter(search, token, {
+                    copyField: 'copyId',
+                    userField: 'borrowerId',
+                });
             }
 
-            const page = parseInt(pagination?.page) || 1;
-            const limit = parseInt(pagination?.limit) || 10;
-            const skip = (page - 1) * limit;
+            const { page, limit, skip } = parsePagination(pagination);
 
             const [borrowings, total] = await Promise.all([
                 BookTakenHistory.find(query)
-                    .populate({
-                        path: 'copyId',
-                        select: 'copyNumber bookId',
-                        populate: {
-                            path: 'bookId',
-                            select: 'title author isbn'
-                        }
-                    })
-                    .populate('libraryId', 'name code')
+                    .populate([
+                        {
+                            path: 'copyId',
+                            select: 'copyNumber bookId',
+                            populate: { path: 'bookId', select: 'title author isbn' },
+                        },
+                        { path: 'libraryId', select: 'name code' },
+                    ])
                     .sort({ borrowDate: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -430,59 +310,16 @@ class BorrowingService {
                 BookTakenHistory.countDocuments(query),
             ]);
 
-            const populatedBorrowings = await this.populateBorrowerDetails(borrowings, token);
+            const populatedBorrowings = await populateUsers(borrowings, 'borrowerId', token);
+            const withBorrower = populatedBorrowings.map((b) => ({ ...b, borrower: b.user }));
 
             return {
-                borrowings: populatedBorrowings,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
+                borrowings: withBorrower,
+                pagination: buildPaginationMeta(total, page, limit),
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching all borrowings: ' + error.message);
         }
-    }
-
-    async populateBorrowerDetails(borrowings, token) {
-        return await Promise.all(borrowings.map(async (borrowing) => {
-            try {
-                const user = await userServiceClient.validateUser(borrowing.userType, borrowing.borrowerId, token);
-                let departmentName = user.department?.name || user.departmentName || null;
-
-                if (!departmentName && user.departmentId) {
-                    try {
-                        const dept = await academicServiceClient.getDepartmentById(user.departmentId);
-                        departmentName = dept.data?.name || dept.name;
-                    } catch (err) {
-                        // Ignore department fetch error
-                    }
-                }
-
-                return {
-                    ...borrowing,
-                    borrower: {
-                        id: user.id || user._id,
-                        fullName: user.fullName,
-                        email: user.email,
-                        departmentId: user.departmentId,
-                        departmentName,
-                        registrationNumber: user.registrationNumber
-                    }
-                };
-            } catch (error) {
-                return {
-                    ...borrowing,
-                    borrower: {
-                        id: borrowing.borrowerId,
-                        fullName: 'Unknown User',
-                        error: 'Failed to fetch user details'
-                    }
-                };
-            }
-        }));
     }
 
     async checkAndUpdateOverdueBooks() {
@@ -492,16 +329,14 @@ class BorrowingService {
                 {
                     status: 'borrowed',
                     dueDate: { $lt: now },
-                    deletedAt: null
+                    deletedAt: null,
                 },
-                {
-                    $set: { status: 'overdue' }
-                }
+                { $set: { status: 'overdue' } }
             );
 
             return {
                 message: 'Overdue status updated',
-                updatedCount: result.modifiedCount
+                updatedCount: result.modifiedCount,
             };
         } catch (error) {
             throw new ApiError(500, 'Error updating overdue books: ' + error.message);

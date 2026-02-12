@@ -4,8 +4,13 @@ import { ApiError } from 'shared';
 import academicServiceClient from '../clients/academicServiceClient.js';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
+import BaseUserService from './BaseUserService.js';
 
-class TeacherService {
+class TeacherService extends BaseUserService {
+    constructor() {
+        super(Teacher, 'Teacher');
+    }
+
     async getAll(options = {}) {
         try {
             const { pagination, search, filters = {} } = options;
@@ -29,34 +34,46 @@ class TeacherService {
                     Teacher.countDocuments(query),
                 ]);
 
-                const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
-                    if (teacher.departmentId) {
-                        try {
-                            const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
-                            teacher.department = dept.data || dept;
-                        } catch (e) {
-                            console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
-                        }
+                const uniqueDeptIds = [...new Set(teachers.map(t => t.departmentId).filter(Boolean))];
+                let deptMap = {};
+                if (uniqueDeptIds.length > 0) {
+                    try {
+                        const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+                        depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+                    } catch (e) {
+                        console.error("Failed to batch fetch departments:", e.message);
+                    }
+                }
+
+                const teachersWithDept = teachers.map(teacher => {
+                    if (teacher.departmentId && deptMap[teacher.departmentId]) {
+                        teacher.department = deptMap[teacher.departmentId];
                     }
                     return teacher;
-                }));
+                });
 
                 return { teachers: teachersWithDept, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
             }
 
             const teachers = await Teacher.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
 
-            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
-                if (teacher.departmentId) {
-                    try {
-                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
-                        teacher.department = dept.data || dept;
-                    } catch (e) {
-                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
-                    }
+            const uniqueDeptIds = [...new Set(teachers.map(t => t.departmentId).filter(Boolean))];
+            let deptMap = {};
+            if (uniqueDeptIds.length > 0) {
+                try {
+                    const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+                    depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+                } catch (e) {
+                    console.error("Failed to batch fetch departments:", e.message);
+                }
+            }
+
+            const teachersWithDept = teachers.map(teacher => {
+                if (teacher.departmentId && deptMap[teacher.departmentId]) {
+                    teacher.department = deptMap[teacher.departmentId];
                 }
                 return teacher;
-            }));
+            });
 
             return { teachers: teachersWithDept };
         } catch (error) {
@@ -66,8 +83,7 @@ class TeacherService {
 
     async getById(id) {
         try {
-            const teacher = await Teacher.findById(id).select('-password').populate('profile').lean();
-            if (!teacher) throw new ApiError(404, 'Teacher not found');
+            const teacher = await super.getById(id);
             if (teacher.departmentId) {
                 try {
                     const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
@@ -90,17 +106,23 @@ class TeacherService {
             }).select('-password').populate('profile').lean();
 
             // Fetch departments for all teachers
-            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
-                if (teacher.departmentId) {
-                    try {
-                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
-                        teacher.department = dept.data || dept;
-                    } catch (e) {
-                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
-                    }
+            const uniqueDeptIds = [...new Set(teachers.map(t => t.departmentId).filter(Boolean))];
+            let deptMap = {};
+            if (uniqueDeptIds.length > 0) {
+                try {
+                    const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+                    depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+                } catch (e) {
+                    console.error("Failed to batch fetch departments:", e.message);
+                }
+            }
+
+            const teachersWithDept = teachers.map(teacher => {
+                if (teacher.departmentId && deptMap[teacher.departmentId]) {
+                    teacher.department = deptMap[teacher.departmentId];
                 }
                 return teacher;
-            }));
+            });
 
             return teachersWithDept;
         } catch (error) {
@@ -201,114 +223,6 @@ class TeacherService {
             return updated;
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error updating teacher: ' + error.message);
-        }
-    }
-
-    async delete(id) {
-        try {
-            const t = await Teacher.findById(id);
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            await t.softDelete();
-            return { message: 'Teacher deleted successfully' };
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error deleting teacher: ' + error.message);
-        }
-    }
-
-    async getDeletedTeachers() {
-        try {
-            const teachers = await Teacher.find({ deletedAt: { $ne: null } })
-                .setOptions({ includeDeleted: true })
-                .select('-password')
-                .populate('profile')
-                .lean();
-
-            const teachersWithDept = await Promise.all(teachers.map(async (teacher) => {
-                if (teacher.departmentId) {
-                    try {
-                        const dept = await academicServiceClient.getDepartmentById(teacher.departmentId);
-                        teacher.department = dept.data || dept;
-                    } catch (e) {
-                        console.error(`Failed to fetch department for teacher ${teacher._id}:`, e.message);
-                    }
-                }
-                return teacher;
-            }));
-
-            return teachersWithDept;
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error getting deleted teachers: ' + error.message);
-        }
-    }
-
-    async deletePermanently(id) {
-        try {
-            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } }).setOptions({ includeDeleted: true });
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            await t.deleteOne();
-            return { message: 'Teacher deleted permanently successfully' };
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error deleting teacher permanently: ' + error.message);
-        }
-    }
-
-    async restore(id) {
-        try {
-            const t = await Teacher.findOne({ _id: id, deletedAt: { $ne: null } }).setOptions({ includeDeleted: true });
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            await t.restore();
-            return { message: 'Teacher restored successfully' };
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring teacher: ' + error.message);
-        }
-    }
-
-    async addRegisteredIp(teacherId, ipAddress) {
-        try {
-            const t = await Teacher.findById(teacherId);
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            if (t.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(409, 'IP address already registered');
-            }
-
-            t.registeredIpAddress.push(ipAddress);
-            await t.save({ validateModifiedOnly: true });
-            return await Teacher.findById(teacherId).select('-password').populate('profile').lean();
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error adding registered IP: ' + error.message);
-        }
-    }
-
-    async removeRegisteredIp(teacherId, ipAddress) {
-        try {
-            const t = await Teacher.findById(teacherId);
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            if (!t.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(404, 'IP address not found in registered list');
-            }
-
-            t.registeredIpAddress = t.registeredIpAddress.filter(ip => ip !== ipAddress);
-            await t.save({ validateModifiedOnly: true });
-            return await Teacher.findById(teacherId).select('-password').populate('profile').lean();
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error removing registered IP: ' + error.message);
-        }
-    }
-
-    async updateRegisteredIps(teacherId, ipAddresses) {
-        try {
-            const t = await Teacher.findByIdAndUpdate(
-                teacherId,
-                { $set: { registeredIpAddress: ipAddresses } },
-                { new: true, runValidators: false }
-            ).select('-password').populate('profile');
-            if (!t) throw new ApiError(404, 'Teacher not found');
-            return t;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error updating registered IPs: ' + error.message);
         }
     }
 }

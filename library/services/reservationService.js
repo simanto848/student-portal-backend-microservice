@@ -1,11 +1,20 @@
-import BookReservation from "../models/BookReservation.js";
-import Book from "../models/Book.js";
-import BookCopy from "../models/BookCopy.js";
+import BookReservation from '../models/BookReservation.js';
+import BookCopy from '../models/BookCopy.js';
 import Library from '../models/Library.js';
 import userServiceClient from '../clients/userServiceClient.js';
-import academicServiceClient from '../clients/academicServiceClient.js';
-import { ApiError } from "shared";
-import fs from 'fs';
+import { ApiError } from 'shared';
+import { parsePagination, buildPaginationMeta } from '../utils/paginationHelper.js';
+import { populateUsers } from '../utils/userPopulator.js';
+import { buildSearchFilter } from '../utils/searchHelper.js';
+
+const RESERVATION_POPULATE = [
+    {
+        path: 'copyId',
+        select: 'copyNumber location condition bookId',
+        populate: { path: 'bookId', select: 'title author isbn category' },
+    },
+    { path: 'libraryId', select: 'name code' },
+];
 
 class ReservationService {
     async createReservation({ userType, userId, copyId, libraryId, notes = '' }, token) {
@@ -21,13 +30,13 @@ class ReservationService {
             if (!library) throw new ApiError(404, 'Library not found');
 
             const bookCopies = await BookCopy.find({ bookId: copy.bookId, deletedAt: null }).select('_id').lean();
-            const copyIds = bookCopies.map(c => c._id);
+            const copyIds = bookCopies.map((c) => c._id);
 
             const existingReservation = await BookReservation.findOne({
                 userId,
                 copyId: { $in: copyIds },
                 status: 'pending',
-                deletedAt: null
+                deletedAt: null,
             });
 
             if (existingReservation) {
@@ -37,63 +46,23 @@ class ReservationService {
             const activeReservations = await BookReservation.countDocuments({
                 userId,
                 status: 'pending',
-                deletedAt: null
+                deletedAt: null,
             });
             if (activeReservations >= library.maxBorrowLimit) {
                 throw new ApiError(400, `You have reached the maximum reservation limit of ${library.maxBorrowLimit} books`);
             }
 
-            const reservationDate = new Date();
-            let expiryDate = new Date(reservationDate);
-            const reservationHoldDays = library.reservationHoldDays || 2;
-            const operatingHours = library.operatingHours || {};
-            const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-
-            let operationalDaysCounted = 0;
-            let daysAdded = 0;
-            const MAX_LOOKAHEAD = 30;
-
-            if (Object.keys(operatingHours).length === 0) {
-                expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
-            } else {
-                while (operationalDaysCounted < reservationHoldDays && daysAdded < MAX_LOOKAHEAD) {
-                    daysAdded++;
-                    const checkDate = new Date(reservationDate);
-                    checkDate.setDate(reservationDate.getDate() + daysAdded);
-
-                    const dayName = daysMap[checkDate.getDay()];
-                    const dayConfig = operatingHours[dayName];
-
-                    const isOpen = dayConfig ? dayConfig.isOpen : false;
-
-                    if (isOpen) {
-                        operationalDaysCounted++;
-                        expiryDate = new Date(checkDate);
-
-                        if (dayConfig.close) {
-                            const [hours, minutes] = dayConfig.close.split(':').map(Number);
-                            expiryDate.setHours(hours, minutes, 0, 0);
-                        } else {
-                            expiryDate.setHours(23, 59, 59, 999);
-                        }
-                    }
-                }
-
-                if (operationalDaysCounted < reservationHoldDays) {
-                    expiryDate = new Date(reservationDate);
-                    expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
-                }
-            }
+            const expiryDate = this._calculateExpiryDate(library);
 
             const reservation = new BookReservation({
                 userType,
                 userId,
                 copyId: copy._id,
                 libraryId: library._id,
-                reservationDate,
+                reservationDate: new Date(),
                 expiryDate,
                 status: 'pending',
-                notes
+                notes,
             });
 
             await reservation.save();
@@ -107,12 +76,59 @@ class ReservationService {
         }
     }
 
+    _calculateExpiryDate(library) {
+        const reservationDate = new Date();
+        const reservationHoldDays = library.reservationHoldDays || 2;
+        const operatingHours = library.operatingHours || {};
+        const daysMap = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+        if (Object.keys(operatingHours).length === 0) {
+            const d = new Date(reservationDate);
+            d.setDate(d.getDate() + reservationHoldDays);
+            return d;
+        }
+
+        let expiryDate = new Date(reservationDate);
+        let operationalDaysCounted = 0;
+        let daysAdded = 0;
+        const MAX_LOOKAHEAD = 30;
+
+        while (operationalDaysCounted < reservationHoldDays && daysAdded < MAX_LOOKAHEAD) {
+            daysAdded++;
+            const checkDate = new Date(reservationDate);
+            checkDate.setDate(reservationDate.getDate() + daysAdded);
+
+            const dayName = daysMap[checkDate.getDay()];
+            const dayConfig = operatingHours[dayName];
+            const isOpen = dayConfig ? dayConfig.isOpen : false;
+
+            if (isOpen) {
+                operationalDaysCounted++;
+                expiryDate = new Date(checkDate);
+
+                if (dayConfig.close) {
+                    const [hours, minutes] = dayConfig.close.split(':').map(Number);
+                    expiryDate.setHours(hours, minutes, 0, 0);
+                } else {
+                    expiryDate.setHours(23, 59, 59, 999);
+                }
+            }
+        }
+
+        if (operationalDaysCounted < reservationHoldDays) {
+            expiryDate = new Date(reservationDate);
+            expiryDate.setDate(expiryDate.getDate() + reservationHoldDays);
+        }
+
+        return expiryDate;
+    }
+
     async cancelReservation(reservationId, userId, notes = '') {
         try {
             const reservation = await BookReservation.findOne({
                 _id: reservationId,
                 userId,
-                deletedAt: null
+                deletedAt: null,
             });
 
             if (!reservation) throw new ApiError(404, 'Reservation not found');
@@ -140,7 +156,7 @@ class ReservationService {
         try {
             const reservation = await BookReservation.findOne({
                 _id: reservationId,
-                deletedAt: null
+                deletedAt: null,
             }).populate('copyId').populate('libraryId');
 
             if (!reservation) throw new ApiError(404, 'Reservation not found');
@@ -178,27 +194,12 @@ class ReservationService {
         try {
             await this.checkAndExpireReservations();
             const { pagination, filters = {} } = options;
-            const query = {
-                userId,
-                deletedAt: null,
-                ...filters
-            };
-
-            const page = parseInt(pagination?.page) || 1;
-            const limit = parseInt(pagination?.limit) || 10;
-            const skip = (page - 1) * limit;
+            const query = { userId, deletedAt: null, ...filters };
+            const { page, limit, skip } = parsePagination(pagination);
 
             const [reservations, total] = await Promise.all([
                 BookReservation.find(query)
-                    .populate({
-                        path: 'copyId',
-                        select: 'copyNumber location condition bookId',
-                        populate: {
-                            path: 'bookId',
-                            select: 'title author isbn category'
-                        }
-                    })
-                    .populate('libraryId', 'name code')
+                    .populate(RESERVATION_POPULATE)
                     .sort({ reservationDate: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -206,7 +207,7 @@ class ReservationService {
                 BookReservation.countDocuments(query),
             ]);
 
-            const reservationsWithDetails = reservations.map(r => {
+            const reservationsWithDetails = reservations.map((r) => {
                 const expiryDate = new Date(r.expiryDate);
                 const now = new Date();
                 const hoursUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60));
@@ -216,17 +217,13 @@ class ReservationService {
                 if (r.copyId && typeof r.copyId === 'object') {
                     let book = null;
                     if (r.copyId.bookId && typeof r.copyId.bookId === 'object') {
-                        book = {
-                            ...r.copyId.bookId,
-                            id: r.copyId.bookId._id.toString()
-                        };
+                        book = { ...r.copyId.bookId, id: r.copyId.bookId._id.toString() };
                     }
-
                     copy = {
                         ...r.copyId,
                         id: r.copyId._id.toString(),
                         book,
-                        bookId: book ? book.id : r.copyId.bookId
+                        bookId: book ? book.id : r.copyId.bookId,
                     };
                 }
 
@@ -237,44 +234,36 @@ class ReservationService {
                     copyId: copy ? copy.id : r.copyId,
                     hoursUntilExpiry,
                     isExpired,
-                    canCancel: r.status === 'pending' && !isExpired
+                    canCancel: r.status === 'pending' && !isExpired,
                 };
             });
 
             return {
                 reservations: reservationsWithDetails,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
+                pagination: buildPaginationMeta(total, page, limit),
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching reservations: ' + error.message);
         }
     }
 
-
-
     async getReservationById(id, token) {
         try {
             const reservation = await BookReservation.findOne({ _id: id, deletedAt: null })
-                .populate({
-                    path: 'copyId',
-                    select: 'copyNumber location bookId',
-                    populate: {
-                        path: 'bookId',
-                        select: 'title author isbn'
-                    }
-                })
-                .populate('libraryId', 'name code')
+                .populate([
+                    {
+                        path: 'copyId',
+                        select: 'copyNumber location bookId',
+                        populate: { path: 'bookId', select: 'title author isbn' },
+                    },
+                    { path: 'libraryId', select: 'name code' },
+                ])
                 .lean();
 
             if (!reservation) throw new ApiError(404, 'Reservation not found');
 
-            const [reservationWithUser] = await this.populateUserDetails([reservation], token);
-            return reservationWithUser;
+            const [populated] = await populateUsers([reservation], 'userId', token);
+            return populated;
         } catch (error) {
             throw error instanceof ApiError ? error : new ApiError(500, 'Error fetching reservation: ' + error.message);
         }
@@ -287,62 +276,24 @@ class ReservationService {
             const query = { deletedAt: null, ...filters };
 
             if (search) {
-                const logData = `[${new Date().toISOString()}] Search: "${search}"\n`;
-                fs.appendFileSync('/tmp/library_search_debug.log', logData);
-
-                const bookIds = await Book.find({
-                    $or: [
-                        { title: { $regex: search, $options: 'i' } },
-                        { author: { $regex: search, $options: 'i' } },
-                        { isbn: { $regex: search, $options: 'i' } }
-                    ]
-                }).distinct('_id');
-
-                const copyIds = await BookCopy.find({
-                    $or: [
-                        { bookId: { $in: bookIds } },
-                        { copyNumber: { $regex: search, $options: 'i' } }
-                    ]
-                }).distinct('_id');
-
-                const [students, teachers, staffs, admins] = await Promise.all([
-                    userServiceClient.searchUsers(search, 'student', token),
-                    userServiceClient.searchUsers(search, 'teacher', token),
-                    userServiceClient.searchUsers(search, 'staff', token),
-                    userServiceClient.searchUsers(search, 'admin', token)
-                ]);
-
-                const userIds = [
-                    ...students.map(u => u.id || u._id),
-                    ...teachers.map(u => u.id || u._id),
-                    ...staffs.map(u => u.id || u._id),
-                    ...admins.map(u => u.id || u._id)
-                ].filter(Boolean);
-
-                const resultLog = `Found Users: ${userIds.length} (${userIds.join(', ')})\n`;
-                fs.appendFileSync('/tmp/library_search_debug.log', resultLog);
-
-                query.$or = [
-                    { copyId: { $in: copyIds } },
-                    { userId: { $in: userIds } }
-                ];
+                query.$or = await buildSearchFilter(search, token, {
+                    copyField: 'copyId',
+                    userField: 'userId',
+                });
             }
 
-            const page = parseInt(pagination?.page) || 1;
-            const limit = parseInt(pagination?.limit) || 10;
-            const skip = (page - 1) * limit;
+            const { page, limit, skip } = parsePagination(pagination);
 
             const [rawReservations, total] = await Promise.all([
                 BookReservation.find(query)
-                    .populate({
-                        path: 'copyId',
-                        select: 'copyNumber location bookId',
-                        populate: {
-                            path: 'bookId',
-                            select: 'title author isbn'
-                        }
-                    })
-                    .populate('libraryId', 'name code')
+                    .populate([
+                        {
+                            path: 'copyId',
+                            select: 'copyNumber location bookId',
+                            populate: { path: 'bookId', select: 'title author isbn' },
+                        },
+                        { path: 'libraryId', select: 'name code' },
+                    ])
                     .sort({ reservationDate: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -350,59 +301,15 @@ class ReservationService {
                 BookReservation.countDocuments(query),
             ]);
 
-            const reservations = await this.populateUserDetails(rawReservations, token);
+            const reservations = await populateUsers(rawReservations, 'userId', token);
 
             return {
                 reservations,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
+                pagination: buildPaginationMeta(total, page, limit),
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching all reservations: ' + error.message);
         }
-    }
-
-    async populateUserDetails(reservations, token) {
-        return await Promise.all(reservations.map(async (reservation) => {
-            try {
-                const user = await userServiceClient.validateUser(reservation.userType, reservation.userId, token);
-                let departmentName = user.department?.name || user.departmentName || null;
-
-                if (!departmentName && user.departmentId) {
-                    try {
-                        const dept = await academicServiceClient.getDepartmentById(user.departmentId);
-                        departmentName = dept.data?.name || dept.name;
-                    } catch (err) {
-                        // Ignore department fetch error
-                    }
-                }
-
-                return {
-                    ...reservation,
-                    user: {
-                        id: user.id || user._id,
-                        fullName: user.fullName,
-                        email: user.email,
-                        departmentId: user.departmentId,
-                        departmentName,
-                        registrationNumber: user.registrationNumber
-                    }
-                };
-            } catch (error) {
-                return {
-                    ...reservation,
-                    user: {
-                        id: reservation.userId,
-                        fullName: 'Unknown User',
-                        error: 'Failed to fetch user details'
-                    }
-                };
-            }
-        }));
     }
 
     async updateReservationStatus(id, data) {
@@ -421,29 +328,31 @@ class ReservationService {
     async checkAndExpireReservations() {
         try {
             const now = new Date();
+
             const expiredReservations = await BookReservation.find({
                 status: 'pending',
                 expiryDate: { $lt: now },
-                deletedAt: null
-            });
+                deletedAt: null,
+            }).select('copyId').lean();
 
-            let expiredCount = 0;
-
-            for (const reservation of expiredReservations) {
-                reservation.status = 'expired';
-                await reservation.save();
-                const copy = await BookCopy.findById(reservation.copyId);
-                if (copy && copy.status === 'reserved') {
-                    copy.status = 'available';
-                    await copy.save();
-                }
-
-                expiredCount++;
+            if (expiredReservations.length === 0) {
+                return { message: 'No expired reservations', expiredCount: 0 };
             }
+
+            const copyIds = expiredReservations.map((r) => r.copyId);
+            const result = await BookReservation.updateMany(
+                { status: 'pending', expiryDate: { $lt: now }, deletedAt: null },
+                { $set: { status: 'expired' } }
+            );
+
+            await BookCopy.updateMany(
+                { _id: { $in: copyIds }, status: 'reserved' },
+                { $set: { status: 'available' } }
+            );
 
             return {
                 message: 'Expired reservations processed',
-                expiredCount
+                expiredCount: result.modifiedCount,
             };
         } catch (error) {
             throw new ApiError(500, 'Error checking expired reservations: ' + error.message);

@@ -23,9 +23,9 @@ class DeliveryService {
       }
     }
 
-    // Check both sendEmail flag and deliveryChannels for email
     const shouldSendEmail = notification.sendEmail || notification.deliveryChannels?.includes('email');
     if (shouldSendEmail) {
+      // No more truncation - process all in batches
       await this.sendEmails(notification, recipients);
     }
   }
@@ -45,7 +45,7 @@ class DeliveryService {
       }
     }
 
-    if (notification.sendEmail) {
+    if (notification.sendEmail || notification.deliveryChannels?.includes('email')) {
       await this.sendEmails(notification, batch);
     }
   }
@@ -56,8 +56,9 @@ class DeliveryService {
       return { successful: 0, failed: 0 };
     }
 
-    const maxEmails = parseInt(config.email.maxPerNotification) || 200;
-    const subset = recipientsWithEmail.slice(0, maxEmails);
+    if (recipientsWithEmail.length > 500) {
+      console.warn(`[DeliveryService] Sending email to ${recipientsWithEmail.length} recipients. This may take time.`);
+    }
 
     const notificationData = {
       title: notification.title,
@@ -71,11 +72,11 @@ class DeliveryService {
     let failCount = 0;
     const errors = [];
 
-    const batchSize = parseInt(config.email.batchSize) || 10;
-    const delayBetweenBatches = parseInt(config.email.batchDelay) || 1000;
+    const batchSize = parseInt(config.email.batchSize) || 20;
+    const delayBetweenBatches = parseInt(config.email.batchDelay) || 500;
 
-    for (let i = 0; i < subset.length; i += batchSize) {
-      const batch = subset.slice(i, i + batchSize);
+    for (let i = 0; i < recipientsWithEmail.length; i += batchSize) {
+      const batch = recipientsWithEmail.slice(i, i + batchSize);
       const batchPromises = batch.map(async (recipient) => {
         try {
           await emailService.sendNotificationEmail(recipient.email, notificationData);
@@ -83,13 +84,13 @@ class DeliveryService {
           return { success: true, email: recipient.email };
         } catch (error) {
           failCount++;
-          errors.push({ email: recipient.email, error: error.message });
+          if (failCount <= 5) errors.push({ email: recipient.email, error: error.message });
           return { success: false, email: recipient.email, error: error.message };
         }
       });
 
       await Promise.all(batchPromises);
-      if (i + batchSize < subset.length) {
+      if (i + batchSize < recipientsWithEmail.length) {
         await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
       }
     }
@@ -99,29 +100,25 @@ class DeliveryService {
 
   buildRooms(notification) {
     switch (notification.targetType) {
-      case 'all':
-        return ['all'];
-      case 'students':
-        return ['role:student'];
-      case 'teachers':
-        return ['role:teacher'];
-      case 'staff':
-        return ['role:staff'];
+      case 'all': return ['all'];
+      case 'students': return ['role:student'];
+      case 'teachers': return ['role:teacher'];
+      case 'staff': return ['role:staff'];
       case 'department':
       case 'department_students':
       case 'department_teachers':
       case 'department_staff':
-        return notification.targetDepartmentIds.map(id => `department:${id}`);
+        return (notification.targetDepartmentIds || []).map(id => `department:${id}`);
       case 'batch':
       case 'batch_students':
-        return notification.targetBatchIds.map(id => `batch:${id}`);
+        return (notification.targetBatchIds || []).map(id => `batch:${id}`);
       case 'faculty':
       case 'faculty_students':
       case 'faculty_teachers':
       case 'faculty_staff':
-        return notification.targetFacultyIds.map(id => `faculty:${id}`);
+        return (notification.targetFacultyIds || []).map(id => `faculty:${id}`);
       case 'custom':
-        return notification.targetUserIds.map(id => `user:${id}`);
+        return (notification.targetUserIds || []).map(id => `user:${id}`);
       default:
         return [];
     }

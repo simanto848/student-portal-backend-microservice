@@ -1,10 +1,16 @@
 import Admin from '../models/Admin.js';
+import Profile from '../models/Profile.js';
 import { ApiError } from 'shared';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
 import mongoose from 'mongoose';
+import BaseUserService from './BaseUserService.js';
 
-class AdminService {
+class AdminService extends BaseUserService {
+    constructor() {
+        super(Admin, 'Admin');
+    }
+
     async getAll(options = {}) {
         try {
             const { pagination, search, filters = {} } = options;
@@ -55,20 +61,6 @@ class AdminService {
         }
     }
 
-    async getById(adminId) {
-        try {
-            const admin = await Admin.findById(adminId).select('-password').populate('profile').lean();
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-
-            return admin;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error fetching admin: ' + error.message);
-        }
-    }
-
     async create(adminData) {
         try {
             if (!adminData.registrationNumber) {
@@ -96,7 +88,6 @@ class AdminService {
             const admin = await Admin.create(adminData);
             if (profileData) {
                 try {
-                    const Profile = mongoose.model('Profile');
                     const nameParts = adminData.fullName ? adminData.fullName.split(' ') : ['Unknown'];
                     const firstName = profileData.firstName || nameParts[0];
                     const lastName = profileData.lastName || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]);
@@ -152,7 +143,6 @@ class AdminService {
             }
 
             if (updateData.profile && typeof updateData.profile === 'object') {
-                const Profile = mongoose.model('Profile');
                 if (existing.profile) {
                     await Profile.findByIdAndUpdate(
                         typeof existing.profile === 'string' ? existing.profile : existing.profile._id,
@@ -191,58 +181,6 @@ class AdminService {
         } catch (error) {
             if (error instanceof ApiError) throw error;
             throw new ApiError(500, 'Error updating admin: ' + error.message);
-        }
-    }
-
-    async delete(adminId) {
-        try {
-            const admin = await Admin.findById(adminId);
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-
-            await admin.softDelete();
-            return { message: 'Admin deleted successfully' };
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error deleting admin: ' + error.message);
-        }
-    }
-
-    async getDeletedAdmins() {
-        try {
-            const admins = await Admin.find({ deletedAt: { $ne: null } })
-                .setOptions({ includeDeleted: true })
-                .select('-password')
-                .populate('profile');
-            return admins;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error fetching deleted admins: ' + error.message);
-        }
-    }
-
-    async deletePermanently(adminId) {
-        try {
-            const admin = await Admin.findByIdAndDelete(adminId).setOptions({ includeDeleted: true });
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-            return { message: 'Admin deleted permanently successfully' };
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error deleting admin permanently: ' + error.message);
-        }
-    }
-
-    async restore(adminId) {
-        try {
-            const admin = await Admin.findById(adminId).setOptions({ includeDeleted: true });
-            if (!admin) throw new ApiError(404, 'Admin not found');
-            await admin.restore();
-            return { message: 'Admin restored successfully' };
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring admin: ' + error.message);
         }
     }
 
@@ -286,70 +224,6 @@ class AdminService {
             throw new ApiError(500, 'Error fetching admin statistics: ' + error.message);
         }
     }
-
-    async addRegisteredIp(adminId, ipAddress) {
-        try {
-            const admin = await Admin.findById(adminId);
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-
-            if (admin.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(409, 'IP address already registered');
-            }
-
-            admin.registeredIpAddress.push(ipAddress);
-            await admin.save({ validateModifiedOnly: true });
-
-            const updatedAdmin = await Admin.findById(adminId).select('-password').populate('profile').lean();
-            return updatedAdmin;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error adding registered IP: ' + error.message);
-        }
-    }
-
-    async removeRegisteredIp(adminId, ipAddress) {
-        try {
-            const admin = await Admin.findById(adminId);
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-
-            if (!admin.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(404, 'IP address not found in registered list');
-            }
-
-            admin.registeredIpAddress = admin.registeredIpAddress.filter(ip => ip !== ipAddress);
-            await admin.save({ validateModifiedOnly: true });
-
-            const updatedAdmin = await Admin.findById(adminId).select('-password').populate('profile').lean();
-            return updatedAdmin;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error removing registered IP: ' + error.message);
-        }
-    }
-
-    async updateRegisteredIps(adminId, ipAddresses) {
-        try {
-            const admin = await Admin.findByIdAndUpdate(
-                adminId,
-                { $set: { registeredIpAddress: ipAddresses } },
-                { new: true, runValidators: false }
-            ).select('-password').populate('profile');
-
-            if (!admin) {
-                throw new ApiError(404, 'Admin not found');
-            }
-
-            return admin;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error updating registered IPs: ' + error.message);
-        }
-    }
-
 
     async blockUser(userType, userId, blockedBy, reason, currentUserRole) {
         try {

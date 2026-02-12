@@ -38,6 +38,19 @@ class AcademicServiceClient {
     }
   }
 
+  async getDepartmentsByIds(ids) {
+    if (!ids || ids.length === 0) return [];
+    try {
+      const uniqueIds = [...new Set(ids)];
+      const results = await Promise.all(
+        uniqueIds.map(id => this.getDepartmentById(id).catch(err => null))
+      );
+      return results.filter(Boolean).map(r => r.data || r);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
   // Faculty APIs
   async getFacultyById(facultyId) {
     try {

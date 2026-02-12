@@ -3,6 +3,7 @@ import BookCopy from '../models/BookCopy.js';
 import BookReservation from '../models/BookReservation.js';
 import Library from '../models/Library.js';
 import { ApiError } from 'shared';
+import { parsePagination, buildPaginationMeta } from '../utils/paginationHelper.js';
 
 class BookService {
     async getAll(options = {}) {
@@ -23,9 +24,7 @@ class BookService {
             Object.assign(query, filters);
 
             if (pagination && (pagination.page || pagination.limit)) {
-                const page = parseInt(pagination.page) || 1;
-                const limit = parseInt(pagination.limit) || 10;
-                const skip = (page - 1) * limit;
+                const { page, limit, skip } = parsePagination(pagination);
 
                 const [books, total] = await Promise.all([
                     Book.find(query).populate('libraryId', 'name code').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
@@ -34,12 +33,7 @@ class BookService {
 
                 return {
                     books,
-                    pagination: {
-                        page,
-                        limit,
-                        total,
-                        pages: Math.ceil(total / limit),
-                    },
+                    pagination: buildPaginationMeta(total, page, limit),
                 };
             }
 
@@ -55,11 +49,10 @@ class BookService {
             const book = await Book.findById(id).populate('libraryId', 'name code').lean();
             if (!book) throw new ApiError(404, 'Book not found');
 
-            // Get available copies count
             const availableCopies = await BookCopy.countDocuments({
                 bookId: id,
                 status: 'available',
-                deletedAt: null
+                deletedAt: null,
             });
 
             return { ...book, availableCopies };
@@ -72,14 +65,12 @@ class BookService {
         try {
             const { numberOfCopies = 0, copyCondition = 'excellent', copyLocation = '', ...bookData } = data;
 
-            // Verify library exists
             const library = await Library.findById(bookData.libraryId);
             if (!library) throw new ApiError(404, 'Library not found');
 
             const book = new Book(bookData);
             await book.save();
 
-            // Automatically generate copies if requested
             if (numberOfCopies > 0) {
                 await this.generateBulkCopies(book, library, numberOfCopies, copyCondition, copyLocation);
             }
@@ -112,41 +103,41 @@ class BookService {
     }
 
     async generateBulkCopies(book, library, count, condition = 'excellent', location = '') {
-        const copies = [];
-        // Get the current highest index for this book in this library to continue numbering
+        const prefix = library.code || 'LIB';
+        const identifier = book.isbn || book.title.substring(0, 3).toUpperCase();
+
+        const existingNumbers = new Set(
+            await BookCopy.find({ libraryId: library._id }).distinct('copyNumber')
+        );
+
         const existingCopiesCount = await BookCopy.countDocuments({ bookId: book._id, libraryId: library._id });
 
+        const copies = [];
+        let offset = existingCopiesCount;
+
         for (let i = 1; i <= count; i++) {
-            const copyIndex = existingCopiesCount + i;
-            const copyNumber = await this.generateCopyNumber(book, library, copyIndex);
+            offset++;
+            let copyNumber = `${prefix}-${identifier}-${offset}`;
+
+            // Check collision in-memory
+            while (existingNumbers.has(copyNumber)) {
+                offset++;
+                copyNumber = `${prefix}-${identifier}-${offset}`;
+            }
+
+            existingNumbers.add(copyNumber);
             copies.push({
                 copyNumber,
                 bookId: book._id,
                 libraryId: library._id,
                 status: 'available',
-                condition: condition,
-                location: location,
+                condition,
+                location,
                 acquisitionDate: new Date(),
             });
         }
+
         return await BookCopy.insertMany(copies);
-    }
-
-    async generateCopyNumber(book, library, index) {
-        const prefix = library.code || 'LIB';
-        const identifier = book.isbn || book.title.substring(0, 3).toUpperCase();
-        let copyNumber = `${prefix}-${identifier}-${index}`;
-
-        // Check if copy number already exists (in case of overlaps or existing records)
-        let exists = await BookCopy.findOne({ copyNumber, libraryId: library._id });
-        let offset = index;
-        while (exists) {
-            offset++;
-            copyNumber = `${prefix}-${identifier}-${offset}`;
-            exists = await BookCopy.findOne({ copyNumber, libraryId: library._id });
-        }
-
-        return copyNumber;
     }
 
     async update(id, data) {
@@ -154,7 +145,6 @@ class BookService {
             const book = await Book.findById(id);
             if (!book) throw new ApiError(404, 'Book not found');
 
-            // If libraryId is being updated, verify it exists
             if (data.libraryId && data.libraryId !== book.libraryId) {
                 const library = await Library.findById(data.libraryId);
                 if (!library) throw new ApiError(404, 'Library not found');
@@ -214,38 +204,37 @@ class BookService {
 
             Object.assign(query, filters);
 
-            const page = parseInt(pagination?.page) || 1;
-            const limit = parseInt(pagination?.limit) || 10;
-            const skip = (page - 1) * limit;
+            const { page, limit, skip } = parsePagination(pagination);
 
-            const books = await Book.find(query)
-                .populate('libraryId', 'name code')
-                .sort({ createdAt: -1 })
-                .skip(skip)
-                .limit(limit)
-                .lean();
+            const [books, total] = await Promise.all([
+                Book.find(query)
+                    .populate('libraryId', 'name code')
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .lean(),
+                Book.countDocuments(query),
+            ]);
 
-            // For each book, get available copies count
-            const booksWithAvailability = await Promise.all(
-                books.map(async (book) => {
-                    const availableCopies = await BookCopy.countDocuments({
-                        bookId: book.id || book._id,
-                        status: 'available',
-                        deletedAt: null
-                    });
-                    return { ...book, availableCopies };
-                })
-            );
+            const bookIds = books.map((b) => b._id);
+            const availabilityCounts = await BookCopy.aggregate([
+                { $match: { bookId: { $in: bookIds }, status: 'available', deletedAt: null } },
+                { $group: { _id: '$bookId', count: { $sum: 1 } } },
+            ]);
 
-            const total = await Book.countDocuments(query);
+            const availMap = new Map();
+            for (const a of availabilityCounts) {
+                availMap.set(String(a._id), a.count);
+            }
+
+            const booksWithAvailability = books.map((book) => ({
+                ...book,
+                availableCopies: availMap.get(String(book._id)) || 0,
+            }));
+
             return {
                 books: booksWithAvailability,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
+                pagination: buildPaginationMeta(total, page, limit),
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching available books: ' + error.message);
@@ -260,8 +249,8 @@ class BookService {
                 BookReservation.countDocuments({
                     copyId: { $in: await BookCopy.find({ bookId: id, deletedAt: null }).distinct('_id') },
                     status: 'pending',
-                    deletedAt: null
-                })
+                    deletedAt: null,
+                }),
             ]);
             return { totalCopies, availableCopies, reservationCount };
         } catch (error) {

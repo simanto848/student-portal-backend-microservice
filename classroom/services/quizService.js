@@ -47,19 +47,41 @@ class QuizService {
         if (status) query.status = status;
 
         const quizzes = await Quiz.find(query).sort({ createdAt: -1 });
+        if (quizzes.length === 0) return [];
 
-        // Get attempt counts for each quiz
-        const quizzesWithStats = await Promise.all(quizzes.map(async (quiz) => {
-            const attemptCount = await QuizAttempt.countDocuments({ quizId: quiz._id });
-            const submittedCount = await QuizAttempt.countDocuments({ quizId: quiz._id, status: { $in: ['submitted', 'graded'] } });
-            return {
-                ...quiz.toObject(),
-                attemptCount,
-                submittedCount
-            };
+        // Single aggregation instead of 2N countDocuments calls
+        const quizIds = quizzes.map(q => q._id);
+        const stats = await QuizAttempt.aggregate([
+            { $match: { quizId: { $in: quizIds } } },
+            {
+                $group: {
+                    _id: {
+                        quizId: '$quizId',
+                        isSubmitted: {
+                            $cond: [{ $in: ['$status', ['submitted', 'graded']] }, true, false]
+                        }
+                    },
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Build stats maps
+        const attemptCountMap = new Map();
+        const submittedCountMap = new Map();
+        for (const s of stats) {
+            const qid = s._id.quizId;
+            attemptCountMap.set(qid, (attemptCountMap.get(qid) || 0) + s.count);
+            if (s._id.isSubmitted) {
+                submittedCountMap.set(qid, (submittedCountMap.get(qid) || 0) + s.count);
+            }
+        }
+
+        return quizzes.map(quiz => ({
+            ...quiz.toObject(),
+            attemptCount: attemptCountMap.get(quiz._id) || 0,
+            submittedCount: submittedCountMap.get(quiz._id) || 0
         }));
-
-        return quizzesWithStats;
     }
 
     async updateQuiz(id, updates) {

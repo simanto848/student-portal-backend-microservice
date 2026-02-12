@@ -80,18 +80,24 @@ class StudentService {
           Student.countDocuments(query),
         ]);
 
-        const studentsWithDept = await Promise.all(students.map(async (student) => {
-          if (student.departmentId) {
-            try {
-              const dept = await academicServiceClient.getDepartmentById(student.departmentId, token);
-              student.department = dept.data || dept;
-              student.departmentName = student.department?.name;
-            } catch (e) {
-              console.error(`Failed to fetch department for student ${student._id}:`, e.message);
-            }
+        const uniqueDeptIds = [...new Set(students.map(s => s.departmentId).filter(Boolean))];
+        let deptMap = {};
+        if (uniqueDeptIds.length > 0) {
+          try {
+            const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+            depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+          } catch (e) {
+            console.error("Failed to batch fetch departments:", e.message);
+          }
+        }
+
+        const studentsWithDept = students.map(student => {
+          if (student.departmentId && deptMap[student.departmentId]) {
+            student.department = deptMap[student.departmentId];
+            student.departmentName = student.department.name;
           }
           return student;
-        }));
+        });
 
         return {
           students: studentsWithDept,
@@ -110,18 +116,24 @@ class StudentService {
         .sort({ createdAt: -1 })
         .lean();
 
-      const studentsWithDept = await Promise.all(students.map(async (student) => {
-        if (student.departmentId) {
-          try {
-            const dept = await academicServiceClient.getDepartmentById(student.departmentId, token);
-            student.department = dept.data || dept;
-            student.departmentName = student.department?.name;
-          } catch (e) {
-            console.error(`Failed to fetch department for student ${student._id}:`, e.message);
-          }
+      const uniqueDeptIds = [...new Set(students.map(s => s.departmentId).filter(Boolean))];
+      let deptMap = {};
+      if (uniqueDeptIds.length > 0) {
+        try {
+          const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+          depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+        } catch (e) {
+          console.error("Failed to batch fetch departments:", e.message);
+        }
+      }
+
+      const studentsWithDept = students.map(student => {
+        if (student.departmentId && deptMap[student.departmentId]) {
+          student.department = deptMap[student.departmentId];
+          student.departmentName = student.department.name;
         }
         return student;
-      }));
+      });
 
       return { students: studentsWithDept };
     } catch (error) {

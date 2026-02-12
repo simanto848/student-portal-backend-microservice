@@ -4,9 +4,13 @@ import { ApiError } from 'shared';
 import PasswordGenerator from '../utils/passwordGenerator.js';
 import emailService from '../utils/emailService.js';
 import academicServiceClient from '../clients/academicServiceClient.js';
-import mongoose from 'mongoose';
+import BaseUserService from './BaseUserService.js';
 
-class StaffService {
+class StaffService extends BaseUserService {
+    constructor() {
+        super(Staff, 'Staff');
+    }
+
     async getAll(options = {}) {
         try {
             const { pagination, search, filters = {} } = options;
@@ -37,20 +41,23 @@ class StaffService {
                     Staff.countDocuments(query),
                 ]);
 
-                const staffWithDetails = await Promise.all(
-                    staffMembers.map(async (staff) => {
-                        if (staff.departmentId) {
-                            try {
-                                const departmentResponse = await academicServiceClient.getDepartmentById(staff.departmentId);
-                                staff.department = departmentResponse.data;
-                            } catch (error) {
-                                console.error('Error fetching department:', error.message);
-                                staff.department = null;
-                            }
-                        }
-                        return staff;
-                    })
-                );
+                const uniqueDeptIds = [...new Set(staffMembers.map(s => s.departmentId).filter(Boolean))];
+                let deptMap = {};
+                if (uniqueDeptIds.length > 0) {
+                    try {
+                        const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+                        depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+                    } catch (e) {
+                        console.error("Failed to batch fetch departments:", e.message);
+                    }
+                }
+
+                const staffWithDetails = staffMembers.map(staff => {
+                    if (staff.departmentId && deptMap[staff.departmentId]) {
+                        staff.department = deptMap[staff.departmentId];
+                    }
+                    return staff;
+                });
 
                 return {
                     staff: staffWithDetails,
@@ -64,20 +71,23 @@ class StaffService {
             }
 
             const staffMembers = await Staff.find(query).select('-password').populate('profile').sort({ createdAt: -1 }).lean();
-            const staffWithDetails = await Promise.all(
-                staffMembers.map(async (staff) => {
-                    if (staff.departmentId) {
-                        try {
-                            const departmentResponse = await academicServiceClient.getDepartmentById(staff.departmentId);
-                            staff.department = departmentResponse.data;
-                        } catch (error) {
-                            console.error('Error fetching department:', error.message);
-                            staff.department = null;
-                        }
-                    }
-                    return staff;
-                })
-            );
+            const uniqueDeptIds = [...new Set(staffMembers.map(s => s.departmentId).filter(Boolean))];
+            let deptMap = {};
+            if (uniqueDeptIds.length > 0) {
+                try {
+                    const depts = await academicServiceClient.getDepartmentsByIds(uniqueDeptIds);
+                    depts.forEach(d => { if (d) deptMap[d.id || d._id] = d; });
+                } catch (e) {
+                    console.error("Failed to batch fetch departments:", e.message);
+                }
+            }
+
+            const staffWithDetails = staffMembers.map(staff => {
+                if (staff.departmentId && deptMap[staff.departmentId]) {
+                    staff.department = deptMap[staff.departmentId];
+                }
+                return staff;
+            });
 
             return { staff: staffWithDetails };
         } catch (error) {
@@ -87,15 +97,7 @@ class StaffService {
 
     async getById(staffId) {
         try {
-            const staff = await Staff.findById(staffId)
-                .select('-password')
-                .populate('profile')
-                .lean();
-
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-
+            const staff = await super.getById(staffId);
             if (staff.departmentId) {
                 try {
                     const departmentResponse = await academicServiceClient.getDepartmentById(staff.departmentId);
@@ -105,7 +107,6 @@ class StaffService {
                     staff.department = null;
                 }
             }
-
             return staff;
         } catch (error) {
             if (error instanceof ApiError) throw error;
@@ -254,55 +255,6 @@ class StaffService {
         }
     }
 
-    async delete(staffId) {
-        try {
-            const staff = await Staff.findById(staffId);
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-
-            await staff.softDelete();
-            return { message: 'Staff deleted successfully' };
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error deleting staff: ' + error.message);
-        }
-    }
-
-    async getDeletedStaffs() {
-        try {
-            const staffs = await Staff.find({ deletedAt: { $ne: null } }).select('-password').populate('profile');
-            return staffs;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error fetching deleted staffs: ' + error.message);
-        }
-    }
-
-    async deletePermanently(staffId) {
-        try {
-            const staff = await Staff.findByIdAndDelete(staffId);
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-            return { message: 'Staff deleted permanently successfully' };
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error deleting staff permanently: ' + error.message);
-        }
-    }
-
-    async restore(staffId) {
-        try {
-            const staff = await Staff.findById(staffId);
-            if (!staff) throw new ApiError(404, 'Staff not found');
-            await staff.restore();
-            return { message: 'Staff restored successfully' };
-        } catch (error) {
-            throw error instanceof ApiError ? error : new ApiError(500, 'Error restoring staff: ' + error.message);
-        }
-    }
-
     async updateRole(staffId, newRole) {
         try {
             const staff = await Staff.findByIdAndUpdate(
@@ -404,69 +356,6 @@ class StaffService {
             };
         } catch (error) {
             throw new ApiError(500, 'Error fetching staff statistics: ' + error.message);
-        }
-    }
-
-    async addRegisteredIp(staffId, ipAddress) {
-        try {
-            const staff = await Staff.findById(staffId);
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-
-            if (staff.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(409, 'IP address already registered');
-            }
-
-            staff.registeredIpAddress.push(ipAddress);
-            await staff.save({ validateModifiedOnly: true });
-
-            const updatedStaff = await Staff.findById(staffId).select('-password').populate('profile').lean();
-            return updatedStaff;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error adding registered IP: ' + error.message);
-        }
-    }
-
-    async removeRegisteredIp(staffId, ipAddress) {
-        try {
-            const staff = await Staff.findById(staffId);
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-
-            if (!staff.registeredIpAddress.includes(ipAddress)) {
-                throw new ApiError(404, 'IP address not found in registered list');
-            }
-
-            staff.registeredIpAddress = staff.registeredIpAddress.filter(ip => ip !== ipAddress);
-            await staff.save({ validateModifiedOnly: true });
-
-            const updatedStaff = await Staff.findById(staffId).select('-password').populate('profile').lean();
-            return updatedStaff;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error removing registered IP: ' + error.message);
-        }
-    }
-
-    async updateRegisteredIps(staffId, ipAddresses) {
-        try {
-            const staff = await Staff.findByIdAndUpdate(
-                staffId,
-                { $set: { registeredIpAddress: ipAddresses } },
-                { new: true, runValidators: false }
-            ).select('-password').populate('profile');
-
-            if (!staff) {
-                throw new ApiError(404, 'Staff not found');
-            }
-
-            return staff;
-        } catch (error) {
-            if (error instanceof ApiError) throw error;
-            throw new ApiError(500, 'Error updating registered IPs: ' + error.message);
         }
     }
 }

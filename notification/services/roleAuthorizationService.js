@@ -49,9 +49,11 @@ class RoleAuthorizationService {
             const instructorBatchIds = await enrollmentServiceClient.getInstructorBatches(userId);
             if (instructorBatchIds.length > 0) {
                 roles.isCourseInstructor = true;
-                for (const batchId of instructorBatchIds) {
-                    const batch = await academicServiceClient.getBatchById(batchId);
 
+                const batchPromises = instructorBatchIds.map(id => academicServiceClient.getBatchById(id));
+                const batches = await Promise.all(batchPromises);
+
+                for (const batch of batches) {
                     if (batch) {
                         roles.instructorBatches.push({
                             id: String(batch.id || batch._id),
