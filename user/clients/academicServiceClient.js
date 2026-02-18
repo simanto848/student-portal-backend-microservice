@@ -147,6 +147,20 @@ class AcademicServiceClient {
     }
   }
 
+  async getCourseCount() {
+    try {
+      const response = await this.client.get("/courses", {
+        params: { page: 1, limit: 1, isDeleted: false },
+      });
+      const data = response.data?.data;
+      if (data?.pagination?.total !== undefined) return data.pagination.total;
+      if (data?.total !== undefined) return data.total;
+      return 0;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // Error handler
   handleError(error) {
     if (error.response) {

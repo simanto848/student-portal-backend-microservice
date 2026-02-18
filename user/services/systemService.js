@@ -2,7 +2,7 @@ import SystemLog from "../models/SystemLog.js";
 import ApiMetric from "../models/ApiMetric.js";
 import Student from "../models/Student.js";
 import Teacher from "../models/Teacher.js";
-import Course from "../../academic/models/Course.js";
+import academicServiceClient from "../clients/academicServiceClient.js";
 import mongoose from "mongoose";
 import os from "os";
 
@@ -99,13 +99,13 @@ class SystemService {
         const [studentCount, teacherCount, courseCount] = await Promise.all([
             Student.countDocuments({ isDeleted: false }),
             Teacher.countDocuments({ isDeleted: false }),
-            Course.countDocuments({ isDeleted: false })
+            academicServiceClient.getCourseCount(),
         ]);
 
         dbStats.counts = {
             students: studentCount,
             teachers: teacherCount,
-            courses: courseCount,
+            courses: courseCount ?? 0,
             admins: 1 // Default to 1 for now or fetch if needed
         };
 
