@@ -11,22 +11,23 @@ class AutoSchedulerService {
         return scheduleDataService.validatePrerequisites(sessionId, batchIds, departmentId);
     }
 
-    // Main scheduling algorithm using constraint satisfaction with backtracking
     async generateSchedule(sessionId, generatedBy, options = {}) {
         const {
             batchIds, departmentId, selectionMode = 'all',
             classDurationMinutes, classDurations,
-            workingDays, offDays, customTimeSlots, preferredRooms
+            workingDays, offDays, customTimeSlots, preferredRooms,
+            targetShift = null,
+            groupLabsTogether = true
         } = options;
 
-        // Configure the engine for this run
         timeSlotEngine.configure({
             classDurationMinutes, classDurations,
-            workingDays, offDays, customTimeSlots
+            workingDays, offDays, customTimeSlots,
+            targetShift,
+            groupLabsTogether
         });
         clearTimeCache();
 
-        // Validate prerequisites
         const validation = await scheduleDataService.validatePrerequisites(sessionId, batchIds, departmentId);
         if (!validation.valid) {
             throw {
@@ -37,39 +38,25 @@ class AutoSchedulerService {
             };
         }
 
-        // Gather data
         const data = await scheduleDataService.gatherSchedulingData(sessionId, timeSlotEngine, batchIds, departmentId);
 
         if (data.batches.length === 0) throw new Error("No batches found for scheduling");
         if (data.courses.length === 0) throw new Error("No courses found for scheduling");
         if (data.classrooms.length === 0) throw new Error("No classrooms available");
 
-        // Build initial schedule from existing active schedules + pending proposals
         const existingScheduleEntries = await this._buildExistingScheduleEntries(
             sessionId, data.batches.map(b => b.id.toString())
         );
 
-        // Build scheduling tasks
-        const tasks = this._buildTasks(data, timeSlotEngine, preferredRooms);
-        if (tasks.length === 0) {
+        const allTasks = this._buildTasks(data, timeSlotEngine, preferredRooms);
+        if (allTasks.length === 0) {
             throw new Error("No scheduling tasks generated. Ensure courses have teachers assigned.");
         }
 
-        // Sort: labs first, then by batch size (descending)
-        tasks.sort((a, b) => {
-            if (a.course.type !== b.course.type) {
-                if (a.course.type === 'lab') return -1;
-                if (b.course.type === 'lab') return 1;
-            }
-            return b.batch.studentCount - a.batch.studentCount;
-        });
-
-        // Run the 4-level scheduling (strict → relaxed → same-day → alternate-shift)
         const { schedule, unscheduled, newScheduleStartIndex } = this._runSchedulingPipeline(
-            tasks, data.classrooms, existingScheduleEntries, timeSlotEngine
+            allTasks, data.batches, data.classrooms, existingScheduleEntries, timeSlotEngine, groupLabsTogether
         );
 
-        // Create proposal from new schedules only
         const newSchedules = schedule.slice(newScheduleStartIndex);
         const scheduleData = newSchedules.map(s => ({
             sessionId, sessionCourseId: s.sessionCourseId,
@@ -88,18 +75,21 @@ class AutoSchedulerService {
             sessionId, generatedBy, scheduleData, {
             generatedAt: new Date(),
             itemCount: scheduleData.length,
-            totalTasks: tasks.length,
+            totalTasks: allTasks.length,
             unscheduledCount: unscheduled.length,
             conflictsCount: timeSlotEngine.conflicts.length,
             warningsCount: timeSlotEngine.warnings.length,
             selectionMode,
             batchIds: batchIds || [],
             departmentId: departmentId || null,
-            algorithm: 'constraint_satisfaction_greedy',
+            algorithm: 'shift_separated_sequential',
             classDurationMinutes: timeSlotEngine.classDurationMinutes,
             classDurations: timeSlotEngine.classDurations,
             workingDays: timeSlotEngine.workingDays,
             shiftConfig: timeSlotEngine.shiftConfig,
+            targetShift: targetShift,
+            groupLabsTogether: groupLabsTogether,
+            batchRoomAssignments: timeSlotEngine.getBatchRoomAssignments(),
             conflicts: timeSlotEngine.conflicts.slice(0, 10),
             warnings: timeSlotEngine.warnings.slice(0, 10),
             existingSchedulesConsidered: existingScheduleEntries.length
@@ -111,24 +101,33 @@ class AutoSchedulerService {
             stats: {
                 scheduled: newSchedules.length,
                 unscheduled: unscheduled.length,
+                unscheduledCourses: unscheduled.map(t => ({
+                    courseCode: t.course.code,
+                    courseName: t.course.name,
+                    courseType: t.course.type,
+                    batchName: t.batch.name,
+                    batchShift: t.batch.shift,
+                    teacherName: t.teacherName,
+                    reason: 'No available time slot found'
+                })),
                 conflicts: timeSlotEngine.conflicts,
                 warnings: timeSlotEngine.warnings,
-                existingSchedulesConsidered: existingScheduleEntries.length
+                existingSchedulesConsidered: existingScheduleEntries.length,
+                batchRoomAssignments: timeSlotEngine.getBatchRoomAssignments()
             }
         };
     }
 
-    // Build the initial schedule entries from existing active schedules and pending proposals
     async _buildExistingScheduleEntries(sessionId, schedulingBatchIds) {
         const existingActiveSchedules = await CourseSchedule.getActiveSchedules(schedulingBatchIds);
         const entries = existingActiveSchedules.map(s => ({
             batchId: s.batchId, teacherId: s.teacherId,
             classroomId: s.classroomId, daysOfWeek: s.daysOfWeek,
             startTime: s.startTime, endTime: s.endTime,
-            sessionCourseId: s.sessionCourseId
+            sessionCourseId: s.sessionCourseId,
+            batchShift: s.batchShift
         }));
 
-        // Include pending proposals to avoid overlap with unapproved schedules
         const pendingProposals = await ScheduleProposal.find({ sessionId, status: 'pending' }).lean();
         const schedulingBatchIdSet = new Set(schedulingBatchIds.map(id => id.toString()));
 
@@ -145,6 +144,7 @@ class AutoSchedulerService {
                     daysOfWeek: s.daysOfWeek,
                     startTime: s.startTime, endTime: s.endTime,
                     sessionCourseId: s.sessionCourseId,
+                    batchShift: s.batchShift,
                     isPending: true
                 })));
             }
@@ -152,7 +152,6 @@ class AutoSchedulerService {
         return entries;
     }
 
-    // Build the list of scheduling tasks from gathered data
     _buildTasks(data, engine, preferredRooms) {
         const tasks = [];
         for (const batch of data.batches) {
@@ -186,71 +185,96 @@ class AutoSchedulerService {
         return tasks;
     }
 
-    // Run the 4-level scheduling pipeline: strict → relaxed → same-day → alternate-shift
-    _runSchedulingPipeline(tasks, classrooms, existingEntries, engine) {
+    _runSchedulingPipeline(allTasks, batches, classrooms, existingEntries, engine, groupLabsTogether) {
         const schedule = [...existingEntries];
         const newScheduleStartIndex = schedule.length;
-        let unscheduled = [];
+        const unscheduled = [];
 
-        // Level 1: Strict constraints
-        for (const task of tasks) {
-            const scheduled = engine.scheduleTask(task, classrooms, schedule);
-            if (scheduled) {
-                schedule.push(scheduled);
-            } else {
-                unscheduled.push(task);
-                engine.conflicts.push({ type: 'UNSCHEDULED', task, reason: 'Could not find available slot' });
+        const dayBatches = batches.filter(b => engine.getShiftForBatch(b) === 'day');
+        const eveningBatches = batches.filter(b => engine.getShiftForBatch(b) === 'evening');
+
+        /**
+         * Schedule labs for all batches first (best-effort grouping).
+         * Labs are done first so they get priority on lab rooms and days.
+         */
+        const scheduleLabsForGroup = (batchGroup) => {
+            for (const batch of batchGroup) {
+                const batchTasks = allTasks.filter(t => t.batch.id.toString() === batch.id.toString());
+                const labTasks = batchTasks.filter(t => t.course.type === 'lab' || t.course.type === 'project');
+                if (labTasks.length === 0) continue;
+
+                if (groupLabsTogether) {
+                    const labResult = engine.scheduleLabsForBatch(batch, labTasks, classrooms, schedule);
+                    for (const t of labResult.unscheduled) unscheduled.push(t);
+                } else {
+                    for (const task of labTasks) {
+                        const scheduled = engine.scheduleTask(task, classrooms, schedule);
+                        if (!scheduled) unscheduled.push(task);
+                    }
+                }
             }
-        }
+        };
 
-        // Level 2: Relaxed room constraints
-        let retry = [...unscheduled];
-        unscheduled = [];
-        for (const task of retry) {
+        /**
+         * Schedule theory tasks using round-robin interleaving across batches.
+         * Round 1: schedule session 1 of each course for each batch (one per batch per round)
+         * Round 2: schedule session 2 of each course for each batch
+         */
+        const scheduleTheoryRoundRobin = (batchGroup) => {
+            // Group theory tasks by batch, then by session number
+            const batchTaskQueues = batchGroup.map(batch => {
+                const batchTasks = allTasks.filter(t =>
+                    t.batch.id.toString() === batch.id.toString() &&
+                    t.course.type === 'theory'
+                );
+                // Sort by session number so session 1 comes before session 2
+                return batchTasks.sort((a, b) => a.sessionNumber - b.sessionNumber);
+            }).filter(q => q.length > 0);
+
+            // Round-robin: take one task from each batch queue per round
+            let anyProgress = true;
+            while (anyProgress) {
+                anyProgress = false;
+                for (const queue of batchTaskQueues) {
+                    if (queue.length === 0) continue;
+                    const task = queue.shift();
+                    const scheduled = engine.scheduleTask(task, classrooms, schedule);
+                    if (!scheduled) {
+                        unscheduled.push(task);
+                    }
+                    anyProgress = true;
+                }
+            }
+        };
+
+        // Process day shift
+        scheduleLabsForGroup(dayBatches);
+        scheduleTheoryRoundRobin(dayBatches);
+
+        // Process evening shift
+        scheduleLabsForGroup(eveningBatches);
+        scheduleTheoryRoundRobin(eveningBatches);
+
+        // Retry pass: allow same-day scheduling for tasks that failed
+        const retry1 = [...unscheduled];
+        unscheduled.length = 0;
+        for (const task of retry1) {
             const scheduled = engine.scheduleTaskRelaxed(task, classrooms, schedule);
-            if (scheduled) {
-                schedule.push(scheduled);
-            } else {
-                unscheduled.push(task);
-            }
-        }
-
-        // Level 3: Same-day scheduling
-        retry = [...unscheduled];
-        unscheduled = [];
-        for (const task of retry) {
-            const scheduled = engine.scheduleTaskSameDay(task, classrooms, schedule);
-            if (scheduled) {
-                schedule.push(scheduled);
-                engine.warnings.push(`${task.course.code} has multiple sessions on the same day due to limited slots`);
-            } else {
-                unscheduled.push(task);
-            }
-        }
-
-        // Level 4: Alternate shift
-        retry = [...unscheduled];
-        unscheduled = [];
-        for (const task of retry) {
-            const scheduled = engine.scheduleTaskAlternateShift(task, classrooms, schedule);
-            if (scheduled) {
-                schedule.push(scheduled);
-                engine.warnings.push(`${task.course.code} scheduled in alternate shift due to limited slots in primary shift`);
-            } else {
+            if (!scheduled) {
                 unscheduled.push(task);
                 engine.conflicts.push({
                     type: 'UNSCHEDULED_FINAL',
-                    courseCode: task.course.code, courseName: task.course.name,
-                    batchName: task.batch.name, teacherName: task.teacherName,
-                    reason: 'No available time slot found after trying all scheduling strategies'
+                    courseCode: task.course.code,
+                    courseName: task.course.name,
+                    batchName: task.batch.name,
+                    teacherName: task.teacherName,
+                    reason: 'No available time slot found in batch shift'
                 });
             }
         }
 
         return { schedule, unscheduled, newScheduleStartIndex };
     }
-
-    // Proposal delegation
 
     async getProposals(sessionId) {
         return scheduleProposalService.getProposals(sessionId);
@@ -268,8 +292,6 @@ class AutoSchedulerService {
         return scheduleProposalService.deleteProposal(proposalId);
     }
 
-    // Conflict detection delegation
-
     async checkExistingConflicts(batchIds, sessionId) {
         const schedules = await CourseSchedule.find({
             batchId: { $in: batchIds },
@@ -277,8 +299,6 @@ class AutoSchedulerService {
         }).lean();
         return timeSlotEngine.detectConflicts(schedules);
     }
-
-    //Schedule lifecycle delegation
 
     async closeSchedulesForBatches(batchIds) {
         const result = await CourseSchedule.closeBatchSchedules(batchIds);

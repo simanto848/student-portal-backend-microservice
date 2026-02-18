@@ -10,14 +10,16 @@ class ScheduleController {
             const {
                 sessionId,
                 departmentId,
-                batchIds,               // Array of batch IDs for multi-batch selection
-                selectionMode,          // 'single_batch', 'multi_batch', 'department', 'all'
-                classDurationMinutes,   // Default class duration in minutes (default: 75 = 1h 15m)
-                classDurations,         // { theory: 75, lab: 150, project: 150 }
-                workingDays,            // ['Saturday', 'Sunday', 'Wednesday', 'Thursday']
-                offDays,                // ['Monday', 'Tuesday', 'Friday']
-                customTimeSlots,        // { day: { startTime, endTime, breakStart, breakEnd }, evening: {...} }
-                preferredRooms          // { theory: "roomId", lab: "roomId" }
+                batchIds,
+                selectionMode,
+                classDurationMinutes,
+                classDurations,
+                workingDays,
+                offDays,
+                customTimeSlots,
+                preferredRooms,
+                targetShift,
+                groupLabsTogether
             } = req.body;
 
             const generatedBy = req.user.id;
@@ -40,7 +42,9 @@ class ScheduleController {
                     workingDays,
                     offDays,
                     customTimeSlots,
-                    preferredRooms
+                    preferredRooms,
+                    targetShift,
+                    groupLabsTogether
                 }
             );
 
