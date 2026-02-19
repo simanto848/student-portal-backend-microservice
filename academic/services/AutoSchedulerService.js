@@ -167,14 +167,22 @@ class AutoSchedulerService {
                     continue;
                 }
 
-                const sessionsPerWeek = engine.getSessionsPerWeek(course.credits, course.type);
+                const batchShift = engine.getShiftForBatch(batch);
+                const sessionsPerWeek = engine.getSessionsPerWeek(course.credits, course.type, batchShift);
+
+                // Evening theory: 100 minutes per session (single longer session)
+                let taskDuration = course.durationMinutes;
+                if (batchShift === 'evening' && course.type === 'theory') {
+                    taskDuration = engine.classDurations.lab || 100;
+                }
+
                 for (let session = 0; session < sessionsPerWeek; session++) {
                     tasks.push({
                         batch, course,
                         teacherId: assignment.teacherId,
                         teacherName: assignment.teacherName,
                         sessionNumber: session + 1,
-                        durationMinutes: course.durationMinutes,
+                        durationMinutes: taskDuration,
                         preferredRoomId: preferredRooms
                             ? (preferredRooms[course.type] || (course.type === 'project' ? preferredRooms.lab : null))
                             : null
@@ -272,6 +280,9 @@ class AutoSchedulerService {
                 });
             }
         }
+
+        // Post-optimization: rebalance theory classes for even day distribution
+        engine.rebalanceSchedule(schedule, newScheduleStartIndex, [...dayBatches, ...eveningBatches], classrooms);
 
         return { schedule, unscheduled, newScheduleStartIndex };
     }

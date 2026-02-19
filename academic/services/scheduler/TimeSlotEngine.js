@@ -9,10 +9,10 @@ import { timeToMinutes, minutesToTime } from '../utils/timeUtils.js';
  *
  * Evening Shift – Friday:
  *   Block 1: 08:30 – 13:00
- *   Block 2: 14:00 – 21:40
+ *   Block 2: 14:00 – 21:40  (Labs/Projects ONLY)
  *
  * Evening Shift – Tuesday:
- *   Block 1: 18:00 – 21:40  (Labs/Projects ONLY)
+ *   Block 1: 18:00 – 21:40  (Theory ONLY)
  *
  * Evening Shift – other days:
  *   Block 1: 18:00 – 21:40
@@ -33,11 +33,12 @@ const DEFAULT_SHIFT_CONFIG = {
             blocks: [
                 { start: '08:30', end: '13:00' },
                 { start: '14:00', end: '21:40' }
-            ]
+            ],
+            labOnly: true
         },
         Tuesday: {
             blocks: [{ start: '18:00', end: '21:40' }],
-            labOnly: true
+            theoryOnly: true
         },
         default: {
             blocks: [{ start: '18:00', end: '21:40' }]
@@ -126,7 +127,14 @@ class TimeSlotEngine {
 
     isLabOnlySlot(shift, day) {
         if (shift !== 'evening') return false;
-        return day === 'Tuesday' && this.shiftConfig.evening.Tuesday?.labOnly === true;
+        if (day === 'Friday' && this.shiftConfig.evening.Friday?.labOnly === true) return true;
+        return false;
+    }
+
+    isTheoryOnlySlot(shift, day) {
+        if (shift !== 'evening') return false;
+        if (day === 'Tuesday' && this.shiftConfig.evening.Tuesday?.theoryOnly === true) return true;
+        return false;
     }
 
     // ─── Core Slot Finder ─────────────────────────────────────────────────────
@@ -267,8 +275,11 @@ class TimeSlotEngine {
 
     // ─── Utility ──────────────────────────────────────────────────────────────
 
-    getSessionsPerWeek(credits, courseType) {
-        return (courseType === 'lab' || courseType === 'project') ? 1 : 2;
+    getSessionsPerWeek(credits, courseType, shift = 'day') {
+        if (courseType === 'lab' || courseType === 'project') return 1;
+        // Evening theory: 1 session/week (100 min) to complete credits
+        if (shift === 'evening') return 1;
+        return 2;
     }
 
     getBatchUsedDays(batchId, schedule) {
@@ -335,12 +346,27 @@ class TimeSlotEngine {
 
         const shift = this.getShiftForBatch(batch);
         const batchStudentCount = batch?.studentCount || 40;
-        const room = this.getRoomForBatch(batch.id, classrooms, course.type, batchStudentCount);
+        const primaryRoom = this.getRoomForBatch(batch.id, classrooms, course.type, batchStudentCount);
 
-        if (!room) {
+        if (!primaryRoom) {
             this.warnings.push(`No room for ${course.code} in batch ${batch.name}`);
             return null;
         }
+
+        // Build room list: primary room first, then all other suitable rooms
+        const category = (course.type === 'lab' || course.type === 'project') ? course.type : 'theory';
+        const requiredTypes = ROOM_TYPE_REQUIREMENTS[category] || ROOM_TYPE_REQUIREMENTS.theory;
+        let suitableRooms = classrooms.filter(r =>
+            r.capacity >= batchStudentCount && requiredTypes.includes(r.roomType)
+        );
+        if (suitableRooms.length === 0) {
+            suitableRooms = classrooms.filter(r => r.capacity >= batchStudentCount);
+        }
+        const primaryId = primaryRoom.id?.toString();
+        const roomsToTry = [
+            primaryRoom,
+            ...suitableRooms.filter(r => r.id?.toString() !== primaryId)
+        ];
 
         const courseDays = allowSameDay
             ? []
@@ -348,28 +374,67 @@ class TimeSlotEngine {
 
         const availableDays = this.workingDays.filter(d => !courseDays.includes(d));
 
-        // Prefer days the batch already uses (pack classes together on fewer days)
-        const batchUsedDays = this.getBatchUsedDays(batch.id, currentSchedule);
-        const preferred = availableDays.filter(d => batchUsedDays.includes(d));
-        const others = availableDays.filter(d => !batchUsedDays.includes(d));
-        const dayOrder = [...preferred, ...others];
+        // Load-balanced: prefer days with fewest classes (spread evenly)
+        // For theory classes, heavily penalize days that already have labs
+        // so theory doesn't get pushed to Block 2 (afternoon) on lab days.
+        const dayClassCount = this._getDayClassCounts(batch.id, currentSchedule);
+        const dayOrder = [...availableDays].sort((a, b) => {
+            let countA = dayClassCount[a] || 0;
+            let countB = dayClassCount[b] || 0;
+            if (course.type === 'theory') {
+                if (this._dayHasLabsForBatch(batch.id, a, currentSchedule)) countA += 100;
+                if (this._dayHasLabsForBatch(batch.id, b, currentSchedule)) countB += 100;
+            }
+            return countA - countB;
+        });
 
+        const blocks = this.getShiftBlocks(shift);
+        const block1End = blocks.length > 0 ? timeToMinutes(blocks[0].end) : Infinity;
+
+        // Pass 1: Try Block 1 (morning) only — across ALL days and rooms.
+        // This ensures every morning slot is used before any afternoon slot.
         for (const day of dayOrder) {
-            // Tuesday Evening: labs/projects only
             if (this.isLabOnlySlot(shift, day) && course.type === 'theory') continue;
+            if (this.isTheoryOnlySlot(shift, day) && (course.type === 'lab' || course.type === 'project')) continue;
 
-            const slot = this.getNextAvailableSlot(
-                batch.id, day, durationMinutes, shift, currentSchedule,
-                teacherId, room.id
-            );
-            if (!slot) continue;
+            for (const room of roomsToTry) {
+                const slot = this.getNextAvailableSlot(
+                    batch.id, day, durationMinutes, shift, currentSchedule,
+                    teacherId, room.id
+                );
+                if (!slot) continue;
 
-            const check = this.checkSlotConflict(slot, day, batch.id, teacherId, room.id, currentSchedule);
-            if (check.conflict) continue;
+                // Only accept if the slot fits in Block 1
+                if (timeToMinutes(slot.end) > block1End) continue;
 
-            const entry = this._buildEntry(slot, day, task, room, shift, course);
-            currentSchedule.push(entry);
-            return entry;
+                const check = this.checkSlotConflict(slot, day, batch.id, teacherId, room.id, currentSchedule);
+                if (check.conflict) continue;
+
+                const entry = this._buildEntry(slot, day, task, room, shift, course);
+                currentSchedule.push(entry);
+                return entry;
+            }
+        }
+
+        // Pass 2: Allow Block 2 (afternoon) — fallback when all morning slots are exhausted.
+        for (const day of dayOrder) {
+            if (this.isLabOnlySlot(shift, day) && course.type === 'theory') continue;
+            if (this.isTheoryOnlySlot(shift, day) && (course.type === 'lab' || course.type === 'project')) continue;
+
+            for (const room of roomsToTry) {
+                const slot = this.getNextAvailableSlot(
+                    batch.id, day, durationMinutes, shift, currentSchedule,
+                    teacherId, room.id
+                );
+                if (!slot) continue;
+
+                const check = this.checkSlotConflict(slot, day, batch.id, teacherId, room.id, currentSchedule);
+                if (check.conflict) continue;
+
+                const entry = this._buildEntry(slot, day, task, room, shift, course);
+                currentSchedule.push(entry);
+                return entry;
+            }
         }
 
         return null;
@@ -409,6 +474,8 @@ class TimeSlotEngine {
 
             const blocks = this.getShiftBlocks(shift, day);
             if (blocks.length === 0) continue;
+            // Skip theory-only days for labs
+            if (this.isTheoryOnlySlot(shift, day)) continue;
 
             // Simulate scheduling all remaining labs on this day
             const simulatedSchedule = [...currentSchedule];
@@ -457,6 +524,28 @@ class TimeSlotEngine {
         return { scheduled: scheduledLabs, unscheduled: remaining };
     }
 
+    _getDayClassCounts(batchId, schedule) {
+        const counts = {};
+        const batchIdStr = batchId?.toString();
+        for (const entry of schedule) {
+            if (entry.batchId?.toString() === batchIdStr) {
+                for (const d of (entry.daysOfWeek || [])) {
+                    counts[d] = (counts[d] || 0) + 1;
+                }
+            }
+        }
+        return counts;
+    }
+
+    _dayHasLabsForBatch(batchId, day, schedule) {
+        const batchIdStr = batchId?.toString();
+        return schedule.some(e =>
+            e.batchId?.toString() === batchIdStr &&
+            e.classType === 'Lab' &&
+            e.daysOfWeek?.includes(day)
+        );
+    }
+
     _buildEntry(slot, day, task, room, shift, course) {
         const { batch, teacherId, teacherName } = task;
         return {
@@ -476,6 +565,174 @@ class TimeSlotEngine {
             roomNumber: room.roomNumber,
             building: room.building
         };
+    }
+
+    /**
+     * Post-optimization: rebalance theory classes across days.
+     *
+     * After greedy scheduling some days may be overloaded while others
+     * are underloaded.  This pass iteratively moves THEORY (Lecture)
+     * classes from the most-loaded day to ANY less-loaded day.
+     *
+     * Key behaviours:
+     *   - Tries ALL suitable classrooms (not just the originally assigned
+     *     one) so a room-busy constraint on one room doesn't block the move.
+     *   - Candidates are sorted by end time desc — the class keeping
+     *     students latest is moved first.
+     *   - Target days are tried least-loaded first.
+     *   - Hard constraints respected: same course on different days,
+     *     teacher availability, room availability, lab-only days.
+     *
+     * Stops when max-min ≤ 1 or after 50 iterations.
+     */
+    rebalanceSchedule(schedule, newScheduleStartIndex, batches, classrooms) {
+        for (const batch of batches) {
+            const batchId = batch.id.toString();
+            const shift = this.getShiftForBatch(batch);
+            const batchStudentCount = batch?.studentCount || 40;
+
+            // Pre-compute suitable theory rooms for this batch (sorted: smallest adequate first)
+            const theoryRoomTypes = ROOM_TYPE_REQUIREMENTS.theory;
+            let suitableRooms = classrooms.filter(r =>
+                r.capacity >= batchStudentCount && theoryRoomTypes.includes(r.roomType)
+            );
+            if (suitableRooms.length === 0) {
+                suitableRooms = classrooms.filter(r => r.capacity >= batchStudentCount);
+            }
+            suitableRooms.sort((a, b) => a.capacity - b.capacity);
+
+            let improved = true;
+            let iterations = 0;
+
+            while (improved && iterations < 50) {
+                improved = false;
+                iterations++;
+
+                // Count classes per working day for this batch
+                const dayCount = {};
+                for (const d of this.workingDays) dayCount[d] = 0;
+                for (const entry of schedule) {
+                    if (entry.batchId?.toString() !== batchId) continue;
+                    for (const d of (entry.daysOfWeek || [])) {
+                        dayCount[d] = (dayCount[d] || 0) + 1;
+                    }
+                }
+
+                // Sort days descending by load
+                const sortedDays = [...this.workingDays].sort(
+                    (a, b) => (dayCount[b] || 0) - (dayCount[a] || 0)
+                );
+                const maxDay = sortedDays[0];
+                const maxCount = dayCount[maxDay] || 0;
+                const minCount = dayCount[sortedDays[sortedDays.length - 1]] || 0;
+
+                if (maxCount - minCount <= 1) break;
+
+                // Target days lighter than maxDay by ≥ 2, least-loaded first
+                const targetDays = [...this.workingDays]
+                    .filter(d => d !== maxDay && (dayCount[d] || 0) < maxCount - 1)
+                    .sort((a, b) => (dayCount[a] || 0) - (dayCount[b] || 0));
+
+                if (targetDays.length === 0) break;
+
+                // Movable theory entries on heaviest day, latest-ending first
+                const moveCandidates = [];
+                for (let i = newScheduleStartIndex; i < schedule.length; i++) {
+                    const entry = schedule[i];
+                    if (
+                        entry.batchId?.toString() === batchId &&
+                        entry.classType === 'Lecture' &&
+                        entry.daysOfWeek?.includes(maxDay)
+                    ) {
+                        moveCandidates.push(entry);
+                    }
+                }
+                moveCandidates.sort((a, b) =>
+                    timeToMinutes(b.endTime) - timeToMinutes(a.endTime)
+                );
+
+                if (moveCandidates.length === 0) break;
+
+                // Put original room first so we prefer keeping the same room
+                const orderRooms = (originalRoomId) => {
+                    const origId = originalRoomId?.toString();
+                    return [
+                        ...suitableRooms.filter(r => r.id?.toString() === origId),
+                        ...suitableRooms.filter(r => r.id?.toString() !== origId)
+                    ];
+                };
+
+                let moved = false;
+                for (const entry of moveCandidates) {
+                    // Save originals
+                    const saved = {
+                        days: entry.daysOfWeek,
+                        start: entry.startTime,
+                        end: entry.endTime,
+                        roomId: entry.classroomId,
+                        roomNum: entry.roomNumber,
+                        building: entry.building
+                    };
+                    entry.daysOfWeek = []; // hide from conflict checks
+
+                    const duration = timeToMinutes(saved.end) - timeToMinutes(saved.start);
+                    const roomsToTry = orderRooms(saved.roomId);
+
+                    for (const targetDay of targetDays) {
+                        // Same course must not already be on targetDay
+                        const courseOnTarget = schedule.some(e =>
+                            e !== entry &&
+                            e.batchId?.toString() === batchId &&
+                            e.sessionCourseId?.toString() === entry.sessionCourseId?.toString() &&
+                            e.daysOfWeek?.includes(targetDay)
+                        );
+                        if (courseOnTarget) continue;
+                        if (this.isLabOnlySlot(shift, targetDay)) continue;
+
+                        // Try every suitable room on this target day
+                        for (const room of roomsToTry) {
+                            const slot = this.getNextAvailableSlot(
+                                batch.id, targetDay, duration, shift, schedule,
+                                entry.teacherId, room.id
+                            );
+                            if (!slot) continue;
+
+                            const check = this.checkSlotConflict(
+                                slot, targetDay, batch.id, entry.teacherId,
+                                room.id, schedule
+                            );
+                            if (check.conflict) continue;
+
+                            // Commit the move
+                            entry.daysOfWeek = [targetDay];
+                            entry.startTime = slot.start;
+                            entry.endTime = slot.end;
+                            entry.classroomId = room.id;
+                            entry.roomNumber = room.roomNumber;
+                            entry.building = room.building;
+                            improved = true;
+                            moved = true;
+                            break;
+                        }
+                        if (moved) break;
+                    }
+
+                    if (!moved) {
+                        // Restore originals
+                        entry.daysOfWeek = saved.days;
+                        entry.startTime = saved.start;
+                        entry.endTime = saved.end;
+                        entry.classroomId = saved.roomId;
+                        entry.roomNumber = saved.roomNum;
+                        entry.building = saved.building;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (!moved) break;
+            }
+        }
     }
 
     getBatchRoomAssignments() {
