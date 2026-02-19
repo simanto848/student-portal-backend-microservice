@@ -8,6 +8,7 @@ const subscriber = createClient({ url: getRedisUrl() });
 
 let isPublisherReady = false;
 let isSubscriberReady = false;
+let connectionPromise = null;
 
 const ensureConnections = async () => {
     if (process.env.DISABLE_EVENT_BUS === 'true') {
@@ -15,17 +16,32 @@ const ensureConnections = async () => {
         return;
     }
 
-    if (!isPublisherReady) {
-        await publisher.connect();
-        isPublisherReady = true;
-        console.log('[EventBus] Publisher connected');
+    if (isPublisherReady && isSubscriberReady) return;
+
+    if (connectionPromise) {
+        return connectionPromise;
     }
 
-    if (!isSubscriberReady) {
-        await subscriber.connect();
-        isSubscriberReady = true;
-        console.log('[EventBus] Subscriber connected');
-    }
+    connectionPromise = (async () => {
+        try {
+            if (!isPublisherReady) {
+                await publisher.connect();
+                isPublisherReady = true;
+                console.log('[EventBus] Publisher connected');
+            }
+
+            if (!isSubscriberReady) {
+                await subscriber.connect();
+                isSubscriberReady = true;
+                console.log('[EventBus] Subscriber connected');
+            }
+        } catch (error) {
+            connectionPromise = null;
+            throw error;
+        }
+    })();
+
+    return connectionPromise;
 };
 
 publisher.on('error', (err) => {

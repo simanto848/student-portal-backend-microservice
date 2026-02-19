@@ -7,48 +7,70 @@ class RabbitMQ {
         // Retry connection parameters
         this.retryInterval = 5000;
         this.maxRetries = 20;
+        this.connectingPromise = null;
     }
 
     async connect(url = process.env.RABBITMQ_URL || 'amqp://localhost:5672') {
-        let retries = 0;
-        while (retries < this.maxRetries) {
-            try {
-                console.log(`Attempting to connect to RabbitMQ at ${url} (Attempt ${retries + 1}/${this.maxRetries})...`);
-                this.connection = await amqp.connect(url);
-                this.channel = await this.connection.createChannel();
+        if (this.connection) return; // Already connected
 
-                console.log('Successfully connected to RabbitMQ');
+        if (this.connectingPromise) return this.connectingPromise;
 
-                this.connection.on('error', (err) => {
-                    console.error('RabbitMQ connection error', err);
-                    this.retryConnection(url);
-                });
+        this.connectingPromise = (async () => {
+            let retries = 0;
+            while (retries < this.maxRetries) {
+                try {
+                    console.log(`Attempting to connect to RabbitMQ at ${url} (Attempt ${retries + 1}/${this.maxRetries})...`);
+                    this.connection = await amqp.connect(url);
+                    this.channel = await this.connection.createChannel();
 
-                this.connection.on('close', () => {
-                    console.warn('RabbitMQ connection closed');
-                    this.retryConnection(url);
-                });
+                    console.log('Successfully connected to RabbitMQ');
 
-                return;
-            } catch (error) {
-                console.error('Failed to connect to RabbitMQ:', error.message);
-                retries++;
-                if (retries >= this.maxRetries) {
-                    throw new Error('Max RabbitMQ connection retries reached');
+                    this.connection.on('error', (err) => {
+                        console.error('RabbitMQ connection error', err);
+                        this.handleDisconnect(url);
+                    });
+
+                    this.connection.on('close', () => {
+                        console.warn('RabbitMQ connection closed');
+                        this.handleDisconnect(url);
+                    });
+
+                    return;
+                } catch (error) {
+                    console.error('Failed to connect to RabbitMQ:', error.message);
+                    retries++;
+                    if (retries >= this.maxRetries) {
+                        throw new Error('Max RabbitMQ connection retries reached');
+                    }
+                    await new Promise(resolve => setTimeout(resolve, this.retryInterval));
                 }
-                await new Promise(resolve => setTimeout(resolve, this.retryInterval));
             }
+        })();
+
+        try {
+            await this.connectingPromise;
+        } catch (error) {
+            console.error('RabbitMQ connection failed permanently:', error);
+            throw error;
+        } finally {
+            this.connectingPromise = null;
         }
     }
 
+    handleDisconnect(url) {
+        this.connection = null;
+        this.channel = null;
+        this.retryConnection(url);
+    }
+
     async retryConnection(url) {
-        if (this.connection) {
+        setTimeout(async () => {
             try {
-                // Clean up existing closed/errored connection if possible
-                this.connection.close().catch(() => { });
-            } catch (e) { /* ignore */ }
-        }
-        await this.connect(url);
+                await this.connect(url);
+            } catch (e) {
+                console.error("Reconnection failed:", e);
+            }
+        }, this.retryInterval);
     }
 
     async publishToQueue(queue, message) {

@@ -37,9 +37,11 @@ export const requestLoggerMiddleware = (serviceName = "APP") => {
       ip: logData.ip,
     });
 
-    // Capture response details
-    const originalSend = res.send;
-    res.send = function (data) {
+    // Set correlation ID in response header for tracing
+    res.set("X-Request-ID", requestId);
+
+    // Capture response details on finish
+    res.on("finish", () => {
       const duration = Date.now() - req.startTime;
       const statusCode = res.statusCode;
 
@@ -50,12 +52,7 @@ export const requestLoggerMiddleware = (serviceName = "APP") => {
         statusCode,
         duration: `${duration}ms`,
       });
-
-      return originalSend.call(this, data);
-    };
-
-    // Set correlation ID in response header for tracing
-    res.set("X-Request-ID", requestId);
+    });
 
     next();
   };

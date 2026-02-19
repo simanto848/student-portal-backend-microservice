@@ -12,17 +12,19 @@ export const transformerMiddleware = (req, res, next) => {
         req.headers["x-request-timestamp"] = new Date().toISOString();
     }
 
-    const originalJson = res.json.bind(res);
-    res.json = (body) => {
-        if (transformConfig.standardizeHeaders) {
+    // Track request start time if not already tracked
+    if (!req.startTime) {
+        req.startTime = Date.now();
+    }
+
+    const originalWriteHead = res.writeHead;
+    res.writeHead = function (statusCode, ...args) {
+        if (transformConfig.standardizeHeaders && !res.headersSent) {
             res.setHeader("X-Request-ID", req.headers["x-request-id"] || "unknown");
             res.setHeader("X-Response-Time", Date.now() - req.startTime || 0);
         }
-        return originalJson(body);
+        return originalWriteHead.apply(this, [statusCode, ...args]);
     };
-
-    // Track request start time
-    req.startTime = Date.now();
 
     next();
 };

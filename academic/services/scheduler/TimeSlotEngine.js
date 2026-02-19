@@ -744,4 +744,4 @@ class TimeSlotEngine {
     }
 }
 
-export default new TimeSlotEngine();
+export default TimeSlotEngine;

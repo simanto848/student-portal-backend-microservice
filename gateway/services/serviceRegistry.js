@@ -40,8 +40,16 @@ class ServiceRegistry {
                 avgResponseTime: 0,
                 lastResponseTime: 0,
             },
+            healthCheckMetrics: {
+                totalChecks: 0,
+                successfulChecks: 0,
+                failedChecks: 0,
+                avgResponseTime: 0,
+                lastResponseTime: 0,
+            },
             circuitState: "closed",
             ...(existing?.metrics ? { metrics: existing.metrics } : {}),
+            ...(existing?.healthCheckMetrics ? { healthCheckMetrics: existing.healthCheckMetrics } : {}),
         });
 
         if (!this.healthLogs.has(key)) {
@@ -76,18 +84,28 @@ class ServiceRegistry {
             service.consecutiveFailures = 0;
         }
 
-        service.metrics.totalRequests++;
-        if (status === "operational") {
-            service.metrics.successfulRequests++;
-        } else {
-            service.metrics.failedRequests++;
+        if (!service.healthCheckMetrics) {
+            service.healthCheckMetrics = {
+                totalChecks: 0,
+                successfulChecks: 0,
+                failedChecks: 0,
+                avgResponseTime: 0,
+                lastResponseTime: 0,
+            };
         }
 
-        const prevAvg = service.metrics.avgResponseTime;
-        const totalReqs = service.metrics.totalRequests;
-        service.metrics.avgResponseTime =
+        service.healthCheckMetrics.totalChecks++;
+        if (status === "operational") {
+            service.healthCheckMetrics.successfulChecks++;
+        } else {
+            service.healthCheckMetrics.failedChecks++;
+        }
+
+        const prevAvg = service.healthCheckMetrics.avgResponseTime;
+        const totalReqs = service.healthCheckMetrics.totalChecks;
+        service.healthCheckMetrics.avgResponseTime =
             (prevAvg * (totalReqs - 1) + responseTimeMs) / totalReqs;
-        service.metrics.lastResponseTime = responseTimeMs;
+        service.healthCheckMetrics.lastResponseTime = responseTimeMs;
 
         service.status = status;
         service.lastHealthCheck = new Date().toISOString();
@@ -173,6 +191,7 @@ class ServiceRegistry {
                 circuitState: s.circuitState,
                 lastHealthCheck: s.lastHealthCheck,
                 metrics: s.metrics,
+                healthCheckMetrics: s.healthCheckMetrics,
                 consecutiveFailures: s.consecutiveFailures,
             })),
         };

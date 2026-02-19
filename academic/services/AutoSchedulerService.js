@@ -2,7 +2,7 @@ import CourseSchedule from "../models/CourseSchedule.js";
 import ScheduleProposal from "../models/ScheduleProposal.js";
 
 import { clearTimeCache } from "./utils/timeUtils.js";
-import timeSlotEngine from "./scheduler/TimeSlotEngine.js";
+import TimeSlotEngine from "./scheduler/TimeSlotEngine.js";
 import scheduleDataService from "./scheduler/ScheduleDataService.js";
 import scheduleProposalService from "./scheduler/ScheduleProposalService.js";
 
@@ -20,6 +20,7 @@ class AutoSchedulerService {
             groupLabsTogether = true
         } = options;
 
+        const timeSlotEngine = new TimeSlotEngine();
         timeSlotEngine.configure({
             classDurationMinutes, classDurations,
             workingDays, offDays, customTimeSlots,
@@ -308,6 +309,7 @@ class AutoSchedulerService {
             batchId: { $in: batchIds },
             isActive: true, status: 'active'
         }).lean();
+        const timeSlotEngine = new TimeSlotEngine();
         return timeSlotEngine.detectConflicts(schedules);
     }
 
