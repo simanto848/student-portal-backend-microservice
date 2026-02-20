@@ -20,9 +20,20 @@ class AutoSchedulerService {
             groupLabsTogether = true
         } = options;
 
+        // Derive shift-specific working days if the user didn't override them
+        const SHIFT_DEFAULT_WORKING_DAYS = {
+            day: ['Saturday', 'Sunday', 'Wednesday', 'Thursday'],
+            evening: ['Tuesday', 'Friday']
+        };
+        const effectiveWorkingDays = workingDays && workingDays.length > 0
+            ? workingDays
+            : (targetShift && SHIFT_DEFAULT_WORKING_DAYS[targetShift]
+                ? SHIFT_DEFAULT_WORKING_DAYS[targetShift]
+                : workingDays);
+
         timeSlotEngine.configure({
             classDurationMinutes, classDurations,
-            workingDays, offDays, customTimeSlots,
+            workingDays: effectiveWorkingDays, offDays, customTimeSlots,
             targetShift,
             groupLabsTogether
         });
